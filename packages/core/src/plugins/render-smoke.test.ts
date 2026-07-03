@@ -5913,9 +5913,6 @@ async function waitFor(predicate: () => boolean, timeout = 1500, describe?: () =
     if (Date.now() - start > timeout) {
       throw new Error(`Timed out waiting for condition.${describe ? ` › ${describe()}` : ""}`);
     }
-    for (const link of document.querySelectorAll<HTMLLinkElement>('link[id^="ofv-prism-css"]')) {
-      link.dispatchEvent(new Event("error"));
-    }
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }

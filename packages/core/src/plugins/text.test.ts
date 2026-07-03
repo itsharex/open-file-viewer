@@ -179,24 +179,27 @@ describe("textPlugin", () => {
     await waitFor(() => markdown.style.getPropertyValue("--ofv-markdown-zoom") === "1");
   });
 
-  it("renders code even when Prism CSS fails to load", async () => {
+  it("renders highlighted code without injecting external Prism stylesheets", async () => {
     const container = document.createElement("div");
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const hostPre = document.createElement("pre");
+    hostPre.textContent = "outside viewer";
+    document.head.querySelectorAll("link[id^='ofv-prism-css']").forEach((link) => link.remove());
+    document.body.append(hostPre);
     document.body.append(container);
 
     createViewer({
       container,
-      file: new Blob(["const value = 1;"], { type: "text/javascript" }),
+      file: new Blob(["const value = 1; // comment"], { type: "text/javascript" }),
       fileName: "sample.js",
       plugins: [textPlugin()]
     });
 
-    const link = await waitFor(() => document.querySelector<HTMLLinkElement>("link[id^='ofv-prism-css']"));
-    link.dispatchEvent(new Event("error"));
-
     await waitFor(() => Boolean(container.querySelector(".ofv-code-container code")));
 
     expect(container.textContent).toContain("value");
+    expect(container.querySelector(".token.comment")?.textContent).toBe("// comment");
+    expect(document.querySelector("link[id^='ofv-prism-css']")).toBeNull();
+    expect(hostPre.className).toBe("");
   });
 
   it("renders extensionless application code MIME blobs as text", async () => {
