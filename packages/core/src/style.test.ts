@@ -37,6 +37,8 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-image-info-item")).toContain("max-width: 100%");
     expect(rule(".ofv-image-info-item")).toContain("overflow-wrap: anywhere");
     expect(rule(".ofv-image-stage")).toContain("min-height: min(320px, 55vh)");
+    expect(rule(".ofv-image-stage")).toContain("overflow: auto");
+    expect(rule(".ofv-image-scrollbox")).toContain("flex: 0 0 auto");
     expect(rule(".ofv-image-content")).toContain("width: auto");
     expect(rule(".ofv-image-content")).toContain("height: auto");
     expect(rule(".ofv-image-content")).toContain("max-height: 100%");
@@ -98,6 +100,8 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-pdf")).toContain("overflow-x: hidden");
     expect(rule(".ofv-pdf")).toContain("overflow-y: auto");
     expect(rule(".ofv-pdf-page-wrapper")).toContain("overflow: hidden");
+    expect(rule(".ofv-pdf-text-layer")).toContain("text-size-adjust: none");
+    expect(rule(".ofv-pdf-text-layer span")).toContain("line-height: 1");
     expect(rule(".ofv-ofd")).toContain("--ofv-ofd-zoom: 1");
     expect(rule(".ofv-ofd")).toContain("--ofv-ofd-rotation: 0deg");
     expect(rule(".ofv-ofd")).toContain("height: 100%");

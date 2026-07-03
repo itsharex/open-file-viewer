@@ -48,6 +48,25 @@ describe("FileViewer React adapter", () => {
     expect(await screen.findByText("当前文件暂不支持在线预览")).toBeTruthy();
   });
 
+  it("passes initialIndex through and reacts to initialIndex changes", async () => {
+    const files = [
+      { file: new Blob(["one"], { type: "text/plain" }), fileName: "one.txt" },
+      { file: new Blob(["two"], { type: "text/plain" }), fileName: "two.txt" },
+      { file: new Blob(["three"], { type: "text/plain" }), fileName: "three.txt" }
+    ];
+    const plugins = [createPlugin("indexed", vi.fn())];
+
+    const { rerender, unmount } = render(<FileViewer files={files} initialIndex={1} plugins={plugins} />);
+
+    expect(await screen.findByText("indexed:two.txt")).toBeTruthy();
+
+    rerender(<FileViewer files={files} initialIndex={2} plugins={plugins} />);
+
+    expect(await screen.findByText("indexed:three.txt")).toBeTruthy();
+
+    unmount();
+  });
+
   it("passes locale and messages through to the core viewer", async () => {
     render(
       <FileViewer

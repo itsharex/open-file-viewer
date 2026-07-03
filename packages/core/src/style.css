@@ -306,13 +306,31 @@
   justify-content: center;
   min-height: min(320px, 55vh);
   min-width: 0;
-  overflow: hidden;
+  overflow: auto;
   cursor: grab;
   touch-action: none;
 }
 
+.ofv-image-stage-pages {
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: 24px;
+}
+
 .ofv-image-stage.is-dragging {
   cursor: grabbing;
+}
+
+.ofv-image-scrollbox {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
 }
 
 .ofv-image-content {
@@ -320,7 +338,7 @@
   height: auto;
   max-width: 100%;
   max-height: 100%;
-  transform-origin: center;
+  transform-origin: top left;
   transition: transform 120ms ease;
   will-change: transform;
   user-select: none;
@@ -328,6 +346,41 @@
 
 .ofv-image-stage.is-dragging .ofv-image-content {
   transition: none;
+}
+
+.ofv-tiff-pages {
+  display: grid;
+  gap: 18px;
+  width: max-content;
+  max-width: 100%;
+  height: auto;
+  transform-origin: top center;
+}
+
+.ofv-tiff-page {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  justify-items: center;
+}
+
+.ofv-tiff-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--ofv-border);
+  border-radius: 4px;
+  background: var(--ofv-surface);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+}
+
+.ofv-tiff-page figcaption {
+  max-width: 100%;
+  color: var(--ofv-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .ofv-image-info {
@@ -3826,12 +3879,15 @@
   line-height: 1;
   pointer-events: none;
   user-select: text;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
 }
 
 .ofv-pdf-text-layer span {
   color: transparent;
   position: absolute;
   white-space: pre;
+  line-height: 1;
   cursor: text;
   transform-origin: 0% 0%;
   pointer-events: auto;

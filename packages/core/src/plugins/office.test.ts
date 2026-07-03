@@ -21,6 +21,7 @@ const renderDocxAsync = vi.hoisted(() =>
     const page = document.createElement("section");
     page.className = "ofv-docx";
     page.style.width = "794px";
+    page.style.height = "1123px";
     if (shouldRenderBlankDocxPreview.value) {
       wrapper.append(page);
       bodyContainer.append(wrapper);
@@ -625,7 +626,46 @@ describe("officePlugin", () => {
     expect(container.querySelector<HTMLElement>(".ofv-docx-page-frame")).not.toBeNull();
     expect(container.querySelector<HTMLElement>("section.ofv-docx")?.style.width).toBe("794px");
     expect(container.querySelector<HTMLElement>(".ofv-docx-wrapper")?.style.getPropertyValue("--ofv-docx-scale")).toBe(
-      "0.35"
+      "0.2166"
+    );
+
+    viewer.destroy();
+  });
+
+  it.each([
+    { fit: "actual" as const, scale: "1" },
+    { fit: "width" as const, scale: "0.4433" },
+    { fit: "height" as const, scale: "0.2244" },
+    { fit: "contain" as const, scale: "0.2244" },
+    { fit: "cover" as const, scale: "0.4433" },
+    { fit: "scale-down" as const, scale: "0.2244" }
+  ])("applies DOCX PreviewFit=$fit to the page scale", async ({ fit, scale }) => {
+    const container = document.createElement("div");
+    container.style.width = "400px";
+    container.style.height = "300px";
+    document.body.append(container);
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["docx"], {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      }),
+      fileName: `fit-${fit}.docx`,
+      width: "400px",
+      height: "300px",
+      fit,
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-docx-document")));
+    const docxDocument = container.querySelector<HTMLElement>(".ofv-docx-document");
+    Object.defineProperty(docxDocument, "clientWidth", { configurable: true, value: 400 });
+    Object.defineProperty(docxDocument, "clientHeight", { configurable: true, value: 300 });
+    window.dispatchEvent(new Event("resize"));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(container.querySelector<HTMLElement>(".ofv-docx-wrapper")?.style.getPropertyValue("--ofv-docx-scale")).toBe(
+      scale
     );
 
     viewer.destroy();

@@ -9,6 +9,7 @@
 
   export let file: PreviewOptions["file"] = undefined;
   export let files: PreviewOptions["files"] = undefined;
+  export let initialIndex: PreviewOptions["initialIndex"] = undefined;
   export let fileName: PreviewOptions["fileName"] = undefined;
   export let mimeType: PreviewOptions["mimeType"] = undefined;
   export let width: PreviewOptions["width"] = "100%";
@@ -67,6 +68,7 @@
     return [
       file,
       files,
+      initialIndex,
       fileName,
       mimeType,
       width,
@@ -110,6 +112,7 @@
       container,
       file,
       files,
+      initialIndex,
       fileName,
       mimeType,
       width,
