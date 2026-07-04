@@ -1431,14 +1431,20 @@ function repairDocxShapeFills(page: HTMLElement): void {
 }
 
 function repairDocxFloatingPictures(page: HTMLElement, hints: DocxLayoutHints): void {
-  const hint = hints.floatingPictures.find((item) => item.relativeFrom === "column" && item.wrap === "square");
-  if (!hint) {
+  const pageHints = hints.floatingPictures.filter((item) => item.relativeFrom === "column" && item.wrap === "square");
+  if (pageHints.length === 0) {
     return;
   }
-  const image = page.querySelector<HTMLImageElement>("img");
-  if (!image) {
+  const images = Array.from(page.querySelectorAll<HTMLImageElement>("img")).filter(
+    (image) => image.closest<HTMLElement>("[data-ofv-docx-float-repaired='true']") === null
+  );
+  if (images.length === 0 || images.length !== pageHints.length) {
     return;
   }
+  images.forEach((image, index) => repairDocxFloatingPicture(page, image, pageHints[index]));
+}
+
+function repairDocxFloatingPicture(page: HTMLElement, image: HTMLImageElement, hint: DocxLayoutHints["floatingPictures"][number]): void {
   const wrapper = image.parentElement as HTMLElement | null;
   if (!wrapper || wrapper.dataset.ofvDocxFloatRepaired === "true") {
     return;

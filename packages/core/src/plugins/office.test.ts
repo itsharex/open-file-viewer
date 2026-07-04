@@ -1000,6 +1000,45 @@ describe("officePlugin", () => {
     expect(imageWrapper.style.width).toBe("68pt");
   });
 
+  it("repairs multiple DOCX floating pictures without collapsing them into one image", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    renderDocxAsync.mockImplementationOnce(async (_data: unknown, bodyContainer: HTMLElement) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "ofv-docx-wrapper";
+      const page = document.createElement("section");
+      page.className = "ofv-docx";
+      page.style.width = "595.3pt";
+      page.style.padding = "36pt";
+      page.innerHTML = `
+        <p><span><div style="display:inline-block;position:relative;width:36pt;height:36pt;float:left"><img src="data:image/png;base64,AA==" /></div></span></p>
+        <p><span><div style="display:inline-block;position:relative;width:48pt;height:48pt;float:left"><img src="data:image/png;base64,BB==" /></div></span></p>
+      `;
+      wrapper.append(page);
+      bodyContainer.append(wrapper);
+    });
+
+    createViewer({
+      container,
+      file: await createMultipleFloatingPicturesDocx(),
+      fileName: "multi-picture.docx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => container.querySelectorAll(".ofv-docx-document img").length === 2);
+
+    const imageWrappers = Array.from(container.querySelectorAll<HTMLImageElement>(".ofv-docx-document img")).map(
+      (image) => image.parentElement as HTMLElement
+    );
+    expect(imageWrappers).toHaveLength(2);
+    expect(imageWrappers[0].dataset.ofvDocxFloatRepaired).toBe("true");
+    expect(imageWrappers[1].dataset.ofvDocxFloatRepaired).toBe("true");
+    expect(imageWrappers[0].style.left).toBe("72pt");
+    expect(imageWrappers[0].style.width).toBe("36pt");
+    expect(imageWrappers[1].style.left).toBe("180pt");
+    expect(imageWrappers[1].style.width).toBe("48pt");
+  });
+
   it("deduplicates textbox DOCX fallback paragraphs from compatibility markup", async () => {
     const container = document.createElement("div");
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -1579,6 +1618,47 @@ async function createFloatingShapeDocx(): Promise<Blob> {
             </w:r>
           </w:p>
           <w:p><w:r><w:t>颜琪</w:t></w:r></w:p>
+        </w:body>
+      </w:document>`
+  );
+  return zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  });
+}
+
+async function createMultipleFloatingPicturesDocx(): Promise<Blob> {
+  const zip = new JSZip();
+  const pictureAnchor = (relationshipId: string, offsetX: number, width: number, height: number) => `
+    <w:p>
+      <w:r>
+        <w:drawing>
+          <wp:anchor>
+            <wp:positionH relativeFrom="column"><wp:posOffset>${Math.round(offsetX * 12700)}</wp:posOffset></wp:positionH>
+            <wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>
+            <wp:extent cx="${Math.round(width * 12700)}" cy="${Math.round(height * 12700)}"/>
+            <wp:wrapSquare wrapText="bothSides"/>
+            <a:graphic>
+              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                <pic:pic><pic:blipFill><a:blip r:embed="${relationshipId}"/></pic:blipFill></pic:pic>
+              </a:graphicData>
+            </a:graphic>
+          </wp:anchor>
+        </w:drawing>
+      </w:r>
+    </w:p>`;
+  zip.file(
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <w:document
+        xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+        xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <w:body>
+          ${pictureAnchor("rIdImage1", 72, 36, 36)}
+          ${pictureAnchor("rIdImage2", 180, 48, 48)}
         </w:body>
       </w:document>`
   );
