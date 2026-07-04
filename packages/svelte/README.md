@@ -61,6 +61,7 @@ npm install pdfjs-dist
 The component accepts the same preview options as `createViewer`, including:
 
 - `file` / `files`
+- `initialIndex`
 - `fileName`
 - `width` / `height`
 - `fit`

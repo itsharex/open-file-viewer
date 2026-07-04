@@ -306,13 +306,31 @@
   justify-content: center;
   min-height: min(320px, 55vh);
   min-width: 0;
-  overflow: hidden;
+  overflow: auto;
   cursor: grab;
   touch-action: none;
 }
 
+.ofv-image-stage-pages {
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: 24px;
+}
+
 .ofv-image-stage.is-dragging {
   cursor: grabbing;
+}
+
+.ofv-image-scrollbox {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
 }
 
 .ofv-image-content {
@@ -320,7 +338,7 @@
   height: auto;
   max-width: 100%;
   max-height: 100%;
-  transform-origin: center;
+  transform-origin: top left;
   transition: transform 120ms ease;
   will-change: transform;
   user-select: none;
@@ -328,6 +346,41 @@
 
 .ofv-image-stage.is-dragging .ofv-image-content {
   transition: none;
+}
+
+.ofv-tiff-pages {
+  display: grid;
+  gap: 18px;
+  width: max-content;
+  max-width: 100%;
+  height: auto;
+  transform-origin: top center;
+}
+
+.ofv-tiff-page {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  justify-items: center;
+}
+
+.ofv-tiff-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--ofv-border);
+  border-radius: 4px;
+  background: var(--ofv-surface);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+}
+
+.ofv-tiff-page figcaption {
+  max-width: 100%;
+  color: var(--ofv-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .ofv-image-info {
@@ -3370,6 +3423,200 @@
   word-break: break-word;
 }
 
+.ofv-code-container .token.comment,
+.ofv-code-container .token.prolog,
+.ofv-code-container .token.doctype,
+.ofv-code-container .token.cdata,
+.ofv-markdown-body pre .token.comment,
+.ofv-markdown-body pre .token.prolog,
+.ofv-markdown-body pre .token.doctype,
+.ofv-markdown-body pre .token.cdata {
+  color: #6b7280;
+}
+
+.ofv-code-container .token.punctuation,
+.ofv-markdown-body pre .token.punctuation {
+  color: #64748b;
+}
+
+.ofv-code-container .token.namespace,
+.ofv-markdown-body pre .token.namespace {
+  opacity: 0.72;
+}
+
+.ofv-code-container .token.property,
+.ofv-code-container .token.tag,
+.ofv-code-container .token.boolean,
+.ofv-code-container .token.number,
+.ofv-code-container .token.constant,
+.ofv-code-container .token.symbol,
+.ofv-code-container .token.deleted,
+.ofv-markdown-body pre .token.property,
+.ofv-markdown-body pre .token.tag,
+.ofv-markdown-body pre .token.boolean,
+.ofv-markdown-body pre .token.number,
+.ofv-markdown-body pre .token.constant,
+.ofv-markdown-body pre .token.symbol,
+.ofv-markdown-body pre .token.deleted {
+  color: #b45309;
+}
+
+.ofv-code-container .token.selector,
+.ofv-code-container .token.attr-name,
+.ofv-code-container .token.string,
+.ofv-code-container .token.char,
+.ofv-code-container .token.builtin,
+.ofv-code-container .token.inserted,
+.ofv-markdown-body pre .token.selector,
+.ofv-markdown-body pre .token.attr-name,
+.ofv-markdown-body pre .token.string,
+.ofv-markdown-body pre .token.char,
+.ofv-markdown-body pre .token.builtin,
+.ofv-markdown-body pre .token.inserted {
+  color: #15803d;
+}
+
+.ofv-code-container .token.operator,
+.ofv-code-container .token.entity,
+.ofv-code-container .token.url,
+.ofv-code-container .language-css .token.string,
+.ofv-code-container .style .token.string,
+.ofv-markdown-body pre .token.operator,
+.ofv-markdown-body pre .token.entity,
+.ofv-markdown-body pre .token.url,
+.ofv-markdown-body pre .language-css .token.string,
+.ofv-markdown-body pre .style .token.string {
+  color: #0369a1;
+}
+
+.ofv-code-container .token.atrule,
+.ofv-code-container .token.attr-value,
+.ofv-code-container .token.keyword,
+.ofv-markdown-body pre .token.atrule,
+.ofv-markdown-body pre .token.attr-value,
+.ofv-markdown-body pre .token.keyword {
+  color: #7c3aed;
+}
+
+.ofv-code-container .token.function,
+.ofv-code-container .token.class-name,
+.ofv-markdown-body pre .token.function,
+.ofv-markdown-body pre .token.class-name {
+  color: #2563eb;
+}
+
+.ofv-code-container .token.regex,
+.ofv-code-container .token.important,
+.ofv-code-container .token.variable,
+.ofv-markdown-body pre .token.regex,
+.ofv-markdown-body pre .token.important,
+.ofv-markdown-body pre .token.variable {
+  color: #be123c;
+}
+
+.ofv-code-container .token.important,
+.ofv-code-container .token.bold,
+.ofv-markdown-body pre .token.important,
+.ofv-markdown-body pre .token.bold {
+  font-weight: 600;
+}
+
+.ofv-code-container .token.italic,
+.ofv-markdown-body pre .token.italic {
+  font-style: italic;
+}
+
+.ofv-code-container .token.entity,
+.ofv-markdown-body pre .token.entity {
+  cursor: help;
+}
+
+.ofv-root.ofv-theme-dark .ofv-code-container .token.comment,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.prolog,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.doctype,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.cdata,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.comment,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.prolog,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.doctype,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.cdata {
+  color: #94a3b8;
+}
+
+.ofv-root.ofv-theme-dark .ofv-code-container .token.punctuation,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.punctuation {
+  color: #cbd5e1;
+}
+
+.ofv-root.ofv-theme-dark .ofv-code-container .token.property,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.tag,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.boolean,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.number,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.constant,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.symbol,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.deleted,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.property,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.tag,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.boolean,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.number,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.constant,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.symbol,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.deleted {
+  color: #fbbf24;
+}
+
+.ofv-root.ofv-theme-dark .ofv-code-container .token.selector,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.attr-name,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.string,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.char,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.builtin,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.inserted,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.selector,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.attr-name,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.string,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.char,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.builtin,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.inserted {
+  color: #86efac;
+}
+
+.ofv-root.ofv-theme-dark .ofv-code-container .token.operator,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.entity,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.url,
+.ofv-root.ofv-theme-dark .ofv-code-container .language-css .token.string,
+.ofv-root.ofv-theme-dark .ofv-code-container .style .token.string,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.operator,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.entity,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.url,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .language-css .token.string,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .style .token.string {
+  color: #7dd3fc;
+}
+
+.ofv-root.ofv-theme-dark .ofv-code-container .token.atrule,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.attr-value,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.keyword,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.atrule,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.attr-value,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.keyword {
+  color: #c4b5fd;
+}
+
+.ofv-root.ofv-theme-dark .ofv-code-container .token.function,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.class-name,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.function,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.class-name {
+  color: #93c5fd;
+}
+
+.ofv-root.ofv-theme-dark .ofv-code-container .token.regex,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.important,
+.ofv-root.ofv-theme-dark .ofv-code-container .token.variable,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.regex,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.important,
+.ofv-root.ofv-theme-dark .ofv-markdown-body pre .token.variable {
+  color: #fda4af;
+}
+
 @media (max-width: 640px) {
   .ofv-code-header {
     align-items: stretch;
@@ -3632,12 +3879,15 @@
   line-height: 1;
   pointer-events: none;
   user-select: text;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
 }
 
 .ofv-pdf-text-layer span {
   color: transparent;
   position: absolute;
   white-space: pre;
+  line-height: 1;
   cursor: text;
   transform-origin: 0% 0%;
   pointer-events: auto;

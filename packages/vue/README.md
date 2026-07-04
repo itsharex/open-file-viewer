@@ -63,6 +63,7 @@ const plugins = [
 The component accepts the same preview options as `createViewer`, including:
 
 - `file` / `files`
+- `initial-index`
 - `file-name`
 - `width` / `height`
 - `fit`

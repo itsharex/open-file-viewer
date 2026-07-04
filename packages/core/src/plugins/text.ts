@@ -161,35 +161,6 @@ const mimeLangMap: Record<string, string> = {
 const MAX_HIGHLIGHT_CHARS = 180_000;
 const MAX_RENDER_CHARS = 600_000;
 
-function loadPrismCss(theme: "light" | "dark"): Promise<void> {
-  const lightId = "ofv-prism-css-light";
-  const darkId = "ofv-prism-css-dark";
-
-  const activeId = theme === "dark" ? darkId : lightId;
-  const inactiveId = theme === "dark" ? lightId : darkId;
-
-  document.getElementById(inactiveId)?.remove();
-
-  if (document.getElementById(activeId)) {
-    return Promise.resolve();
-  }
-
-  const href =
-    theme === "dark"
-      ? "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css"
-      : "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css";
-
-  return new Promise((resolve, reject) => {
-    const link = document.createElement("link");
-    link.id = activeId;
-    link.rel = "stylesheet";
-    link.href = href;
-    link.onload = () => resolve();
-    link.onerror = () => reject(new Error(`Failed to load Prism CSS: ${href}`));
-    document.head.appendChild(link);
-  });
-}
-
 export function textPlugin(): PreviewPlugin {
   return {
     name: "text",
@@ -213,13 +184,6 @@ export function textPlugin(): PreviewPlugin {
           }
         };
       }
-
-      // Detect dark theme active state
-      const isDark =
-        ctx.host.parentElement?.classList.contains("ofv-theme-dark") ||
-        document.body.classList.contains("ofv-theme-dark") ||
-        (ctx.options.theme === "auto" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) ||
-        ctx.options.theme === "dark";
 
       // 1. Markdown path
       if (isMarkdown) {
@@ -247,7 +211,6 @@ export function textPlugin(): PreviewPlugin {
         try {
           const codeBlocks = container.querySelectorAll("pre code");
           if (codeBlocks.length > 0) {
-            await loadPrismCss(isDark ? "dark" : "light");
             codeBlocks.forEach((block) => {
               const parent = block.parentElement;
               if (parent && !parent.className.includes("language-")) {
@@ -377,10 +340,6 @@ export function textPlugin(): PreviewPlugin {
           console.warn(`Prism failed to load language component for: ${lang}`, e);
         }
       }
-
-      await loadPrismCss(isDark ? "dark" : "light").catch((error) => {
-        console.warn("Prism CSS failed to load; rendering code without external theme:", error);
-      });
 
       const codeText = text.length > MAX_RENDER_CHARS ? text.slice(0, MAX_RENDER_CHARS) : text;
       const totalLines = countLines(text);

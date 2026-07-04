@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import DOMPurify from "dompurify";
 import type { WorkBook } from "xlsx";
-import type { PreviewCommand, PreviewContext, PreviewInstance, PreviewPlugin } from "../types";
+import type { PreviewCommand, PreviewContext, PreviewFit, PreviewInstance, PreviewPlugin } from "../types";
 import { createPanel, createSection, decodeTextBuffer, getInitialZoom, readArrayBuffer, resolveFormat } from "./utils";
 import { renderPdfDocumentPreview, type PdfPluginOptions } from "./pdf";
 
@@ -166,13 +166,13 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
       if (conversionContext && (await shouldUseOfficeConversion(options, conversionContext))) {
         delegatedInstance = await renderConvertedOfficePreview(panel, ctx, options, conversionContext);
       } else if (packageFormat === "docx" && !fileIsDocx(extension)) {
-        disposeDocxFit = await renderDocx(panel, arrayBuffer);
+        disposeDocxFit = await renderDocx(panel, arrayBuffer, ctx.options.fit);
       } else if (packageFormat === "xlsx" && !sheetExtensions.has(extension)) {
         await renderSheet(panel, arrayBuffer, "xlsx");
       } else if (packageFormat === "pptx" && !["pptx", "pptm", "ppsx", "ppsm", "potx", "potm"].includes(extension)) {
         await renderPptx(panel, arrayBuffer);
       } else if (fileIsDocx(extension)) {
-        disposeDocxFit = await renderDocx(panel, arrayBuffer);
+        disposeDocxFit = await renderDocx(panel, arrayBuffer, ctx.options.fit);
       } else if (extension === "rtf") {
         renderPlainDocument(panel, "RTF 文档", rtfToText(await readTextFromBuffer(arrayBuffer)));
       } else if (extension === "odt") {
@@ -181,7 +181,7 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
         renderOpenDocumentXml(panel, "FODT 文档", await readTextFromBuffer(arrayBuffer));
       } else if (extension === "fods") {
         renderFlatOds(panel, await readTextFromBuffer(arrayBuffer));
-      } else if (packagedOfficeCandidates.has(extension) && (await renderPackagedOfficePreview(panel, arrayBuffer, extension))) {
+      } else if (packagedOfficeCandidates.has(extension) && (await renderPackagedOfficePreview(panel, arrayBuffer, extension, ctx.options.fit))) {
         // Rendered by package sniffing.
       } else if (sheetExtensions.has(extension)) {
         await renderSheet(panel, arrayBuffer, extension);
@@ -419,7 +419,7 @@ async function detectPackagedOfficeFormat(arrayBuffer: ArrayBuffer): Promise<"do
   return undefined;
 }
 
-async function renderDocx(panel: HTMLElement, arrayBuffer: ArrayBuffer): Promise<() => void> {
+async function renderDocx(panel: HTMLElement, arrayBuffer: ArrayBuffer, fit: PreviewFit): Promise<() => void> {
   const content = document.createElement("div");
   content.className = "ofv-docx-document";
   const styleContainer = document.createElement("div");
@@ -462,7 +462,7 @@ async function renderDocx(panel: HTMLElement, arrayBuffer: ArrayBuffer): Promise
       return () => undefined;
     }
     panel.append(content);
-    disposeFit = fitDocxPages(content);
+    disposeFit = fitDocxPages(content, fit);
     return () => {
       disposeFit?.();
       styleContainer.remove();
@@ -1494,7 +1494,7 @@ function parseCssLineHeight(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function fitDocxPages(container: HTMLElement): () => void {
+function fitDocxPages(container: HTMLElement, fit: PreviewFit): () => void {
   const wrapper = container.querySelector<HTMLElement>(".ofv-docx-wrapper");
   if (!wrapper) {
     return () => undefined;
@@ -1509,6 +1509,7 @@ function fitDocxPages(container: HTMLElement): () => void {
     }
 
     const availableWidth = Math.max(1, container.clientWidth - 48);
+    const availableHeight = container.clientHeight > 0 ? Math.max(1, container.clientHeight - 48) : undefined;
     const pageWidth = Math.max(
       1,
       ...frames.map(({ page }) => {
@@ -1516,15 +1517,25 @@ function fitDocxPages(container: HTMLElement): () => void {
         return page.offsetWidth || rectWidth || parseCssPixelValue(page.style.width) || 794;
       })
     );
-    const scale = Math.min(1, Math.max(0.35, availableWidth / pageWidth));
+    const pageHeight = Math.max(
+      1,
+      ...frames.map(({ page }) => page.offsetHeight || page.getBoundingClientRect().height || parseCssPixelValue(page.style.height) || 1123)
+    );
+    const scale = getDocxFitScale(fit, availableWidth, availableHeight, pageWidth, pageHeight);
     const userZoom = parseCssPixelValue(panel?.style.getPropertyValue("--ofv-office-zoom") || "1") || 1;
     wrapper.style.setProperty("--ofv-docx-scale", formatCssNumber(scale));
     wrapper.style.setProperty("--ofv-docx-page-width", `${pageWidth}px`);
+    wrapper.style.width = `${Math.ceil(pageWidth * scale * userZoom + 48)}px`;
+    wrapper.style.maxWidth = "none";
+    wrapper.style.overflow = "visible";
 
     for (const { frame, page } of frames) {
-      const pageHeight = page.offsetHeight || page.getBoundingClientRect().height || parseCssPixelValue(page.style.height);
-      if (pageHeight > 0) {
-        frame.style.height = `${Math.ceil(pageHeight * scale * userZoom)}px`;
+      const framePageHeight = page.offsetHeight || page.getBoundingClientRect().height || parseCssPixelValue(page.style.height);
+      const framePageWidth = page.offsetWidth || page.getBoundingClientRect().width || parseCssPixelValue(page.style.width) || pageWidth;
+      frame.style.width = `${Math.ceil(framePageWidth * scale * userZoom)}px`;
+      frame.style.maxWidth = "none";
+      if (framePageHeight > 0) {
+        frame.style.height = `${Math.ceil(framePageHeight * scale * userZoom)}px`;
       }
     }
   };
@@ -1551,6 +1562,33 @@ function fitDocxPages(container: HTMLElement): () => void {
     panel?.removeEventListener("ofv-office-zoom", update);
     observer.disconnect();
   };
+}
+
+function getDocxFitScale(
+  fit: PreviewFit,
+  availableWidth: number,
+  availableHeight: number | undefined,
+  pageWidth: number,
+  pageHeight: number
+): number {
+  const widthScale = availableWidth / pageWidth;
+  const heightScale = availableHeight ? availableHeight / pageHeight : undefined;
+  if (fit === "actual") {
+    return 1;
+  }
+  if (fit === "height") {
+    return Math.max(0.1, heightScale ?? widthScale);
+  }
+  if (fit === "cover") {
+    return Math.max(0.1, Math.max(widthScale, heightScale ?? widthScale));
+  }
+  if (fit === "scale-down") {
+    return Math.min(1, Math.max(0.1, Math.min(widthScale, heightScale ?? widthScale)));
+  }
+  if (fit === "contain") {
+    return Math.max(0.1, Math.min(widthScale, heightScale ?? widthScale));
+  }
+  return Math.max(0.1, widthScale);
 }
 
 function ensureDocxPageFrames(wrapper: HTMLElement): Array<{ frame: HTMLElement; page: HTMLElement }> {
@@ -3237,7 +3275,8 @@ function renderOpenDocumentPresentationXml(panel: HTMLElement, xml: string): voi
 async function renderPackagedOfficePreview(
   panel: HTMLElement,
   arrayBuffer: ArrayBuffer,
-  extension: string
+  extension: string,
+  fit: PreviewFit
 ): Promise<boolean> {
   let zip: JSZip;
   try {
@@ -3251,7 +3290,7 @@ async function renderPackagedOfficePreview(
   const contentXml = zip.file(/(^|\/)content\.xml$/i)[0];
 
   if (hasEntry("word/document.xml")) {
-    await renderDocx(panel, arrayBuffer);
+    await renderDocx(panel, arrayBuffer, fit);
     return true;
   }
 

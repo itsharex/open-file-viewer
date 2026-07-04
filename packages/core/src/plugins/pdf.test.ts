@@ -294,6 +294,85 @@ describe("pdfPlugin", () => {
     viewer.destroy();
   });
 
+  it("preserves intrinsic PDF page rotation while rendering", async () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    const container = createSizedContainer();
+    const page = createPdfPageMock({ rotation: 90 });
+    const pdfjs = createPdfJsMock({ page });
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["pdf"], { type: "application/pdf" }),
+      fileName: "rotated-source.pdf",
+      toolbar: true,
+      plugins: [pdfPlugin({ pdfjs })]
+    });
+
+    await waitFor(() => container.querySelectorAll("canvas.ofv-pdf-page").length === 2);
+
+    const firstWrapper = container.querySelector<HTMLElement>(".ofv-pdf-page-wrapper");
+    expect(parseCssPx(firstWrapper?.style.width)).toBeGreaterThan(parseCssPx(firstWrapper?.style.height));
+    expect(page.render).toHaveBeenCalledWith(
+      expect.objectContaining({
+        viewport: expect.objectContaining({ rotation: 90 })
+      })
+    );
+
+    container.querySelector<HTMLButtonElement>('button[aria-label="Rotate right"]')?.click();
+    await waitFor(() => page.getViewport.mock.calls.some(([args]: any[]) => args?.rotation === 180));
+
+    viewer.destroy();
+  });
+
+  it("keeps PDF text layer glyph metrics stable while zooming", async () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    const container = createSizedContainer();
+    const page = createPdfPageMock({
+      textItems: [
+        {
+          str: "Zoom text",
+          transform: [12, 0, 0, 12, 24, 120],
+          width: 54,
+          fontName: "Helvetica"
+        }
+      ]
+    });
+    const pdfjs = createPdfJsMock({ page });
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["pdf"], { type: "application/pdf" }),
+      fileName: "text-zoom.pdf",
+      fit: "actual",
+      toolbar: true,
+      plugins: [pdfPlugin({ pdfjs })]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-pdf-text-layer span")));
+
+    const firstSpan = container.querySelector<HTMLElement>(".ofv-pdf-text-layer span");
+    const firstFontSize = parseCssPx(firstSpan?.style.fontSize);
+    expect(firstSpan?.style.lineHeight).toBe("1");
+    expect(parseCssPx(firstSpan?.style.height)).toBeCloseTo(firstFontSize, 4);
+    expect(firstSpan?.style.transform).not.toContain("scaleY");
+
+    container.querySelector<HTMLButtonElement>('button[aria-label="Zoom in"]')?.click();
+
+    await waitFor(() => {
+      const span = container.querySelector<HTMLElement>(".ofv-pdf-text-layer span");
+      return Boolean(span && span !== firstSpan);
+    });
+
+    const zoomedSpan = container.querySelector<HTMLElement>(".ofv-pdf-text-layer span");
+    const zoomedFontSize = parseCssPx(zoomedSpan?.style.fontSize);
+    expect(zoomedFontSize).toBeGreaterThan(firstFontSize);
+    expect(zoomedSpan?.style.lineHeight).toBe("1");
+    expect(parseCssPx(zoomedSpan?.style.height)).toBeCloseTo(zoomedFontSize, 4);
+    expect(zoomedSpan?.style.transform).not.toContain("scaleY");
+
+    viewer.destroy();
+  });
+
   it("shows a page hint when a PDF-compatible page renders visually blank", async () => {
     vi.stubGlobal("IntersectionObserver", undefined);
     const container = createSizedContainer();
@@ -482,8 +561,8 @@ describe("pdfPlugin", () => {
   });
 });
 
-function createPdfJsMock(): any {
-  const page = createPdfPageMock();
+function createPdfJsMock(options: { page?: any } = {}): any {
+  const page = options.page || createPdfPageMock();
 
   return {
     __page: page,
@@ -499,13 +578,16 @@ function createPdfJsMock(): any {
   };
 }
 
-function createPdfPageMock(): any {
+function createPdfPageMock(options: { rotation?: number; textItems?: any[] } = {}): any {
+  const intrinsicRotation = options.rotation ?? 0;
   return {
-    getViewport: vi.fn(({ scale, rotation = 0 }: { scale: number; rotation?: number }) => {
+    rotate: intrinsicRotation,
+    getViewport: vi.fn(({ scale, rotation = intrinsicRotation }: { scale: number; rotation?: number }) => {
       const sideways = rotation === 90 || rotation === 270;
       return {
         width: (sideways ? 600 : 400) * scale,
         height: (sideways ? 400 : 600) * scale,
+        rotation,
         transform: [scale, 0, 0, scale, 0, 0]
       };
     }),
@@ -516,7 +598,7 @@ function createPdfPageMock(): any {
       };
     }),
     getTextContent() {
-      return Promise.resolve({ items: [] });
+      return Promise.resolve({ items: options.textItems || [] });
     }
   };
 }

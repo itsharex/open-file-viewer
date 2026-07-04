@@ -54,6 +54,34 @@ describe("OpenFileViewer Vue adapter", () => {
     expect(await screen.findByText("当前文件暂不支持在线预览")).toBeTruthy();
   });
 
+  it("passes initialIndex through and reacts to initialIndex changes", async () => {
+    const files = [
+      { file: new Blob(["one"], { type: "text/plain" }), fileName: "one.txt" },
+      { file: new Blob(["two"], { type: "text/plain" }), fileName: "two.txt" },
+      { file: new Blob(["three"], { type: "text/plain" }), fileName: "three.txt" }
+    ];
+    const plugins = [createPlugin("indexed", vi.fn())];
+    const view = render(OpenFileViewer, {
+      props: {
+        files,
+        initialIndex: 1,
+        plugins
+      }
+    });
+
+    expect(await screen.findByText("indexed:two.txt")).toBeTruthy();
+
+    await view.rerender({
+      files,
+      initialIndex: 2,
+      plugins
+    });
+
+    expect(await screen.findByText("indexed:three.txt")).toBeTruthy();
+
+    view.unmount();
+  });
+
   it("passes locale and messages through to the core viewer", async () => {
     render(OpenFileViewer, {
       props: {

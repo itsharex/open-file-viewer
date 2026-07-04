@@ -189,17 +189,18 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
   }
   const pdfDocument = doc;
 
-  const pagesMeta: Array<{ width: number; height: number }> = [];
+  const pagesMeta: Array<{ width: number; height: number; rotation: number }> = [];
   for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
     try {
       const page = await pdfDocument.getPage(pageNumber);
       const baseViewport = page.getViewport({ scale: 1 });
       pagesMeta.push({
         width: baseViewport.width,
-        height: baseViewport.height
+        height: baseViewport.height,
+        rotation: getPdfPageRotation(page)
       });
     } catch {
-      pagesMeta.push({ width: 612, height: 792 });
+      pagesMeta.push({ width: 612, height: 792, rotation: 0 });
     }
   }
 
@@ -252,7 +253,7 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
         options.fit === "actual"
           ? zoomFactor
           : Math.max(0.05, Math.min(5, (getPdfAvailableWidth(size.width) / rotatedPdfWidth(meta, rotation)) * zoomFactor));
-      const viewport = page.getViewport({ scale, rotation });
+      const viewport = page.getViewport({ scale, rotation: getPdfRenderRotation(meta, rotation) });
       const outputScale = getPdfOutputScale();
       const cssWidth = Math.floor(viewport.width);
       const cssHeight = Math.floor(viewport.height);
@@ -300,6 +301,8 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
         const span = document.createElement("span");
         span.textContent = str;
         span.style.fontSize = `${fontHeight}px`;
+        span.style.lineHeight = "1";
+        span.style.height = `${fontHeight}px`;
         span.style.fontFamily = (item as any).fontName || "sans-serif";
         span.style.left = `${tx[4]}px`;
         span.style.top = `${tx[5] - fontHeight}px`;
@@ -534,6 +537,15 @@ function appendPdfSummary(parent: HTMLElement, label: string, value: string): vo
 
 function normalizePdfRotation(value: number): number {
   return ((value % 360) + 360) % 360;
+}
+
+function getPdfPageRotation(page: { rotate?: unknown }): number {
+  const rotation = Number(page.rotate);
+  return Number.isFinite(rotation) ? normalizePdfRotation(rotation) : 0;
+}
+
+function getPdfRenderRotation(meta: { rotation?: number }, userRotation: number): number {
+  return normalizePdfRotation((meta.rotation || 0) + userRotation);
 }
 
 function isPdfRotatedSideways(rotation: number): boolean {

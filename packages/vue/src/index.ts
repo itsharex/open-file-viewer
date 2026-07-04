@@ -30,6 +30,7 @@ export const OpenFileViewer = defineComponent({
       type: Array as PropType<PreviewOptions["files"]>,
       default: undefined
     },
+    initialIndex: Number,
     fileName: String,
     mimeType: String,
     width: {
@@ -94,6 +95,7 @@ export const OpenFileViewer = defineComponent({
         container: containerRef.value,
         file: props.file,
         files: props.files,
+        initialIndex: props.initialIndex,
         fileName: props.fileName,
         mimeType: props.mimeType,
         width: props.width,
@@ -146,6 +148,7 @@ export const OpenFileViewer = defineComponent({
       () => [
         props.file,
         props.files,
+        props.initialIndex,
         props.fileName,
         props.mimeType,
         props.width,

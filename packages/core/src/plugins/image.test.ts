@@ -97,6 +97,44 @@ describe("imagePlugin", () => {
     viewer.destroy();
   });
 
+  it("expands the image scroll area when zooming in", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:scrollable-image"),
+      revokeObjectURL: vi.fn()
+    });
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["<svg></svg>"], { type: "image/svg+xml" }),
+      fileName: "large.svg",
+      toolbar: true,
+      plugins: [imagePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-image-content")));
+
+    const image = container.querySelector<HTMLImageElement>(".ofv-image-content")!;
+    Object.defineProperty(image, "offsetWidth", { configurable: true, value: 640 });
+    Object.defineProperty(image, "offsetHeight", { configurable: true, value: 360 });
+    image.dispatchEvent(new Event("load"));
+
+    const scrollBox = container.querySelector<HTMLElement>(".ofv-image-scrollbox");
+    expect(scrollBox?.style.width).toBe("640px");
+    expect(scrollBox?.style.height).toBe("360px");
+
+    container.querySelector<HTMLButtonElement>('button[aria-label="Zoom in"]')?.click();
+
+    await waitFor(() => scrollBox?.style.width === "800px");
+    expect(scrollBox?.style.height).toBe("450px");
+    expect(image.style.transform).toContain("scale(1.25)");
+
+    viewer.destroy();
+  });
+
   it("renders inline image controls only when the shared toolbar is disabled", async () => {
     const container = document.createElement("div");
     document.body.append(container);
@@ -390,6 +428,54 @@ describe("imagePlugin", () => {
     viewer.destroy();
   });
 
+  it("renders every image directory in multi-page TIFF files", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const first = { width: 2, height: 1 };
+    const second = { width: 1, height: 2 };
+    utifMock.decode.mockReturnValueOnce([first, second]);
+    utifMock.toRGBA8
+      .mockReturnValueOnce(new Uint8Array([255, 0, 0, 255, 0, 128, 255, 255]))
+      .mockReturnValueOnce(new Uint8Array([0, 0, 0, 255, 255, 255, 255, 255]));
+    vi.stubGlobal(
+      "ImageData",
+      vi.fn(function ImageDataMock(this: ImageData, data: Uint8ClampedArray, width: number, height: number) {
+        Object.assign(this, { data, width, height });
+      })
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      putImageData: vi.fn()
+    } as unknown as CanvasRenderingContext2D);
+
+    const viewer = createViewer({
+      container,
+      file: minimalMultiPageTiff([
+        { width: 2, height: 1 },
+        { width: 1, height: 2 }
+      ]),
+      fileName: "scan.tiff",
+      toolbar: true,
+      plugins: [imagePlugin()]
+    });
+
+    await waitFor(() => container.querySelectorAll(".ofv-tiff-canvas").length === 2);
+
+    const canvases = Array.from(container.querySelectorAll<HTMLCanvasElement>(".ofv-tiff-canvas"));
+    expect(container.querySelector(".ofv-tiff-pages")).not.toBeNull();
+    expect(container.querySelector(".ofv-image-stage-pages")).not.toBeNull();
+    expect(canvases.map((canvas) => `${canvas.width}x${canvas.height}`)).toEqual(["2x1", "1x2"]);
+    expect(container.textContent).toContain("第 1 / 2 页");
+    expect(container.textContent).toContain("第 2 / 2 页");
+    expect(container.textContent).toContain("图像2");
+    expect(utifMock.decodeImage).toHaveBeenCalledWith(expect.any(ArrayBuffer), first);
+    expect(utifMock.decodeImage).toHaveBeenCalledWith(expect.any(ArrayBuffer), second);
+
+    container.querySelector<HTMLButtonElement>('button[aria-label="Rotate right"]')?.click();
+    expect(container.querySelector<HTMLElement>(".ofv-tiff-pages")?.style.transform).toContain("rotate(90deg)");
+
+    viewer.destroy();
+  });
+
   it("falls back to native image handling when TIFF decoding fails", async () => {
     const container = document.createElement("div");
     document.body.append(container);
@@ -679,6 +765,25 @@ function minimalTiff({ width, height }: { width: number; height: number }): Blob
   writeTiffEntry(view, 22, 257, height);
   writeTiffEntry(view, 34, 258, 8);
   view.setUint32(46, 0, true);
+  return new Blob([bytes], { type: "image/tiff" });
+}
+
+function minimalMultiPageTiff(pages: Array<{ width: number; height: number }>): Blob {
+  const ifdSize = 2 + 3 * 12 + 4;
+  const bytes = new Uint8Array(8 + pages.length * ifdSize);
+  const view = new DataView(bytes.buffer);
+  bytes.set([0x49, 0x49, 0x2a, 0x00]);
+  view.setUint32(4, 8, true);
+
+  pages.forEach((page, index) => {
+    const offset = 8 + index * ifdSize;
+    view.setUint16(offset, 3, true);
+    writeTiffEntry(view, offset + 2, 256, page.width);
+    writeTiffEntry(view, offset + 14, 257, page.height);
+    writeTiffEntry(view, offset + 26, 258, 8);
+    view.setUint32(offset + 38, index + 1 < pages.length ? offset + ifdSize : 0, true);
+  });
+
   return new Blob([bytes], { type: "image/tiff" });
 }
 
