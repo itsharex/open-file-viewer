@@ -1234,7 +1234,8 @@ function looksLikeDocxTextboxHeading(value: string): boolean {
 }
 
 async function normalizeDocxLayout(container: HTMLElement, arrayBuffer: ArrayBuffer): Promise<void> {
-  const hints = await readDocxLayoutHints(arrayBuffer);
+  const [hints, charts] = await Promise.all([readDocxLayoutHints(arrayBuffer), readDocxCharts(arrayBuffer)]);
+  repairDocxChartPlaceholders(container, charts);
   const pages = container.querySelectorAll<HTMLElement>("section.ofv-docx");
   for (const page of pages) {
     repairDocxShapeFills(page);
@@ -1248,6 +1249,87 @@ async function normalizeDocxLayout(container: HTMLElement, arrayBuffer: ArrayBuf
       }
     }
   }
+}
+
+type DocxChartPreview = ChartPreview & {
+  widthPt: number;
+  heightPt: number;
+};
+
+async function readDocxCharts(arrayBuffer: ArrayBuffer): Promise<DocxChartPreview[]> {
+  try {
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const documentXml = await zip.file("word/document.xml")?.async("text");
+    const documentDoc = documentXml ? parseOfficeXml(documentXml) : undefined;
+    if (!documentDoc) {
+      return [];
+    }
+    const relationships = await readOfficeRelationships(zip, "word/document.xml");
+    const chartDrawings = Array.from(documentDoc.getElementsByTagName("*"))
+      .filter((element) => element.localName === "inline" || element.localName === "anchor")
+      .map((element) => readDocxChartDrawing(element))
+      .filter((item): item is { relationshipId: string; widthPt: number; heightPt: number } => Boolean(item?.relationshipId));
+    const charts: DocxChartPreview[] = [];
+    for (const [index, drawing] of chartDrawings.entries()) {
+      const chartRel = relationships.find((rel) => rel.id === drawing.relationshipId && /\/chart$/i.test(rel.type));
+      const chartPath = resolveOfficeRelationshipTarget("word/document.xml", chartRel?.target);
+      const chartXml = chartPath ? await zip.file(chartPath)?.async("text") : undefined;
+      const chart = chartXml ? parseChartXml(chartXml, chartPath?.split("/").pop() || `chart${index + 1}.xml`) : null;
+      if (chart) {
+        charts.push({ ...chart, widthPt: drawing.widthPt, heightPt: drawing.heightPt });
+      }
+    }
+    return charts;
+  } catch {
+    return [];
+  }
+}
+
+function readDocxChartDrawing(element: Element): { relationshipId: string; widthPt: number; heightPt: number } | undefined {
+  const chart = Array.from(element.getElementsByTagName("*")).find((child) => child.localName === "chart");
+  const relationshipId = chart ? getXmlAttribute(chart, "id") : "";
+  if (!relationshipId) {
+    return undefined;
+  }
+  const extent = Array.from(element.children).find((child) => child.localName === "extent");
+  return {
+    relationshipId,
+    widthPt: emuToPt(Number(extent?.getAttribute("cx") || 0)),
+    heightPt: emuToPt(Number(extent?.getAttribute("cy") || 0))
+  };
+}
+
+function repairDocxChartPlaceholders(container: HTMLElement, charts: DocxChartPreview[]): void {
+  if (charts.length === 0) {
+    return;
+  }
+  const placeholders = Array.from(container.querySelectorAll<HTMLElement>("section.ofv-docx div")).filter(isDocxChartPlaceholder);
+  if (placeholders.length !== charts.length) {
+    return;
+  }
+  placeholders.forEach((placeholder, index) => {
+    const chart = charts[index];
+    placeholder.classList.add("ofv-docx-chart-preview");
+    placeholder.dataset.ofvDocxChartPreview = "true";
+    if (chart.widthPt > 0) {
+      placeholder.style.width ||= `${formatCssNumber(chart.widthPt)}pt`;
+    }
+    if (chart.heightPt > 0) {
+      placeholder.style.height ||= `${formatCssNumber(chart.heightPt)}pt`;
+    }
+    placeholder.replaceChildren(renderChartSvg(chart));
+  });
+}
+
+function isDocxChartPlaceholder(element: HTMLElement): boolean {
+  if (element.dataset.ofvDocxChartPreview === "true" || element.children.length > 0 || normalizePreviewText(element.textContent || "")) {
+    return false;
+  }
+  const display = element.style.display;
+  const position = element.style.position;
+  const width = parseCssPixelValue(element.style.width);
+  const height = parseCssPixelValue(element.style.height);
+  return display === "inline-block" && position === "relative" && width >= 120 && height >= 80;
 }
 
 function repairDocxHeadingShapeAlignment(page: HTMLElement): void {

@@ -798,6 +798,19 @@
   overflow-wrap: anywhere;
 }
 
+.ofv-docx-chart-preview {
+  min-width: 0;
+  overflow: hidden;
+  background: #fff;
+}
+
+.ofv-docx-chart-preview .ofv-chart-svg {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+}
+
 .ofv-docx-fallback-note {
   margin: 0 0 12px;
   padding: 8px 10px;

@@ -500,6 +500,35 @@ describe("officePlugin", () => {
     expect(visibleText(container)).not.toContain("Revenue: 12, 18, 30");
   });
 
+  it("renders DOCX embedded chart placeholders from OOXML chart parts", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    renderDocxAsync.mockImplementationOnce(async (_data: unknown, bodyContainer: HTMLElement) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "ofv-docx-wrapper";
+      const page = document.createElement("section");
+      page.className = "ofv-docx";
+      page.style.width = "595.3pt";
+      page.innerHTML = `<p><span><div style="display:inline-block;position:relative;width:320pt;height:180pt"></div></span></p>`;
+      wrapper.append(page);
+      bodyContainer.append(wrapper);
+    });
+
+    createViewer({
+      container,
+      file: await createDocxWithChart(),
+      fileName: "chart.docx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-docx-chart-preview .ofv-chart-svg")));
+
+    expect(container.querySelector(".ofv-docx-chart-preview")?.getAttribute("data-ofv-docx-chart-preview")).toBe("true");
+    expect(container.querySelector(".ofv-docx-chart-preview .ofv-chart-svg")?.getAttribute("role")).toBe("img");
+    expect(container.querySelector(".ofv-docx-chart-preview .ofv-chart-svg")?.getAttribute("aria-label")).toBe("Quarterly Revenue");
+    expect(container.querySelectorAll(".ofv-docx-chart-preview .ofv-chart-svg rect[data-index]")).toHaveLength(3);
+  });
+
   it("renders flat ODS spreadsheets with repeated cells and formulas", async () => {
     const container = document.createElement("div");
     document.body.append(container);
@@ -532,6 +561,7 @@ describe("officePlugin", () => {
 
   it("uses the layout DOCX renderer before falling back to content extraction", async () => {
     const container = document.createElement("div");
+    const callsBefore = renderDocxAsync.mock.calls.length;
     document.body.append(container);
 
     createViewer({
@@ -545,10 +575,10 @@ describe("officePlugin", () => {
 
     await waitFor(() => Boolean(container.querySelector(".ofv-docx-document")));
 
-    expect(renderDocxAsync).toHaveBeenCalledTimes(1);
+    expect(renderDocxAsync).toHaveBeenCalledTimes(callsBefore + 1);
     expect(container.querySelector(".ofv-docx-document")?.parentElement?.classList.contains("ofv-office")).toBe(true);
     expect(container.querySelector(".ofv-office > section > h3")).toBeNull();
-    expect(renderDocxAsync.mock.calls[0][3]).toMatchObject({
+    expect(renderDocxAsync.mock.calls.at(-1)?.[3]).toMatchObject({
       className: "ofv-docx",
       breakPages: true,
       renderHeaders: true,
@@ -1904,6 +1934,85 @@ async function createWorkbookWithChart(): Promise<Blob> {
   return zip.generateAsync({
     type: "blob",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+}
+
+async function createDocxWithChart(): Promise<Blob> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+        <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+        <Default Extension="xml" ContentType="application/xml"/>
+        <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+        <Override PartName="/word/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>
+      </Types>`
+  );
+  zip.file(
+    "_rels/.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+      </Relationships>`
+  );
+  zip.file(
+    "word/_rels/document.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rIdChart1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="charts/chart1.xml"/>
+      </Relationships>`
+  );
+  zip.file(
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+        xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <w:body>
+          <w:p><w:r><w:drawing>
+            <wp:inline>
+              <wp:extent cx="4064000" cy="2286000"/>
+              <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+                <c:chart r:id="rIdChart1"/>
+              </a:graphicData></a:graphic>
+            </wp:inline>
+          </w:drawing></w:r></w:p>
+        </w:body>
+      </w:document>`
+  );
+  zip.file(
+    "word/charts/chart1.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <c:chart>
+          <c:title><c:tx><c:rich><a:p><a:r><a:t>Quarterly Revenue</a:t></a:r></a:p></c:rich></c:tx></c:title>
+          <c:plotArea>
+            <c:barChart>
+              <c:ser>
+                <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Revenue</c:v></c:pt></c:strCache></c:strRef></c:tx>
+                <c:cat><c:strRef><c:strCache>
+                  <c:pt idx="0"><c:v>Q1</c:v></c:pt>
+                  <c:pt idx="1"><c:v>Q2</c:v></c:pt>
+                  <c:pt idx="2"><c:v>Q3</c:v></c:pt>
+                </c:strCache></c:strRef></c:cat>
+                <c:val><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>12</c:v></c:pt>
+                  <c:pt idx="1"><c:v>18</c:v></c:pt>
+                  <c:pt idx="2"><c:v>30</c:v></c:pt>
+                </c:numCache></c:numRef></c:val>
+              </c:ser>
+            </c:barChart>
+          </c:plotArea>
+        </c:chart>
+      </c:chartSpace>`
+  );
+  return zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   });
 }
 
