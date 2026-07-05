@@ -208,7 +208,7 @@ const translations: Record<Language, Record<string, string>> = {
 };
 
 const formats = [
-  { title: "PDF / Office", icon: "document", level: { zh: "高频业务文档", en: "Business documents" }, items: "pdf docx docm dotx dotm rtf odt xlsx xlsm ods pptx pptm odp ofd epub xps" },
+  { title: "PDF / Office", icon: "document", level: { zh: "高频业务文档", en: "Business documents" }, items: "pdf doc docx docm dot dotx dotm rtf odt xls xlsx xlsm xlsb ods pptx pptm odp ofd epub xps" },
   {
     title: "Image / Media",
     icon: "media",
