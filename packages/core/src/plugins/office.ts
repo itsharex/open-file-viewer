@@ -4,6 +4,7 @@ import type { WorkBook } from "xlsx";
 import type { PreviewCommand, PreviewContext, PreviewFit, PreviewInstance, PreviewPlugin } from "../types";
 import { createPanel, createSection, decodeTextBuffer, getInitialZoom, readArrayBuffer, resolveFormat } from "./utils";
 import { renderPdfDocumentPreview, type PdfPluginOptions } from "./pdf";
+import { parseLegacyWordDocument, renderLegacyWordDocument } from "./msdoc";
 
 const wordExtensions = new Set(["docx", "docm", "doc", "dotx", "dotm", "dot", "rtf", "odt", "fodt", "wps"]);
 const sheetExtensions = new Set(["xlsx", "xls", "xlsm", "xlsb", "xlt", "xltx", "xltm", "csv", "tsv", "ods", "fods", "numbers", "et"]);
@@ -191,6 +192,8 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
         await renderOdp(panel, arrayBuffer);
       } else if (extension === "fodp") {
         renderOpenDocumentPresentationXml(panel, await readTextFromBuffer(arrayBuffer));
+      } else if (extension === "doc" || extension === "dot") {
+        renderLegacyWordBinary(panel, extension, arrayBuffer);
       } else if (isLegacyOfficeBinary(extension)) {
         renderLegacyOfficeBinary(panel, extension, arrayBuffer);
       } else {
@@ -2165,7 +2168,7 @@ type ChartPreview = {
   type: string;
   title: string;
   categories: string[];
-  series: Array<{ name: string; values: number[] }>;
+  series: Array<{ name: string; values: number[]; color?: string }>;
 };
 
 type ParsedSheet = {
@@ -2294,11 +2297,11 @@ function parseChartXml(xml: string, fallbackName: string): ChartPreview | null {
   }
 
   const type = detectChartType(doc);
-  const title = textFromFirst(doc, "title") || fallbackName.replace(/\.xml$/i, "");
+  const title = readChartTitle(doc, fallbackName);
   const seriesElements = Array.from(doc.getElementsByTagName("*")).filter((element) => element.localName === "ser");
   const series = seriesElements
-    .map((element, index) => parseChartSeries(element, index))
-    .filter((item): item is { name: string; values: number[]; categories: string[] } => item.values.length > 0);
+    .map((element, index) => ({ ...parseChartSeries(element, index), color: readChartSeriesColor(element) }))
+    .filter((item) => item.values.length > 0);
 
   if (series.length === 0) {
     return null;
@@ -2309,8 +2312,21 @@ function parseChartXml(xml: string, fallbackName: string): ChartPreview | null {
     type,
     title,
     categories: series.find((item) => item.categories.length > 0)?.categories || [],
-    series: series.map((item) => ({ name: item.name, values: item.values }))
+    series: series.map((item) => ({ name: item.name, values: item.values, color: item.color }))
   };
+}
+
+function readChartTitle(doc: Document, fallbackName: string): string {
+  const titleElement = Array.from(doc.getElementsByTagName("*")).find((element) => element.localName === "title");
+  if (!titleElement) {
+    return fallbackName.replace(/\.xml$/i, "");
+  }
+  const explicitTitle = chartText(titleElement);
+  if (explicitTitle) {
+    return explicitTitle;
+  }
+  const language = Array.from(doc.getElementsByTagName("*")).find((element) => element.localName === "lang")?.getAttribute("val") || "";
+  return /^zh\b/i.test(language) ? "图表标题" : "Chart Title";
 }
 
 function detectChartType(doc: Document): string {
@@ -2332,6 +2348,33 @@ function parseChartSeries(
     values: numbersFromFirst(element, "val"),
     categories: stringsFromFirst(element, "cat")
   };
+}
+
+function readChartSeriesColor(element: Element | undefined): string | undefined {
+  const shape = Array.from(element?.children || []).find((child) => child.localName === "spPr");
+  const color = Array.from(shape?.getElementsByTagName("*") || []).find(
+    (child) => child.localName === "srgbClr" || child.localName === "schemeClr"
+  );
+  if (!color) {
+    return undefined;
+  }
+  if (color.localName === "srgbClr") {
+    const value = color.getAttribute("val") || "";
+    return /^[\da-f]{6}$/i.test(value) ? `#${value}` : undefined;
+  }
+  return chartSchemeColor(color.getAttribute("val") || "");
+}
+
+function chartSchemeColor(value: string): string | undefined {
+  const colors: Record<string, string> = {
+    accent1: "#156082",
+    accent2: "#e97132",
+    accent3: "#196b24",
+    accent4: "#0f9ed5",
+    accent5: "#a02b93",
+    accent6: "#4ea72e"
+  };
+  return colors[value];
 }
 
 function renderChartPreviewSection(charts: ChartPreview[]): HTMLElement {
@@ -2377,7 +2420,7 @@ function renderChartCard(chart: ChartPreview): HTMLElement {
 
 function renderChartSvg(chart: ChartPreview): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 640 260");
+  svg.setAttribute("viewBox", "0 0 640 380");
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", chart.title);
   svg.classList.add("ofv-chart-svg");
@@ -2385,11 +2428,35 @@ function renderChartSvg(chart: ChartPreview): SVGSVGElement {
   const allValues = chart.series.flatMap((item) => item.values).filter((value) => Number.isFinite(value));
   const max = Math.max(1, ...allValues);
   const min = Math.min(0, ...allValues);
+  const axisScale = createChartAxisScale(max, min);
+  const axisMax = axisScale.max;
+  const axisMin = axisScale.min;
   const span = max - min || 1;
-  const colors = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed"];
-  const plot = { x: 48, y: 24, width: 552, height: 178 };
+  const colors = ["#156082", "#e97132", "#196b24", "#0f9ed5", "#a02b93", "#4ea72e"];
+  const plot = { x: 74, y: 74, width: 526, height: 214 };
+  const categories = chart.categories.length > 0 ? chart.categories : chart.series[0]?.values.map((_, index) => String(index + 1)) || [];
 
-  appendSvg(svg, "line", { x1: plot.x, y1: plot.y, x2: plot.x, y2: plot.y + plot.height, class: "ofv-chart-axis" });
+  const title = appendSvg(svg, "text", { x: 320, y: 34, class: "ofv-chart-title", "text-anchor": "middle" });
+  title.textContent = chart.title;
+
+  for (const value of axisScale.ticks) {
+    const y = plot.y + plot.height - ((value - axisMin) / (axisMax - axisMin || 1)) * plot.height;
+    appendSvg(svg, "line", {
+      x1: plot.x,
+      y1: Number(y.toFixed(1)),
+      x2: plot.x + plot.width,
+      y2: Number(y.toFixed(1)),
+      class: value === 0 ? "ofv-chart-axis" : "ofv-chart-gridline"
+    });
+    const label = appendSvg(svg, "text", {
+      x: plot.x - 12,
+      y: Number((y + 4).toFixed(1)),
+      class: "ofv-chart-label",
+      "text-anchor": "end"
+    });
+    label.textContent = formatChartTick(value);
+  }
+
   appendSvg(svg, "line", {
     x1: plot.x,
     y1: plot.y + plot.height,
@@ -2398,29 +2465,50 @@ function renderChartSvg(chart: ChartPreview): SVGSVGElement {
     class: "ofv-chart-axis"
   });
 
-  chart.series.forEach((series, seriesIndex) => {
-    const color = colors[seriesIndex % colors.length];
-    const step = series.values.length > 1 ? plot.width / (series.values.length - 1) : plot.width;
-    const points = series.values.map((value, index) => ({
-      x: plot.x + index * step,
-      y: plot.y + plot.height - ((value - min) / span) * plot.height
-    }));
+  if (chart.type.includes("bar") || chart.type.includes("col")) {
+    const categoryCount = Math.max(1, categories.length, ...chart.series.map((series) => series.values.length));
+    const groupWidth = plot.width / categoryCount;
+    const clusterWidth = groupWidth * 0.58;
+    const barWidth = Math.max(5, Math.min(28, clusterWidth / Math.max(1, chart.series.length)));
+    const zeroY = plot.y + plot.height - ((0 - axisMin) / (axisMax - axisMin || 1)) * plot.height;
 
-    if (chart.type.includes("bar") || chart.type.includes("col")) {
-      const barWidth = Math.max(4, Math.min(28, step * 0.6)) / Math.max(1, chart.series.length);
-      points.forEach((point, index) => {
-        const zeroY = plot.y + plot.height - ((0 - min) / span) * plot.height;
-        const x = point.x - (barWidth * chart.series.length) / 2 + seriesIndex * barWidth;
+    categories.slice(0, categoryCount).forEach((category, index) => {
+      const x = plot.x + groupWidth * (index + 0.5);
+      const label = appendSvg(svg, "text", {
+        x: Number(x.toFixed(1)),
+        y: plot.y + plot.height + 22,
+        class: "ofv-chart-label",
+        "text-anchor": "middle"
+      });
+      label.textContent = truncateChartLabel(category);
+    });
+
+    chart.series.forEach((series, seriesIndex) => {
+      const color = series.color || colors[seriesIndex % colors.length];
+      series.values.forEach((value, index) => {
+        const groupCenter = plot.x + groupWidth * (index + 0.5);
+        const x = groupCenter - (barWidth * chart.series.length) / 2 + seriesIndex * barWidth + barWidth * 0.12;
+        const y = plot.y + plot.height - ((value - axisMin) / (axisMax - axisMin || 1)) * plot.height;
         appendSvg(svg, "rect", {
-          x,
-          y: Math.min(point.y, zeroY),
-          width: barWidth,
-          height: Math.max(1, Math.abs(zeroY - point.y)),
+          x: Number(x.toFixed(1)),
+          y: Number(Math.min(y, zeroY).toFixed(1)),
+          width: Number((barWidth * 0.76).toFixed(1)),
+          height: Number(Math.max(1, Math.abs(zeroY - y)).toFixed(1)),
           fill: color,
           "data-index": index
         });
       });
-    } else {
+    });
+  } else {
+    chart.series.forEach((series, seriesIndex) => {
+      const color = series.color || colors[seriesIndex % colors.length];
+      const step = series.values.length > 1 ? plot.width / (series.values.length - 1) : plot.width;
+      const lineSpan = axisMax - axisMin || span;
+      const points = series.values.map((value, index) => ({
+        x: plot.x + index * step,
+        y: plot.y + plot.height - ((value - axisMin) / lineSpan) * plot.height
+      }));
+
       appendSvg(svg, "polyline", {
         points: points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" "),
         fill: "none",
@@ -2432,12 +2520,54 @@ function renderChartSvg(chart: ChartPreview): SVGSVGElement {
       for (const point of points.slice(0, 80)) {
         appendSvg(svg, "circle", { cx: point.x, cy: point.y, r: 3, fill: color });
       }
-    }
+    });
+  }
 
-    appendLegend(svg, series.name, color, 52 + seriesIndex * 118, 236);
-  });
-
+  appendChartLegend(svg, chart, colors, 348);
   return svg;
+}
+
+function appendChartLegend(svg: SVGSVGElement, chart: ChartPreview, colors: string[], y: number): void {
+  const itemWidth = 86;
+  const startX = 320 - ((chart.series.length * itemWidth) / 2);
+  chart.series.forEach((series, seriesIndex) => {
+    const color = series.color || colors[seriesIndex % colors.length];
+    appendLegend(svg, series.name, color, startX + seriesIndex * itemWidth, y);
+  });
+}
+
+function createChartAxisScale(max: number, min: number): { min: number; max: number; ticks: number[] } {
+  const axisMin = Math.min(0, min);
+  const positiveMax = Math.max(1, max);
+  const step = niceChartStep((positiveMax - axisMin) / 5);
+  let axisMax = Math.ceil(positiveMax / step) * step;
+  if (axisMax <= positiveMax) {
+    axisMax += step;
+  }
+  const ticks: number[] = [];
+  for (let value = axisMin; value <= axisMax + step / 2; value += step) {
+    ticks.push(Number(value.toFixed(6)));
+  }
+  return { min: axisMin, max: axisMax, ticks };
+}
+
+function niceChartStep(rawStep: number): number {
+  if (rawStep <= 0) {
+    return 1;
+  }
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const normalized = rawStep / magnitude;
+  const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return nice * magnitude;
+}
+
+function formatChartTick(value: number): string {
+  const rounded = Math.abs(value) < 1 ? Number(value.toFixed(1)) : Number(value.toFixed(0));
+  return String(rounded);
+}
+
+function truncateChartLabel(value: string): string {
+  return value.length > 10 ? `${value.slice(0, 10)}...` : value;
 }
 
 function appendLegend(svg: SVGSVGElement, label: string, color: string, x: number, y: number): void {
@@ -3869,6 +3999,14 @@ function legacyOfficeFormatLabel(extension: string): string {
     return "WPS Presentation legacy format";
   }
   return "PowerPoint Binary File Format";
+}
+
+function renderLegacyWordBinary(panel: HTMLElement, extension: string, arrayBuffer: ArrayBuffer): void {
+  try {
+    renderLegacyWordDocument(panel, parseLegacyWordDocument(arrayBuffer));
+  } catch (error) {
+    renderLegacyOfficeBinary(panel, extension, arrayBuffer, `Word 二进制解析失败：${normalizeOfficeError(error)}`);
+  }
 }
 
 function renderLegacyOfficeBinary(panel: HTMLElement, extension: string, arrayBuffer: ArrayBuffer, parseError?: string): void {

@@ -97,9 +97,10 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-code-status")).toContain("text-overflow: ellipsis");
     expect(rule(".ofv-markdown-body")).toContain("overflow: auto");
     expect(rule(".ofv-markdown-body table")).toContain("max-width: 100%");
-    expect(rule(".ofv-pdf")).toContain("overflow-x: hidden");
+    expect(rule(".ofv-pdf")).toContain("overflow-x: auto");
     expect(rule(".ofv-pdf")).toContain("overflow-y: auto");
     expect(rule(".ofv-pdf-page-wrapper")).toContain("overflow: hidden");
+    expect(rule(".ofv-pdf-page-wrapper")).not.toContain("max-width: 100%");
     expect(rule(".ofv-pdf-text-layer")).toContain("text-size-adjust: none");
     expect(rule(".ofv-pdf-text-layer span")).toContain("line-height: 1");
     expect(rule(".ofv-ofd")).toContain("--ofv-ofd-zoom: 1");

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
 import JSZip from "jszip";
 import { createViewer } from "../viewer";
 import { officePlugin } from "./office";
@@ -494,6 +495,9 @@ describe("officePlugin", () => {
     expect(container.querySelector(".ofv-chart-card header span")?.textContent).toContain("1 个系列");
     expect(container.querySelector(".ofv-chart-svg")?.getAttribute("role")).toBe("img");
     expect(container.querySelectorAll(".ofv-chart-svg rect[data-index]")).toHaveLength(3);
+    expect(container.querySelector(".ofv-chart-title")?.textContent).toBe("Quarterly Revenue");
+    expect(Array.from(container.querySelectorAll(".ofv-chart-label")).some((label) => label.textContent === "Q1")).toBe(true);
+    expect(container.querySelectorAll(".ofv-chart-gridline").length).toBeGreaterThan(0);
     expect(container.querySelector(".ofv-chart-data")?.textContent).toContain("Revenue: 12, 18, 30");
     expect(container.querySelector<HTMLElement>(".ofv-chart-data")?.hidden).toBe(true);
     expect(visibleText(container)).not.toContain("数据摘要");
@@ -527,6 +531,8 @@ describe("officePlugin", () => {
     expect(container.querySelector(".ofv-docx-chart-preview .ofv-chart-svg")?.getAttribute("role")).toBe("img");
     expect(container.querySelector(".ofv-docx-chart-preview .ofv-chart-svg")?.getAttribute("aria-label")).toBe("Quarterly Revenue");
     expect(container.querySelectorAll(".ofv-docx-chart-preview .ofv-chart-svg rect[data-index]")).toHaveLength(3);
+    expect(container.querySelector(".ofv-docx-chart-preview .ofv-chart-title")?.textContent).toBe("Quarterly Revenue");
+    expect(container.querySelectorAll(".ofv-docx-chart-preview .ofv-chart-gridline").length).toBeGreaterThan(0);
   });
 
   it("renders flat ODS spreadsheets with repeated cells and formulas", async () => {
@@ -1277,6 +1283,87 @@ describe("officePlugin", () => {
     expect(container.textContent).toContain("可读文本片段");
     expect(container.textContent).toContain("Quarterly roadmap");
     expect(container.textContent).toContain("Budget 2026");
+  });
+
+  it("renders real Word 97-2003 .doc files through the built-in parser when a sample is available", async () => {
+    const samplePath = "/Users/kuangkuang/Desktop/sample5.doc";
+    if (!existsSync(samplePath)) {
+      return;
+    }
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: new Blob([readFileSync(samplePath)], { type: "application/msword" }),
+      fileName: "sample5.doc",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-msdoc-document")), 2000);
+
+    expect(container.querySelector(".ofv-office-conversion")).toBeNull();
+    expect(container.textContent).toContain("Word Specification Sample");
+    expect(container.textContent).toContain("Working Draft 04");
+    expect(container.querySelector(".ofv-msdoc-document")?.textContent).toContain("Table of Contents");
+    expect(container.querySelectorAll(".ofv-msdoc-page").length).toBeGreaterThan(1);
+    expect(container.querySelector(".ofv-msdoc-page")?.textContent).not.toContain("Table of Contents");
+    expect(container.querySelector(".ofv-msdoc-meta")?.textContent).toContain("样式表");
+    expect(container.querySelector(".ofv-msdoc-meta")?.textContent).toContain("Heading 1");
+    expect(container.querySelector(".ofv-msdoc-page-footer")?.textContent).toContain("wd-spectools-word-sample-04");
+    expect(container.querySelector(".ofv-msdoc-page-footer")?.textContent).toContain("Page 1 of 9");
+    const bodyParagraphTexts = Array.from(container.querySelectorAll(".ofv-msdoc-page > p")).map((element) => element.textContent?.trim());
+    expect(bodyParagraphTexts).not.toContain("PAGE");
+    expect(bodyParagraphTexts).not.toContain("NUMPAGES");
+    expect(container.querySelector(".ofv-msdoc-instruction")?.textContent).toContain("List your editors");
+    expect(container.querySelector(".ofv-msdoc-instruction")?.classList.contains("ofv-msdoc-indent")).toBe(true);
+    expect(container.querySelector(".ofv-msdoc-title")?.textContent).toContain("Word Specification Sample");
+    expect(container.querySelector<HTMLImageElement>(".ofv-msdoc-oasis-header img")?.alt).toBe("OASIS");
+    expect(container.querySelector<HTMLImageElement>(".ofv-msdoc-oasis-header img")?.src).toContain("data:image/png;base64,");
+    expect(container.querySelector(".ofv-msdoc-line-numbered")).not.toBeNull();
+    expect(container.querySelector<HTMLElement>(".ofv-msdoc-title")?.dataset.line).toBe("1");
+    expect(container.querySelectorAll(".ofv-msdoc-toc").length).toBeGreaterThan(5);
+    expect(container.querySelectorAll(".ofv-msdoc-table tr").length).toBeGreaterThan(1);
+    const revisionTable = container.querySelector<HTMLTableElement>(".ofv-msdoc-revision-table");
+    expect(revisionTable).not.toBeNull();
+    expect(Array.from(revisionTable?.querySelectorAll("col") || []).map((col) => col.style.width)).toEqual([
+      "calc(59px * var(--ofv-office-zoom, 1))",
+      "calc(81px * var(--ofv-office-zoom, 1))",
+      "calc(106px * var(--ofv-office-zoom, 1))",
+      "calc(191px * var(--ofv-office-zoom, 1))"
+    ]);
+    expect(
+      Array.from(container.querySelectorAll(".ofv-msdoc-heading-level-1")).some((element) => element.textContent?.includes("Introduction"))
+    ).toBe(true);
+    expect(
+      Array.from(container.querySelectorAll(".ofv-msdoc-heading-level-2")).some((element) => element.textContent?.includes("Terminology"))
+    ).toBe(true);
+    const firstLink = container.querySelector<HTMLAnchorElement>("a.ofv-msdoc-link-text");
+    expect(firstLink?.textContent).toContain("http");
+    expect(firstLink?.href).toContain("http://www.oasis-open.org/spectools/docs/");
+    expect(firstLink?.target).toBe("_blank");
+    expect(firstLink?.rel).toContain("noreferrer");
+    expect(container.querySelector(".ofv-msdoc-listItem")?.textContent).toContain("Definition term");
+    expect(container.querySelector(".ofv-msdoc-list-level-2")?.textContent).toContain("Definition for the term");
+    expect(container.querySelector(".ofv-msdoc-reference")?.textContent).toContain("[RFC2119]");
+    expect(container.querySelector(".ofv-msdoc-reference")?.textContent).toContain("[RFC2119] S. Bradner");
+    expect(container.querySelector(".ofv-msdoc-reference")?.textContent).not.toContain("\t");
+    expect(container.querySelector(".ofv-msdoc-reference .ofv-msdoc-ref-term")?.textContent).toBe("[RFC2119]");
+    expect(container.querySelector(".ofv-msdoc-instruction-run")?.textContent).toContain("List your editors");
+    const inlineCodeTexts = Array.from(container.querySelectorAll(".ofv-msdoc-inline-code")).map((element) => element.textContent);
+    expect(inlineCodeTexts).toContain("attributeNames");
+    expect(inlineCodeTexts).toContain("DataType");
+    expect(inlineCodeTexts).toContain("OtherKeyword");
+    const keywordTexts = Array.from(container.querySelectorAll(".ofv-msdoc-keyword")).map((element) => element.textContent?.toLowerCase());
+    expect(keywordTexts).toContain("must");
+    expect(keywordTexts).toContain("should");
+    expect(container.querySelector(".ofv-msdoc-variable")?.textContent).toBe("variable");
+    expect(Array.from(container.querySelectorAll(".ofv-msdoc-code")).some((element) => element.textContent?.includes("12345678901234567890"))).toBe(true);
+    expect(Array.from(container.querySelectorAll(".ofv-msdoc-code")).some((element) => element.textContent?.includes("GET http://"))).toBe(true);
+    expect(container.querySelector(".ofv-msdoc-document")?.textContent).not.toContain("HYPERLINK");
+    expect(container.querySelector(".ofv-msdoc-document")?.textContent).not.toContain("PAGEREF");
+    expect(container.querySelector(".ofv-msdoc-document")?.textContent).not.toContain("REF rfc2119");
   });
 
   it("keeps literal ASCII text from legacy Word binaries even when it looks random", async () => {

@@ -466,7 +466,7 @@
   min-width: 0;
   min-height: 100%;
   padding: 16px;
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: auto;
   background: #6b7280;
 }
@@ -731,6 +731,317 @@
   background: var(--ofv-surface-muted);
   color: var(--ofv-text-muted);
   line-height: 1.6;
+}
+
+.ofv-msdoc-document {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: max-content;
+  padding: 24px;
+  gap: 24px;
+  overflow: auto;
+  background: var(--ofv-surface-muted);
+}
+
+.ofv-msdoc-page {
+  position: relative;
+  width: calc(794px * var(--ofv-office-zoom, 1));
+  min-height: calc(1123px * var(--ofv-office-zoom, 1));
+  height: calc(1123px * var(--ofv-office-zoom, 1));
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: calc(86px * var(--ofv-office-zoom, 1)) calc(76px * var(--ofv-office-zoom, 1));
+  border: 1px solid var(--ofv-border);
+  background: #fff;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.14);
+  color: #111827;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: calc(10pt * var(--ofv-office-zoom, 1));
+  line-height: 1.32;
+}
+
+.ofv-msdoc-page-footer {
+  position: absolute;
+  right: calc(64px * var(--ofv-office-zoom, 1));
+  bottom: calc(34px * var(--ofv-office-zoom, 1));
+  left: calc(132px * var(--ofv-office-zoom, 1));
+  padding-top: calc(5px * var(--ofv-office-zoom, 1));
+  border-top: 1px solid #9ca3af;
+  color: #111827;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: calc(8px * var(--ofv-office-zoom, 1));
+  line-height: 1.35;
+}
+
+.ofv-msdoc-footer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: calc(18px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-footer-row span:last-child {
+  text-align: right;
+}
+
+.ofv-msdoc-line-numbered {
+  padding: calc(44px * var(--ofv-office-zoom, 1)) calc(64px * var(--ofv-office-zoom, 1)) calc(86px * var(--ofv-office-zoom, 1)) calc(132px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-page-header {
+  margin: 0 0 calc(8px * var(--ofv-office-zoom, 1));
+  padding: 0 0 calc(8px * var(--ofv-office-zoom, 1));
+  border-bottom: 1px solid #6b7280;
+}
+
+.ofv-msdoc-oasis-logo {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ofv-office-zoom, 1));
+  min-height: calc(54px * var(--ofv-office-zoom, 1));
+  color: #4b148c;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: calc(52px * var(--ofv-office-zoom, 1));
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.ofv-msdoc-oasis-logo-image {
+  min-height: calc(54px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-oasis-logo-image img {
+  width: calc(232px * var(--ofv-office-zoom, 1));
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.ofv-msdoc-oasis-mark {
+  display: inline-grid;
+  place-items: center;
+  width: calc(40px * var(--ofv-office-zoom, 1));
+  height: calc(40px * var(--ofv-office-zoom, 1));
+  border-radius: calc(7px * var(--ofv-office-zoom, 1));
+  background: #f4b000;
+  color: #4b148c;
+  font-size: calc(34px * var(--ofv-office-zoom, 1));
+  font-weight: 800;
+}
+
+.ofv-msdoc-oasis-mark::before {
+  content: "S";
+}
+
+.ofv-msdoc-page p {
+  position: relative;
+  margin: 0 0 calc(6px * var(--ofv-office-zoom, 1));
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ofv-msdoc-line-numbered > :not(.ofv-msdoc-meta, .ofv-msdoc-page-header)::before {
+  position: absolute;
+  right: calc(100% + 28px * var(--ofv-office-zoom, 1));
+  top: 0;
+  width: calc(30px * var(--ofv-office-zoom, 1));
+  color: #111827;
+  content: attr(data-line);
+  font-family: "Times New Roman", Times, serif;
+  font-size: calc(12px * var(--ofv-office-zoom, 1));
+  font-weight: 400;
+  line-height: inherit;
+  text-align: right;
+}
+
+.ofv-msdoc-title {
+  margin: 0 0 calc(6px * var(--ofv-office-zoom, 1));
+  color: #333399;
+  font-size: calc(24px * var(--ofv-office-zoom, 1));
+  font-weight: 700;
+  line-height: 1.18;
+}
+
+.ofv-msdoc-subtitle {
+  margin: 0 0 calc(18px * var(--ofv-office-zoom, 1));
+  color: #333399;
+  font-size: calc(18px * var(--ofv-office-zoom, 1));
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.ofv-msdoc-heading {
+  margin: calc(18px * var(--ofv-office-zoom, 1)) 0 calc(6px * var(--ofv-office-zoom, 1));
+  color: #000099;
+  font-size: calc(18px * var(--ofv-office-zoom, 1));
+  font-weight: 700;
+}
+
+.ofv-msdoc-heading-level-1 {
+  padding-top: calc(5px * var(--ofv-office-zoom, 1));
+  border-top: 1px solid #9ca3af;
+  font-size: calc(18px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-heading-level-2 {
+  margin: calc(12px * var(--ofv-office-zoom, 1)) 0 calc(4px * var(--ofv-office-zoom, 1));
+  border-top: 0;
+  font-size: calc(14px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-heading-level-3 {
+  margin: calc(8px * var(--ofv-office-zoom, 1)) 0 calc(4px * var(--ofv-office-zoom, 1));
+  border-top: 0;
+  font-size: calc(12px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-label {
+  margin-top: calc(6px * var(--ofv-office-zoom, 1));
+  color: #333399;
+  font-weight: 700;
+}
+
+.ofv-msdoc-label + .ofv-msdoc-paragraph {
+  margin-left: calc(36px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-indent {
+  margin-left: calc(36px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-instruction {
+  color: #111827;
+  font-style: italic;
+}
+
+.ofv-msdoc-listItem {
+  margin-left: calc(18px * var(--ofv-office-zoom, 1));
+  padding-left: calc(14px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-listItem::after {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: #111827;
+  content: "•";
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.ofv-msdoc-list-level-2 {
+  margin-left: calc(36px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-reference {
+  margin-left: calc(108px * var(--ofv-office-zoom, 1));
+  text-indent: calc(-90px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-page em {
+  font-style: italic;
+}
+
+.ofv-msdoc-ref-term {
+  font-weight: 700;
+}
+
+.ofv-msdoc-inline-code {
+  font-family: "Courier New", Courier, monospace;
+  font-size: calc(10px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-keyword,
+.ofv-msdoc-variable {
+  font-style: italic;
+}
+
+.ofv-msdoc-link-text {
+  color: #0000ee;
+  text-decoration: underline;
+}
+
+.ofv-msdoc-toc {
+  display: grid;
+  grid-template-columns: auto max-content;
+  column-gap: calc(10px * var(--ofv-office-zoom, 1));
+  align-items: baseline;
+  margin: calc(3px * var(--ofv-office-zoom, 1)) 0;
+  color: #0000ee;
+}
+
+.ofv-msdoc-toc::before {
+  grid-column: 1 / 3;
+  grid-row: 1;
+  align-self: end;
+  border-bottom: 1px dotted #9ca3af;
+  content: "";
+}
+
+.ofv-msdoc-toc span {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+}
+
+.ofv-msdoc-toc span:first-child {
+  padding-right: 4px;
+}
+
+.ofv-msdoc-toc span:last-child {
+  padding-left: 4px;
+  text-align: right;
+}
+
+.ofv-msdoc-toc-level-2 {
+  margin-left: calc(12px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-toc-level-3 {
+  margin-left: calc(24px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-code {
+  margin: 0 calc(22px * var(--ofv-office-zoom, 1));
+  color: #800000;
+  font-family: "Courier New", Courier, monospace;
+  font-size: calc(9px * var(--ofv-office-zoom, 1));
+  line-height: 1.18;
+}
+
+.ofv-msdoc-table {
+  position: relative;
+  width: auto;
+  max-width: 100%;
+  margin: calc(8px * var(--ofv-office-zoom, 1)) 0;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.ofv-msdoc-revision-table {
+  table-layout: fixed;
+}
+
+.ofv-msdoc-table th,
+.ofv-msdoc-table td {
+  padding: 0 calc(5px * var(--ofv-office-zoom, 1));
+  border: 1px solid #bfbfbf;
+  vertical-align: top;
+  text-align: left;
+  line-height: 1.32;
+}
+
+.ofv-msdoc-table th {
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.ofv-msdoc-meta,
+.ofv-msdoc-warning {
+  display: none;
 }
 
 .ofv-docx-document {
@@ -1468,9 +1779,19 @@
   stroke-width: 1.5;
 }
 
+.ofv-chart-gridline {
+  stroke: #d9d9d9;
+  stroke-width: 1;
+}
+
+.ofv-chart-title {
+  fill: #595959;
+  font: 20px/1 Calibri, Arial, sans-serif;
+}
+
 .ofv-chart-label {
-  fill: var(--ofv-text-muted);
-  font: 12px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  fill: #595959;
+  font: 12px/1 Calibri, Arial, sans-serif;
 }
 
 .ofv-chart-data {
@@ -3809,7 +4130,6 @@
 /* PDF lazy loading elements */
 .ofv-pdf-page-wrapper {
   margin: 16px auto;
-  max-width: 100%;
   min-width: 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   border: 1px solid var(--ofv-border);
