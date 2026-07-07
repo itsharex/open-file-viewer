@@ -92,10 +92,12 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-code-gutter")).toContain("z-index: 3");
     expect(rule(".ofv-code-gutter")).toContain("background: var(--ofv-surface)");
     expect(rule(".ofv-code-container pre")).toContain("z-index: 0");
+    expect(rule(".ofv-code-container pre")).toContain("color: var(--ofv-text)");
     expect(rule(".ofv-code-actions")).toContain("flex-wrap: nowrap");
     expect(rule(".ofv-code-action")).toContain("white-space: nowrap");
     expect(rule(".ofv-code-status")).toContain("text-overflow: ellipsis");
     expect(rule(".ofv-markdown-body")).toContain("overflow: auto");
+    expect(css).toContain("color: var(--ofv-text);\n  background-color: var(--ofv-surface-muted);");
     expect(rule(".ofv-markdown-body table")).toContain("max-width: 100%");
     expect(rule(".ofv-pdf")).toContain("overflow-x: auto");
     expect(rule(".ofv-pdf")).toContain("overflow-y: auto");

@@ -3729,6 +3729,7 @@
   max-width: 100%;
   min-width: max-content;
   background: transparent !important;
+  color: var(--ofv-text);
   font-family: var(--ofv-font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
   font-size: calc(13px * var(--ofv-text-zoom, 1));
   line-height: 1.6;
@@ -4078,6 +4079,7 @@
   overflow: auto;
   font-size: 85%;
   line-height: 1.45;
+  color: var(--ofv-text);
   background-color: var(--ofv-surface-muted);
   border-radius: 6px;
 }
