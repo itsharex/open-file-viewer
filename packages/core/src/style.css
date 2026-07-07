@@ -4079,6 +4079,7 @@
   overflow: auto;
   font-size: 85%;
   line-height: 1.45;
+  color: var(--ofv-text);
   background-color: var(--ofv-surface-muted);
   border-radius: 6px;
 }
