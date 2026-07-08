@@ -1883,7 +1883,7 @@ async function renderSheet(
     heading.textContent = sheetName;
     const sheet = workbook.Sheets[sheetName];
     const sheetImages = workbookImages.get(sheetName) || [];
-    const range = trimWorkbookSheetRange(sheet, xlsx.utils.decode_range(sheet["!ref"] || "A1:A1"), xlsx.utils.decode_cell);
+    const range = trimWorkbookSheetRange(sheet, xlsx.utils.decode_range(sheet["!ref"] || "A1:A1"), xlsx.utils.decode_cell, sheetImages);
     const rowCount = range.e.r - range.s.r + 1;
     const columnCount = range.e.c - range.s.c + 1;
     const formulaRows = collectFormulaRows(sheet, range, xlsx.utils.encode_cell);
@@ -1992,7 +1992,7 @@ function renderSheetFallback(panel: HTMLElement, extension: string, detail: stri
 async function readWorkbookSheetImages(arrayBuffer: ArrayBuffer): Promise<Map<string, WorkbookSheetImage[]>> {
   const zip = await JSZip.loadAsync(arrayBuffer);
   const fileNames = Object.keys(zip.files);
-  if (!fileNames.some((name) => /^xl\/drawings\/.+\.xml$/i.test(name)) || !fileNames.some((name) => /^xl\/media\//i.test(name))) {
+  if (!fileNames.some((name) => /^xl\/drawings\/.+\.xml$/i.test(name))) {
     return new Map();
   }
   const workbookXml = await zip.file("xl/workbook.xml")?.async("text");
@@ -2060,6 +2060,7 @@ async function readWorksheetDrawingImages(zip: JSZip, drawingPath: string): Prom
   const images: WorkbookSheetImage[] = [];
   for (const anchor of anchors) {
     const from = Array.from(anchor.children).find((element) => element.localName === "from");
+    const to = Array.from(anchor.children).find((element) => element.localName === "to");
     const embedId = findDrawingImageRelationshipId(anchor);
     const mediaRel = drawingRels.find((rel) => rel.id === embedId && /\/image$/i.test(rel.type));
     const mediaPath = resolveOfficeRelationshipTarget(drawingPath, mediaRel?.target);
@@ -2071,6 +2072,8 @@ async function readWorksheetDrawingImages(zip: JSZip, drawingPath: string): Prom
     images.push({
       row: readDrawingMarkerIndex(from, "row"),
       column: readDrawingMarkerIndex(from, "col"),
+      endRow: to ? readDrawingMarkerIndex(to, "row") : undefined,
+      endColumn: to ? readDrawingMarkerIndex(to, "col") : undefined,
       fileName: mediaPath.split("/").pop() || "image",
       mimeType,
       dataUrl: `data:${mimeType};base64,${await mediaFile.async("base64")}`,
@@ -2660,6 +2663,8 @@ type SheetColumnSizing = {
 type WorkbookSheetImage = {
   row: number;
   column: number;
+  endRow?: number;
+  endColumn?: number;
   fileName: string;
   mimeType: string;
   dataUrl: string;
@@ -2669,7 +2674,8 @@ type WorkbookSheetImage = {
 function trimWorkbookSheetRange(
   sheet: Record<string, any>,
   range: SheetRange,
-  decodeCell: (address: string) => { r: number; c: number }
+  decodeCell: (address: string) => { r: number; c: number },
+  images: WorkbookSheetImage[] = []
 ): SheetRange {
   let minRow = Number.POSITIVE_INFINITY;
   let minColumn = Number.POSITIVE_INFINITY;
@@ -2698,18 +2704,23 @@ function trimWorkbookSheetRange(
     include(merge.e.r, merge.e.c);
   }
 
+  for (const image of images) {
+    include(image.row, image.column);
+    include(image.endRow ?? image.row, image.endColumn ?? image.column);
+  }
+
   if (!Number.isFinite(minRow) || !Number.isFinite(minColumn) || !Number.isFinite(maxRow) || !Number.isFinite(maxColumn)) {
     return range;
   }
 
   return {
     s: {
-      r: Math.max(range.s.r, minRow),
-      c: Math.max(range.s.c, minColumn)
+      r: minRow,
+      c: minColumn
     },
     e: {
-      r: Math.min(range.e.r, maxRow),
-      c: Math.min(range.e.c, maxColumn)
+      r: maxRow,
+      c: maxColumn
     }
   };
 }

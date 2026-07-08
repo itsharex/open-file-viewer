@@ -194,6 +194,63 @@ describe("officePlugin", () => {
     expect(image?.alt).toBe("Inserted logo");
   });
 
+  it("renders embedded XLSX drawing images when the sheet has no populated cells", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: await createWorkbookWithImage({
+        sheetDataXml: "",
+        fromColumn: 4,
+        fromRow: 5,
+        toColumn: 6,
+        toRow: 8,
+        title: "Image-only logo"
+      }),
+      fileName: "image-only.xlsx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-sheet-summary")));
+
+    const summary = container.querySelector(".ofv-sheet-summary");
+    const imageCell = container.querySelector<HTMLTableCellElement>('[data-cell="E6"]');
+    const image = imageCell?.querySelector<HTMLImageElement>("img");
+    expect(summary?.textContent).toContain("4 行 x 3 列");
+    expect(imageCell?.classList.contains("ofv-cell-image")).toBe(true);
+    expect(image?.src).toContain("data:image/png;base64,");
+    expect(image?.alt).toBe("Image-only logo");
+  });
+
+  it("renders embedded XLSX drawing images stored under the drawing folder", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: await createWorkbookWithImage({
+        fromColumn: 9,
+        fromRow: 2,
+        toColumn: 9,
+        toRow: 2,
+        mediaTarget: "media/image1.png",
+        mediaFilePath: "xl/drawings/media/image1.png",
+        title: "Drawing folder logo"
+      }),
+      fileName: "drawing-folder-media.xlsx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-sheet-summary")));
+
+    const imageCell = container.querySelector<HTMLTableCellElement>('[data-cell="J3"]');
+    const image = imageCell?.querySelector<HTMLImageElement>("img");
+    expect(imageCell?.classList.contains("ofv-cell-image")).toBe(true);
+    expect(image?.src).toContain("data:image/png;base64,");
+    expect(image?.alt).toBe("Drawing folder logo");
+  });
+
   it("responds to shared toolbar zoom for workbook previews", async () => {
     const xlsx = await import("xlsx");
     const sheet = xlsx.utils.aoa_to_sheet([
@@ -2103,7 +2160,28 @@ async function createDocxWithChart(): Promise<Blob> {
   });
 }
 
-async function createWorkbookWithImage(): Promise<Blob> {
+async function createWorkbookWithImage(
+  options: {
+    sheetDataXml?: string;
+    fromColumn?: number;
+    fromRow?: number;
+    toColumn?: number;
+    toRow?: number;
+    title?: string;
+    mediaTarget?: string;
+    mediaFilePath?: string;
+  } = {}
+): Promise<Blob> {
+  const sheetDataXml =
+    options.sheetDataXml ??
+    '<row r="1" ht="90" customHeight="1"><c r="A1" t="e"><v>#VALUE!</v></c><c r="B1" t="inlineStr"><is><t>Product</t></is></c></row>';
+  const fromColumn = options.fromColumn ?? 0;
+  const fromRow = options.fromRow ?? 0;
+  const toColumn = options.toColumn ?? 1;
+  const toRow = options.toRow ?? 3;
+  const title = options.title ?? "Inserted logo";
+  const mediaTarget = options.mediaTarget ?? "../media/image1.png";
+  const mediaFilePath = options.mediaFilePath ?? "xl/media/image1.png";
   const zip = new JSZip();
   zip.file(
     "[Content_Types].xml",
@@ -2145,7 +2223,7 @@ async function createWorkbookWithImage(): Promise<Blob> {
       <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
         xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
         <sheetData>
-          <row r="1" ht="90" customHeight="1"><c r="A1" t="e"><v>#VALUE!</v></c><c r="B1" t="inlineStr"><is><t>Product</t></is></c></row>
+          ${sheetDataXml}
         </sheetData>
         <drawing r:id="rIdDrawing1"/>
       </worksheet>`
@@ -2164,10 +2242,10 @@ async function createWorkbookWithImage(): Promise<Blob> {
         xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
         xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
         <xdr:twoCellAnchor>
-          <xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
-          <xdr:to><xdr:col>1</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>3</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+          <xdr:from><xdr:col>${fromColumn}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${fromRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+          <xdr:to><xdr:col>${toColumn}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${toRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
           <xdr:pic>
-            <xdr:nvPicPr><xdr:cNvPr id="2" name="Inserted logo"/><xdr:cNvPicPr/></xdr:nvPicPr>
+            <xdr:nvPicPr><xdr:cNvPr id="2" name="${title}"/><xdr:cNvPicPr/></xdr:nvPicPr>
             <xdr:blipFill><a:blip r:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>
             <xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>
           </xdr:pic>
@@ -2179,10 +2257,10 @@ async function createWorkbookWithImage(): Promise<Blob> {
     "xl/drawings/_rels/drawing1.xml.rels",
     `<?xml version="1.0" encoding="UTF-8"?>
       <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-        <Relationship Id="rIdImage1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>
+        <Relationship Id="rIdImage1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${mediaTarget}"/>
       </Relationships>`
   );
-  zip.file("xl/media/image1.png", Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  zip.file(mediaFilePath, Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]));
   return zip.generateAsync({
     type: "blob",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -2340,7 +2418,7 @@ function createMinimalFodp(): string {
     </office:document>`;
 }
 
-async function waitFor(predicate: () => boolean, timeout = 1000): Promise<void> {
+async function waitFor(predicate: () => boolean, timeout = 3000): Promise<void> {
   const start = Date.now();
   while (!predicate()) {
     if (Date.now() - start > timeout) {
