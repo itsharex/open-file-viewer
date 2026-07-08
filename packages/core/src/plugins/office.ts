@@ -2863,7 +2863,9 @@ function createWorkbookSheetTable(
         cell.classList.add("ofv-cell-multiline");
       }
       appendWorkbookCellImages(cell, imagesByCell.get(`${rowIndex}:${columnIndex}`), text);
-      appendColumnResizeHandle(cell, columnIndex, columnSizing);
+      if (rowIndex === rowStart) {
+        appendColumnResizeHandle(cell, columnIndex, columnSizing);
+      }
       row.append(cell);
     }
     table.append(row);
@@ -3129,7 +3131,9 @@ function createParsedSheetTable(
       if (value.includes("\n")) {
         cell.classList.add("ofv-cell-multiline");
       }
-      appendColumnResizeHandle(cell, columnIndex, columnSizing);
+      if (rowIndex === viewport.rowStart) {
+        appendColumnResizeHandle(cell, columnIndex, columnSizing);
+      }
       row.append(cell);
     }
     table.append(row);

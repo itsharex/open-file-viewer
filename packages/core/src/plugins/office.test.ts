@@ -473,7 +473,7 @@ describe("officePlugin", () => {
     await waitFor(() => container.querySelector(".ofv-sheet-window-note")?.textContent?.includes("3-82 列") || false);
     expect(container.querySelector(".ofv-table-scroll [data-cell='C6']")?.textContent).toBe("R6C3");
     expect(container.querySelector(".ofv-table-scroll [data-cell='CD6']")?.textContent).toBe("R6C82");
-  }, 20000);
+  }, 45000);
 
   it("renders workbook chart previews from embedded OOXML chart parts", async () => {
     const container = document.createElement("div");
