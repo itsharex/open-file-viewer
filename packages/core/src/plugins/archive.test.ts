@@ -179,6 +179,61 @@ describe("archivePlugin", () => {
     expect(visibleText(container)).not.toContain("总解压大小17 B");
   });
 
+  it("keeps the archive summary visible when a zip only contains directories", async () => {
+    const zip = new JSZip();
+    zip.folder("empty");
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "folders-only.zip",
+      plugins: [archivePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-archive-info")));
+
+    expect(container.querySelector(".ofv-archive-item")).toBeNull();
+    const info = container.querySelector<HTMLElement>(".ofv-archive-info");
+    expect(info?.hidden).toBe(false);
+    expect(info?.getAttribute("aria-hidden")).toBeNull();
+    expect(info?.style.display).not.toBe("none");
+    const text = visibleText(container);
+    expect(text).toContain("包含文件数： 0 个");
+    expect(text).toContain("包含目录数： 1 个");
+    expect(text).toContain("压缩包内没有可预览的文件。");
+  });
+
+  it("keeps the archive summary visible when a zip has no entries", async () => {
+    const zip = new JSZip();
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "empty.zip",
+      plugins: [archivePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-archive-info")));
+
+    expect(container.querySelector(".ofv-archive-item")).toBeNull();
+    const info = container.querySelector<HTMLElement>(".ofv-archive-info");
+    expect(info?.hidden).toBe(false);
+    expect(info?.getAttribute("aria-hidden")).toBeNull();
+    expect(info?.style.display).not.toBe("none");
+    const text = visibleText(container);
+    expect(text).toContain("包含文件数： 0 个");
+    expect(text).toContain("包含目录数： 0 个");
+    expect(text).toContain("压缩包内没有可预览的文件。");
+  });
+
   it("keeps archive sidebar collapsible and auto-collapses after selecting files in narrow containers", async () => {
     const zip = new JSZip();
     for (let index = 0; index < 30; index += 1) {

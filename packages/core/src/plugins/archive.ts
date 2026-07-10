@@ -263,11 +263,13 @@ export function archivePlugin(): PreviewPlugin {
       });
 
       // Render default metadata summary
-      const showDefaultSummary = () => {
+      const showDefaultSummary = (isSupplemental = true) => {
         mainPanel.replaceChildren();
         const summary = document.createElement("div");
         summary.className = "ofv-archive-info";
-        hideSupplementalInfo(summary);
+        if (isSupplemental) {
+          hideSupplementalInfo(summary);
+        }
         
         const heading = document.createElement("h3");
         heading.textContent = ctx.file.name;
@@ -281,16 +283,19 @@ export function archivePlugin(): PreviewPlugin {
         appendArchiveInfo(info, "格式类型", `.${ext.toUpperCase()} 压缩文件`);
         appendArchiveInfo(info, "包含文件数", `${fileCount} 个`);
         appendArchiveInfo(info, "包含目录数", `${dirCount} 个`);
-        appendArchiveInfo(info, "操作提示", "请点击左侧栏中的文件进行联动预览。");
+        appendArchiveInfo(
+          info,
+          "操作提示",
+          fileCount === 0 ? "压缩包内没有可预览的文件。" : "请点击左侧栏中的文件进行联动预览。"
+        );
         
         summary.append(heading, info, createArchiveSummary(archiveEntries));
         mainPanel.append(summary);
       };
 
-      showDefaultSummary();
-
       // Filter and render items (max 500 to keep DOM lightweight)
       const visibleEntries = archiveEntries.filter(e => !e.dir).slice(0, 500);
+      showDefaultSummary(visibleEntries.length > 0);
       let destroyed = false;
       let renderToken = 0;
 
