@@ -6,6 +6,7 @@ import type {
   PreviewToolbarRenderContext
 } from "@open-file-viewer/core";
 import type { CSSProperties, ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { useEffect, useRef } from "react";
 
@@ -33,6 +34,19 @@ export function FileViewer({
 
     let toolbarRoot: Root | null = null;
     let toolbarMount: HTMLDivElement | null = null;
+    let latestToolbarContext: PreviewToolbarRenderContext | null = null;
+    let toolbarRenderQueued = false;
+    const renderReactToolbar = () => {
+      toolbarRenderQueued = false;
+      const ctx = latestToolbarContext;
+      if (!ctx || !toolbarRoot || !renderToolbar) {
+        return;
+      }
+      const toolbarContent = renderToolbar(ctx);
+      flushSync(() => {
+        toolbarRoot?.render(toolbarContent);
+      });
+    };
     const toolbar =
       renderToolbar === undefined
         ? options.toolbar
@@ -44,7 +58,11 @@ export function FileViewer({
                 toolbarMount.className = "ofv-react-toolbar";
                 toolbarRoot = createRoot(toolbarMount);
               }
-              toolbarRoot?.render(renderToolbar(ctx));
+              latestToolbarContext = ctx;
+              if (!toolbarRenderQueued) {
+                toolbarRenderQueued = true;
+                queueMicrotask(renderReactToolbar);
+              }
               return toolbarMount;
             }
           };
@@ -63,6 +81,8 @@ export function FileViewer({
       const root = toolbarRoot;
       toolbarRoot = null;
       toolbarMount = null;
+      latestToolbarContext = null;
+      toolbarRenderQueued = false;
       viewerRef.current?.destroy();
       viewerRef.current = null;
       if (root) {
