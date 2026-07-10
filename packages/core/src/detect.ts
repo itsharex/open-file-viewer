@@ -343,7 +343,7 @@ function getFileNameFromUrl(source: string): string {
 export function getExtension(name: string): string {
   const clean = name.split("?")[0]?.split("#")[0] || "";
   const index = clean.lastIndexOf(".");
-  return index >= 0 ? clean.slice(index + 1).toLowerCase() : "";
+  return index >= 0 ? clean.slice(index + 1).split("!", 1)[0].toLowerCase() : "";
 }
 
 export function isTextLike(file: PreviewFile): boolean {
