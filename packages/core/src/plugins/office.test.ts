@@ -1285,6 +1285,27 @@ describe("officePlugin", () => {
     expect(container.textContent).toContain("Budget 2026");
   });
 
+  it("localizes legacy Office conversion guidance", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: createLegacyBinaryBlob(["Quarterly roadmap", "Budget 2026"]),
+      fileName: "legacy.doc",
+      locale: "en-US",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-office")));
+
+    expect(container.textContent).toContain("Office conversion guidance");
+    expect(container.textContent).toContain("belongs to a legacy Microsoft Office binary format");
+    expect(container.textContent).toContain("Readable text fragments");
+    expect(container.textContent).toContain("Quarterly roadmap");
+    expect(container.textContent).not.toContain("Office 转换提示");
+  });
+
   it("renders real Word 97-2003 .doc files through the built-in parser when a sample is available", async () => {
     const samplePath = "/Users/kuangkuang/Desktop/sample5.doc";
     if (!existsSync(samplePath)) {

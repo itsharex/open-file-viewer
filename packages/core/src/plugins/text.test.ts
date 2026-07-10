@@ -143,6 +143,29 @@ describe("textPlugin", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it("localizes the remote text fallback", async () => {
+    const container = document.createElement("div");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false, status: 500 } as Response))
+    );
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: "https://example.com/error.txt",
+      fileName: "error.txt",
+      locale: "en-US",
+      plugins: [textPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-fallback")));
+
+    expect(container.textContent).toContain("Text preview failed");
+    expect(container.textContent).toContain("Open original file");
+    expect(container.textContent).not.toContain("文本预览失败");
+  });
+
   it("renders remote text sources and keeps shared toolbar commands working", async () => {
     const container = document.createElement("div");
     vi.stubGlobal(
@@ -209,6 +232,7 @@ describe("textPlugin", () => {
     createViewer({
       container,
       file: new Blob(["const answer = 42;"], { type: "application/javascript" }),
+      locale: "en-US",
       plugins: [textPlugin()]
     });
 
@@ -398,6 +422,7 @@ describe("textPlugin", () => {
       container,
       file: new Blob([text], { type }),
       fileName: name,
+      locale: "en-US",
       plugins: [textPlugin()]
     });
 
@@ -450,6 +475,7 @@ describe("textPlugin", () => {
       container,
       file: new Blob(["const one = 1;\nconst two = 2;"], { type: "text/javascript" }),
       fileName: "sample.mjs",
+      locale: "en-US",
       plugins: [textPlugin()]
     });
 
@@ -476,6 +502,7 @@ describe("textPlugin", () => {
       container,
       file: new Blob(["Open File Viewer\n\n请选择一个本地文件。"], { type: "text/plain" }),
       fileName: "welcome.txt",
+      locale: "en-US",
       plugins: [textPlugin()]
     });
 
@@ -525,6 +552,7 @@ describe("textPlugin", () => {
       container,
       file: new Blob(["line one\nline two"], { type: "text/plain" }),
       fileName: "notes.txt",
+      locale: "en-US",
       plugins: [textPlugin()]
     });
 
@@ -539,6 +567,46 @@ describe("textPlugin", () => {
     await waitFor(() => container.querySelector(".ofv-code-status")?.textContent === "Copied");
   });
 
+  it("uses custom messages for code preview controls and status text", async () => {
+    const container = document.createElement("div");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: new Blob(["one\ntwo"], { type: "text/plain" }),
+      fileName: "custom.txt",
+      plugins: [textPlugin()],
+      messages: {
+        textPlainLanguage: "raw text",
+        textLineCount: "{count} rows",
+        textWrap: "Fold",
+        textCopy: "Duplicate",
+        textCopied: "Done",
+        textDownload: "Save"
+      }
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-code-container code")));
+
+    expect(container.querySelector(".ofv-code-title")?.textContent).toContain("raw text");
+    expect(container.querySelector(".ofv-code-title")?.textContent).toContain("2 rows");
+    expect(Array.from(container.querySelectorAll(".ofv-code-action")).map((button) => button.textContent)).toEqual([
+      "Fold",
+      "Duplicate",
+      "Save"
+    ]);
+
+    const copy = Array.from(container.querySelectorAll<HTMLButtonElement>(".ofv-code-action")).find(
+      (button) => button.textContent === "Duplicate"
+    );
+    copy?.click();
+
+    await waitFor(() => writeText.mock.calls.length > 0);
+    await waitFor(() => container.querySelector(".ofv-code-status")?.textContent === "Done");
+  });
+
   it("downloads the full text from the preview action", async () => {
     const container = document.createElement("div");
     const createObjectURL = vi.fn(() => "blob:preview");
@@ -551,6 +619,7 @@ describe("textPlugin", () => {
       container,
       file: new Blob(["download me"], { type: "text/plain" }),
       fileName: "download.txt",
+      locale: "en-US",
       plugins: [textPlugin()]
     });
 
@@ -586,7 +655,7 @@ describe("textPlugin", () => {
     expect(container.querySelector(".ofv-code-container code")?.textContent).not.toContain("TAIL");
 
     const copy = Array.from(container.querySelectorAll<HTMLButtonElement>(".ofv-code-action")).find(
-      (button) => button.textContent === "Copy"
+      (button) => button.textContent === "复制"
     );
     copy?.click();
     await waitFor(() => writeText.mock.calls.length > 0);
