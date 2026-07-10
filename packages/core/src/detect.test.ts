@@ -5,6 +5,7 @@ describe("detect", () => {
   it("extracts extensions from names and urls", () => {
     expect(getExtension("report.final.DOCX")).toBe("docx");
     expect(getExtension("https://example.com/files/demo.pdf?download=1#page=2")).toBe("pdf");
+    expect(getExtension("https://example.com/files/photo.jpg!wx750")).toBe("jpg");
     expect(getExtension("README")).toBe("");
   });
 
@@ -20,10 +21,13 @@ describe("detect", () => {
   it("decodes file names from remote URL sources", async () => {
     const file = await normalizeFile("https://example.com/files/%E5%88%AB%E5%A2%85%E5%9B%BE%E7%BA%B8.dwg?download=1");
     const malformed = await normalizeFile("https://example.com/files/bad%name.dwg");
+    const styledImage = await normalizeFile("https://files.sciconf.cn/public/2024/0/202509/2025091418475086759124310.jpg!wx750");
 
     expect(file.name).toBe("别墅图纸.dwg");
     expect(file.extension).toBe("dwg");
     expect(malformed.name).toBe("bad%name.dwg");
+    expect(styledImage.extension).toBe("jpg");
+    expect(styledImage.mimeType).toBe("image/jpeg");
   });
 
   it("infers MIME types for common complex preview formats", async () => {
