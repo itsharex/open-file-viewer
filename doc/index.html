@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -171,26 +171,26 @@
         <span>Open File Viewer</span>
       </a>
       <nav class="desktop-nav" aria-label="Primary navigation">
-        <a href="#docs"><svg><use href="#icon-docs"></use></svg><span data-i18n="nav.docs">文档</span></a>
-        <a href="#frameworks"><svg><use href="#icon-framework"></use></svg><span data-i18n="nav.frameworks">框架</span></a>
-        <a href="#formats"><svg><use href="#icon-grid"></use></svg><span data-i18n="nav.formats">格式</span></a>
+        <a href="#docs"><svg><use href="#icon-docs"></use></svg><span data-i18n="nav.docs">Documentation</span></a>
+        <a href="#frameworks"><svg><use href="#icon-framework"></use></svg><span data-i18n="nav.frameworks">Frameworks</span></a>
+        <a href="#formats"><svg><use href="#icon-grid"></use></svg><span data-i18n="nav.formats">Formats</span></a>
         <a href="/api.html"><svg><use href="#icon-api"></use></svg><span data-i18n="nav.api">API</span></a>
-        <a href="#playground"><svg><use href="#icon-play"></use></svg><span data-i18n="nav.playground">在线使用</span></a>
-        <a href="/about.html"><svg><use href="#icon-heart"></use></svg><span data-i18n="nav.about">关于我们</span></a>
+        <a href="#playground"><svg><use href="#icon-play"></use></svg><span data-i18n="nav.playground">Live Demo</span></a>
+        <a href="/about.html"><svg><use href="#icon-heart"></use></svg><span data-i18n="nav.about">About</span></a>
       </nav>
       <div class="nav-actions">
         <button class="ghost-icon" id="themeToggle" type="button" aria-label="Toggle dark mode"><svg><use href="#icon-moon"></use></svg></button>
-        <button class="ghost-icon" id="languageToggle" type="button">EN</button>
+        <button class="ghost-icon" id="languageToggle" type="button">ZH</button>
         <a class="github-button" href="https://github.com/xushanpei/open-file-viewer" target="_blank" rel="noreferrer"><svg><use href="#icon-github"></use></svg><span>GitHub</span></a>
       </div>
     </header>
 
     <main id="top">
       <section class="hero">
-        <div class="hero-badge" data-i18n="hero.badge">开源文件预览 SDK</div>
-        <h1 data-i18n="hero.title">面向现代 Web 的文件预览基础设施</h1>
+        <div class="hero-badge" data-i18n="hero.badge">Open source file preview SDK</div>
+        <h1 data-i18n="hero.title">Preview any file without the pain</h1>
         <p data-i18n="hero.lede">
-          一个兼容原生 JavaScript、React、Vue 和 Svelte 的嵌入式文件预览器。把 PDF、Office、图片、音视频、压缩包、邮件、图纸、3D、GIS 和工程文件放进同一个稳定容器。
+          A framework-agnostic embedded file viewer for vanilla JavaScript, React, Vue and Svelte. Put PDF, Office, images, media, archives, email, drawings, 3D, GIS and engineering files inside one stable container.
         </p>
         <div class="hero-actions">
           <a class="primary-button" href="/api.html"><span data-i18n="hero.primary">Get Started</span><svg><use href="#icon-arrow"></use></svg></a>
@@ -252,10 +252,10 @@
             </aside>
             <section class="paper-preview">
               <div class="paper-toolbar">
-                <span><svg><use href="#icon-search"></use></svg>Search</span>
-                <span><svg><use href="#icon-zoom"></use></svg>Zoom</span>
-                <span><svg><use href="#icon-rotate"></use></svg>Rotate</span>
-                <span><svg><use href="#icon-download"></use></svg>Download</span>
+                <span><svg><use href="#icon-search"></use></svg><span data-i18n="showcase.search">Search</span></span>
+                <span><svg><use href="#icon-zoom"></use></svg><span data-i18n="showcase.zoom">Zoom</span></span>
+                <span><svg><use href="#icon-rotate"></use></svg><span data-i18n="showcase.rotate">Rotate</span></span>
+                <span><svg><use href="#icon-download"></use></svg><span data-i18n="showcase.download">Download</span></span>
               </div>
               <div class="paper">
                 <div class="paper-title"></div>
@@ -284,7 +284,7 @@
           <article>
             <span><svg><use href="#icon-eye"></use></svg><span data-i18n="ways.dropin.label">Drop-in</span></span>
             <h3 data-i18n="ways.dropin.title">OpenFileViewer Component</h3>
-            <p data-i18n="ways.dropin.desc">用内置 UI 快速上线，获得工具栏、主题、多文件队列、容器自适应和失败降级。</p>
+            <p data-i18n="ways.dropin.desc">Ship quickly with toolbar, themes, multi-file queues, responsive containers and tested fallbacks.</p>
             <div class="editor-window compact-editor">
               <div class="editor-titlebar"><span></span><span></span><span></span><strong>terminal</strong></div>
               <pre><code>npm install @open-file-viewer/core</code></pre>
@@ -293,7 +293,7 @@
           <article>
             <span><svg><use href="#icon-puzzle"></use></svg><span data-i18n="ways.headless.label">Composable</span></span>
             <h3 data-i18n="ways.headless.title">Plugin-first Core</h3>
-            <p data-i18n="ways.headless.desc">通过插件协议接入自定义渲染器、WASM 或服务端转换结果，React/Vue/Svelte/原生 JS 共用同一核心。</p>
+            <p data-i18n="ways.headless.desc">Attach custom renderers, WASM pipelines or server-converted output while React, Vue, Svelte and vanilla JS share one core.</p>
             <div class="editor-window compact-editor">
               <div class="editor-titlebar"><span></span><span></span><span></span><strong>viewer.ts</strong></div>
               <pre><code>plugins: [pdfPlugin(), officePlugin(), customPlugin()]</code></pre>
@@ -307,17 +307,17 @@
           <article>
             <div class="feature-icon"><svg><use href="#icon-layers"></use></svg></div>
             <h3 data-i18n="feature.one.title">Batteries included</h3>
-            <p data-i18n="feature.one.desc">PDF、Office、OFD、EPUB、XPS、图片、音视频、压缩包、邮件、CAD、GIS、3D 和文本插件开箱可用。</p>
+            <p data-i18n="feature.one.desc">PDF, Office, OFD, EPUB, XPS, image, media, archive, email, CAD, GIS, 3D and text plugins are ready to use.</p>
           </article>
           <article>
             <div class="feature-icon"><svg><use href="#icon-framework"></use></svg></div>
             <h3 data-i18n="feature.two.title">Framework agnostic</h3>
-            <p data-i18n="feature.two.desc">原生 JavaScript、React、Vue 和 Svelte 使用同一套 core 能力，方便团队跨产品复用。</p>
+            <p data-i18n="feature.two.desc">Vanilla JavaScript, React, Vue and Svelte share the same core so teams can reuse one preview strategy across products.</p>
           </article>
           <article>
             <div class="feature-icon"><svg><use href="#icon-resize"></use></svg></div>
             <h3 data-i18n="feature.three.title">Container-first</h3>
-            <p data-i18n="feature.three.desc">所有预览都在你的 DOM 容器内完成，支持尺寸变化、黑色模式、下载和错误边界。</p>
+            <p data-i18n="feature.three.desc">Every preview stays inside your DOM container with resize handling, dark mode, downloads and error boundaries.</p>
           </article>
         </div>
       </section>
@@ -328,7 +328,7 @@
             <p data-i18n="integration.eyebrow">Drop-in Integration</p>
             <h2 data-i18n="integration.title">Add a viewer in minutes.</h2>
           </div>
-          <p data-i18n="integration.desc">选择 Vanilla JS、React、Vue 或 Svelte。底层插件一致，UI 可以先用默认组件，再逐步定制。</p>
+          <p data-i18n="integration.desc">Pick Vanilla JS, React, Vue or Svelte. The plugin capability stays consistent, while the UI can start default and evolve later.</p>
         </div>
         <div class="code-frame">
           <div class="editor-window">
@@ -354,7 +354,7 @@
             <p data-i18n="playground.eyebrow">Try it live</p>
             <h2 data-i18n="playground.title">Drop files and preview them instantly.</h2>
           </div>
-          <p data-i18n="playground.desc">本地文件只在浏览器内读取，不会上传。你也可以用内置示例体验 Markdown、JSON、SVG 和 DXF。</p>
+          <p data-i18n="playground.desc">Local files stay in your browser and are not uploaded. Built-in samples cover Markdown, JSON, Office, SVG, DXF, 3D, GDSII, OASIS and DWG.</p>
         </div>
         <div class="playground-shell">
           <aside class="controls-card">
@@ -437,35 +437,35 @@
             <p data-i18n="api.eyebrow">API Reference</p>
             <h2 data-i18n="api.title">A small API surface with room to extend.</h2>
           </div>
-          <p data-i18n="api.desc">核心 API 保持克制：容器、文件、插件、尺寸、主题和事件回调。复杂格式能力由插件扩展。</p>
+          <p data-i18n="api.desc">The API stays focused: container, file, plugins, size, theme and lifecycle callbacks. Complex formats are extended through plugins.</p>
         </div>
         <div class="api-summary-grid">
           <a class="api-summary-card" href="/api.html#frameworks">
             <span><svg><use href="#icon-framework"></use></svg></span>
-            <strong>Frameworks</strong>
-            <p>Vanilla JS、React、Vue、Svelte 的安装、接入方式和差异说明。</p>
+            <strong data-i18n="api.frameworks.title">Frameworks</strong>
+            <p data-i18n="api.frameworks.desc">Installation and integration guidance for Vanilla JS, React, Vue and Svelte.</p>
           </a>
           <a class="api-summary-card" href="/api.html#options">
             <span><svg><use href="#icon-api"></use></svg></span>
-            <strong>PreviewOptions</strong>
-            <p>文件源、队列、尺寸、主题、回调、降级和实例方法完整说明。</p>
+            <strong data-i18n="api.options.title">PreviewOptions</strong>
+            <p data-i18n="api.options.desc">Complete reference for file sources, queues, sizing, themes, callbacks, fallbacks and instance methods.</p>
           </a>
           <a class="api-summary-card" href="/api.html#toolbar">
             <span><svg><use href="#icon-puzzle"></use></svg></span>
             <strong data-i18n="toolbar.title">Toolbar Customization</strong>
-            <p data-i18n="toolbar.desc">支持自定义文案、顺序、图标、审批/收藏/分享等业务按钮，也可以完全替换工具栏。</p>
+            <p data-i18n="toolbar.desc">Change labels, order, icons, approval/favorite/share actions or replace the toolbar completely.</p>
           </a>
           <a class="api-summary-card" href="/api.html#plugins">
             <span><svg><use href="#icon-layers"></use></svg></span>
-            <strong>Plugin Protocol</strong>
-            <p>通过 match/render 协议扩展自定义格式、服务端转换结果或业务专属渲染器。</p>
+            <strong data-i18n="api.plugins.title">Plugin Protocol</strong>
+            <p data-i18n="api.plugins.desc">Extend custom formats, server-converted results or product-specific renderers through the match/render protocol.</p>
           </a>
         </div>
       </section>
 
       <section class="cta-band">
         <h2 data-i18n="cta.title">Ship file previews without building every renderer from scratch.</h2>
-        <p data-i18n="cta.desc">从一个稳定容器开始，让文件预览能力持续进化。</p>
+        <p data-i18n="cta.desc">Start from a stable container and keep evolving preview capability.</p>
         <a class="primary-button" href="#playground"><span data-i18n="cta.action">Try the playground</span><svg><use href="#icon-arrow"></use></svg></a>
       </section>
     </main>

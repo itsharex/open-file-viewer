@@ -52,7 +52,7 @@ describe("OpenFileViewer Svelte adapter", () => {
     });
 
     await waitFor(() => expect(unsupported).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText("当前文件暂不支持在线预览")).toBeTruthy();
+    expect(await screen.findByText("Preview is not available for this file")).toBeTruthy();
   });
 
   it("passes initialIndex through and reacts to initialIndex changes", async () => {

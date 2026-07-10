@@ -27,7 +27,7 @@ import "./style.css";
 function App() {
   const [theme, setTheme] = useState<PreviewTheme>("light");
   const [files, setFiles] = useState<Array<File | Blob>>([
-    new File(["React adapter demo\n\n选择本地文件后会在自定义容器内预览。"], "welcome.txt", {
+    new File(["React adapter demo\n\nChoose a local file to preview it inside the custom container."], "welcome.txt", {
       type: "text/plain"
     })
   ]);
@@ -68,7 +68,7 @@ function App() {
           }}
         />
         <select
-          aria-label="主题"
+          aria-label="Theme"
           value={theme}
           onChange={(event) => setTheme(event.target.value as PreviewTheme)}
         >

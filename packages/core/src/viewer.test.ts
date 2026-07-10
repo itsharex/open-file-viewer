@@ -228,15 +228,14 @@ describe("createViewer", () => {
     expect(container.querySelector(".ofv-status")?.textContent).toContain("preview failed");
   });
 
-  it("can render fallback messages in English", async () => {
+  it("renders fallback messages in English by default", async () => {
     const container = document.createElement("div");
     document.body.append(container);
 
     createViewer({
       container,
       file: new Blob(["unknown"], { type: "application/octet-stream" }),
-      fileName: "unknown.bin",
-      locale: "en-US"
+      fileName: "unknown.bin"
     });
 
     await waitFor(() => container.textContent?.includes("Preview is not available for this file") === true);
@@ -246,6 +245,23 @@ describe("createViewer", () => {
     expect(container.textContent).toContain("Format");
     expect(container.textContent).toContain("Local or in-memory file");
     expect(container.textContent).not.toContain("当前文件暂不支持在线预览");
+  });
+
+  it("can render fallback messages in Simplified Chinese", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: new Blob(["unknown"], { type: "application/octet-stream" }),
+      fileName: "unknown.bin",
+      locale: "zh-CN"
+    });
+
+    await waitFor(() => container.textContent?.includes("当前文件暂不支持在线预览") === true);
+
+    expect(container.textContent).toContain("下载文件");
+    expect(container.textContent).not.toContain("Preview is not available for this file");
   });
 
   it("allows fallback messages to be customized", async () => {

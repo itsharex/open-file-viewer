@@ -37,7 +37,7 @@ export const defaultMessages: Record<PreviewLocale, PreviewMessages> = {
 
 export function resolveMessages(options: Pick<PreviewOptions, "locale" | "messages">): PreviewMessages {
   return {
-    ...defaultMessages[options.locale || "zh-CN"],
+    ...defaultMessages[options.locale || "en-US"],
     ...options.messages
   };
 }

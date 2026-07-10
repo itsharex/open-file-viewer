@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -132,86 +132,87 @@
         <span>Open File Viewer</span>
       </a>
       <nav class="desktop-nav" aria-label="Primary navigation">
-        <a href="/#docs"><svg><use href="#icon-docs"></use></svg><span>文档</span></a>
-        <a href="/#frameworks"><svg><use href="#icon-framework"></use></svg><span>框架</span></a>
-        <a href="/#formats"><svg><use href="#icon-grid"></use></svg><span>格式</span></a>
+        <a href="/#docs"><svg><use href="#icon-docs"></use></svg><span data-i18n="nav.docs">Documentation</span></a>
+        <a href="/#frameworks"><svg><use href="#icon-framework"></use></svg><span data-i18n="nav.frameworks">Frameworks</span></a>
+        <a href="/#formats"><svg><use href="#icon-grid"></use></svg><span data-i18n="nav.formats">Formats</span></a>
         <a class="active" href="/api.html"><svg><use href="#icon-api"></use></svg><span>API</span></a>
-        <a href="/#playground"><svg><use href="#icon-play"></use></svg><span>在线使用</span></a>
-        <a href="/about.html"><svg><use href="#icon-heart"></use></svg><span>关于我们</span></a>
+        <a href="/#playground"><svg><use href="#icon-play"></use></svg><span data-i18n="nav.playground">Live Demo</span></a>
+        <a href="/about.html"><svg><use href="#icon-heart"></use></svg><span data-i18n="nav.about">About</span></a>
       </nav>
       <div class="nav-actions">
         <button class="ghost-icon" id="themeToggle" type="button" aria-label="Toggle dark mode"><svg><use href="#icon-moon"></use></svg></button>
+        <button class="ghost-icon" id="languageToggle" type="button" aria-label="Switch to Chinese">ZH</button>
         <a class="github-button" href="https://github.com/xushanpei/open-file-viewer" target="_blank" rel="noreferrer"><svg><use href="#icon-github"></use></svg><span>GitHub</span></a>
       </div>
     </header>
 
     <main id="top">
       <section class="api-doc-hero">
-        <p>API Documentation</p>
-        <h1>Open File Viewer 接入与 API 指南</h1>
+        <p data-i18n="api.hero.eyebrow">API Documentation</p>
+        <h1 data-i18n="api.hero.title">Open File Viewer integration and API guide</h1>
         <div>
-          <a class="primary-button" href="#quick-start"><span>开始接入</span><svg><use href="#icon-arrow"></use></svg></a>
-          <a class="secondary-button" href="/#playground"><svg><use href="#icon-eye"></use></svg><span>在线体验</span></a>
+          <a class="primary-button" href="#quick-start"><span data-i18n="action.getStarted">Get Started</span><svg><use href="#icon-arrow"></use></svg></a>
+          <a class="secondary-button" href="/#playground"><svg><use href="#icon-eye"></use></svg><span data-i18n="action.liveDemo">Live Demo</span></a>
         </div>
       </section>
 
       <section class="api-doc-layout">
         <aside class="api-sidebar" aria-label="API sections">
-          <strong>目录</strong>
-          <a href="#overview">能力概览</a>
-          <a href="#frameworks">支持框架</a>
-          <a href="#install">安装</a>
-          <a href="#optional-deps">可选依赖</a>
-          <a href="#quick-start">快速接入</a>
-          <a href="#options">核心 API</a>
-          <a href="#instance">实例方法</a>
-          <a href="#toolbar">工具栏自定义</a>
-          <a href="#plugins">插件机制</a>
-          <a href="#formats">插件清单</a>
-          <a href="#faq">常见问题</a>
+          <strong data-i18n="contents">Contents</strong>
+          <a href="#overview" data-i18n="api.sidebar.overview">Overview</a>
+          <a href="#frameworks" data-i18n="api.sidebar.frameworks">Frameworks</a>
+          <a href="#install" data-i18n="api.sidebar.install">Installation</a>
+          <a href="#optional-deps" data-i18n="api.sidebar.optional">Optional dependencies</a>
+          <a href="#quick-start" data-i18n="api.sidebar.quickStart">Quick start</a>
+          <a href="#options" data-i18n="api.sidebar.core">Core API</a>
+          <a href="#instance" data-i18n="api.sidebar.instance">Instance methods</a>
+          <a href="#toolbar" data-i18n="api.sidebar.toolbar">Toolbar customization</a>
+          <a href="#plugins" data-i18n="api.sidebar.plugins">Plugin protocol</a>
+          <a href="#formats" data-i18n="api.sidebar.builtIn">Built-in plugins</a>
+          <a href="#faq" data-i18n="api.sidebar.faq">FAQ</a>
         </aside>
 
         <div class="api-doc-content">
           <section class="doc-panel" id="overview">
-            <p class="doc-eyebrow">Overview</p>
-            <h2>从一个稳定容器开始接入文件预览</h2>
-            <p>
-              Open File Viewer 由一个框架无关的 core 加多个 UI 适配器组成。核心负责文件识别、插件匹配、容器尺寸、工具栏命令、错误降级和生命周期；React、Vue、Svelte 适配器只是把同一套能力包装成组件。
+            <p class="doc-eyebrow" data-i18n="api.eyebrow.overview">Overview</p>
+            <h2 data-i18n="api.overview.title">Start file previews from one stable container</h2>
+            <p data-i18n="api.overview.body">
+              Open File Viewer combines a framework-agnostic core with UI adapters. The core handles file detection, plugin matching, container sizing, toolbar commands, fallbacks and lifecycle events. React, Vue and Svelte adapters expose the same capability as components.
             </p>
             <div class="doc-kpi-grid">
               <div><strong>4</strong><span>Vanilla JS / React / Vue / Svelte</span></div>
-              <div><strong>15+</strong><span>内置预览插件</span></div>
-              <div><strong>1</strong><span>统一插件协议</span></div>
+              <div><strong>15+</strong><span data-i18n="api.overview.plugins">Built-in preview plugins</span></div>
+              <div><strong>1</strong><span data-i18n="api.overview.protocol">Unified plugin protocol</span></div>
             </div>
           </section>
 
           <section class="doc-panel" id="frameworks">
-            <p class="doc-eyebrow">Frameworks</p>
-            <h2>支持的框架</h2>
+            <p class="doc-eyebrow" data-i18n="api.eyebrow.frameworks">Frameworks</p>
+            <h2 data-i18n="api.frameworks.title">Supported frameworks</h2>
             <div class="doc-card-grid">
               <article>
                 <strong>Vanilla JavaScript</strong>
-                <p>直接调用 <code>createViewer()</code>。适合任意 Web 页面、低代码平台、微前端容器和非框架项目。</p>
+                <p data-i18n="api.frameworks.vanilla">Call <code>createViewer()</code> directly in any web page, low-code platform, micro-frontend container or framework-free project.</p>
               </article>
               <article>
                 <strong>React</strong>
-                <p>使用 <code>@open-file-viewer/react</code> 的 <code>FileViewer</code> 组件，支持 <code>renderToolbar</code> 完全替换工具栏。</p>
+                <p data-i18n="api.frameworks.react">Use the <code>FileViewer</code> component from <code>@open-file-viewer/react</code>, including <code>renderToolbar</code> for complete toolbar replacement.</p>
               </article>
               <article>
                 <strong>Vue</strong>
-                <p>使用 <code>@open-file-viewer/vue</code> 的 <code>OpenFileViewer</code> 组件，支持 <code>#toolbar</code> slot。</p>
+                <p data-i18n="api.frameworks.vue">Use the <code>OpenFileViewer</code> component from <code>@open-file-viewer/vue</code>, with a <code>#toolbar</code> slot.</p>
               </article>
               <article>
                 <strong>Svelte</strong>
-                <p>使用 <code>@open-file-viewer/svelte</code> 的 <code>OpenFileViewer</code> 组件，支持 <code>slot="toolbar"</code> 和 <code>renderToolbar</code>。</p>
+                <p data-i18n="api.frameworks.svelte">Use the <code>OpenFileViewer</code> component from <code>@open-file-viewer/svelte</code>, with <code>slot="toolbar"</code> and <code>renderToolbar</code>.</p>
               </article>
             </div>
           </section>
 
           <section class="doc-panel" id="install">
-            <p class="doc-eyebrow">Install</p>
-            <h2>安装</h2>
-            <p>core 是必装包；如果使用具体框架，再安装对应适配器。</p>
+            <p class="doc-eyebrow" data-i18n="api.eyebrow.install">Install</p>
+            <h2 data-i18n="api.install.title">Installation</h2>
+            <p data-i18n="api.install.body">Install the core package, then add the adapter for your framework when needed.</p>
             <div class="editor-window doc-code-window">
               <div class="editor-titlebar"><span></span><span></span><span></span><strong>terminal</strong></div>
               <pre><code data-language="bash">npm install @open-file-viewer/core
@@ -220,27 +221,27 @@ npm install @open-file-viewer/vue
 npm install @open-file-viewer/svelte</code></pre>
             </div>
             <div class="doc-callout">
-              <strong>样式必须引入</strong>
-              <p>默认 UI、工具栏、错误态、各类插件容器都依赖 <code>@open-file-viewer/core/style.css</code>。业务项目可在它之后覆盖 CSS 变量或 class。</p>
+              <strong data-i18n="api.install.stylesTitle">Import the stylesheet</strong>
+              <p data-i18n="api.install.stylesBody">The default UI, toolbar, error states and plugin containers depend on <code>@open-file-viewer/core/style.css</code>. Override CSS variables or classes after this import.</p>
             </div>
           </section>
 
           <section class="doc-panel" id="optional-deps">
-            <p class="doc-eyebrow">Optional Dependencies</p>
-            <h2>按需安装的增强能力</h2>
-            <p>core 默认安装只包含通用预览能力。少数专有格式或流媒体格式需要业务项目按需安装额外依赖；未安装时，插件会展示元信息或下载降级，不会阻塞普通文件预览。</p>
+            <p class="doc-eyebrow" data-i18n="api.eyebrow.optional">Optional Dependencies</p>
+            <h2 data-i18n="api.optional.title">Optional enhanced capabilities</h2>
+            <p data-i18n="api.optional.body">The default core install contains common preview capabilities. A few proprietary or streaming formats need optional dependencies. Without them, plugins show metadata or a download fallback without affecting ordinary previews.</p>
             <div class="doc-card-grid">
               <article>
                 <strong>PDF</strong>
-                <p><code>pdfPlugin()</code> 需要业务项目提供 <code>pdfjs-dist</code> worker 地址，适合 Vite、Webpack、Next.js 等不同构建环境自行处理 worker 资源。</p>
+                <p data-i18n="api.optional.pdf"><code>pdfPlugin()</code> requires the host app to provide a <code>pdfjs-dist</code> worker URL so Vite, Webpack, Next.js and other build systems can handle worker assets correctly.</p>
               </article>
               <article>
                 <strong>DWG</strong>
-                <p><code>cadPlugin()</code> 默认会尝试 LibreDWG WASM。需要 DWG 线稿预览时安装 <code>@mlightcad/libredwg-web</code> 并配置 <code>wasmBaseUrl</code>。</p>
+                <p data-i18n="api.optional.dwg"><code>cadPlugin()</code> tries LibreDWG WASM by default. Install <code>@mlightcad/libredwg-web</code> and configure <code>wasmBaseUrl</code> for DWG linework previews.</p>
               </article>
               <article>
                 <strong>FLV / M2TS</strong>
-                <p><code>videoPlugin()</code> 对 MP4、WebM、MOV 等原生格式不需要额外依赖；FLV、MPEG-TS/M2TS 需要业务项目安装 <code>mpegts.js</code>，未安装时展示下载 fallback。</p>
+                <p data-i18n="api.optional.video"><code>videoPlugin()</code> needs no extra dependency for native formats such as MP4, WebM and MOV. FLV and MPEG-TS/M2TS require <code>mpegts.js</code>; otherwise a download fallback is shown.</p>
               </article>
             </div>
             <div class="editor-window doc-code-window">
@@ -250,8 +251,8 @@ npm install @mlightcad/libredwg-web
 npm install mpegts.js</code></pre>
             </div>
             <div class="doc-callout">
-              <strong>pnpm 11 / blockExoticSubdeps 说明</strong>
-              <p><code>mpegts.js</code> 的上游依赖中包含 git 形式的 <code>webworkify-webpack</code>。因此 Open File Viewer 不再把它作为 core 强制依赖。只有确实需要 FLV/M2TS 播放时才安装它；如果你的 pnpm 配置阻止 git 子依赖，可以在业务项目中覆盖到 npm 版本，或继续使用内置下载降级。</p>
+              <strong data-i18n="api.optional.pnpmTitle">pnpm 11 / blockExoticSubdeps note</strong>
+              <p data-i18n="api.optional.pnpmBody">An upstream dependency of <code>mpegts.js</code> references <code>webworkify-webpack</code> through git, so Open File Viewer no longer makes it a required core dependency. Install it only for FLV/M2TS playback. If pnpm blocks git subdependencies, override it with the npm release or keep the built-in download fallback.</p>
             </div>
             <div class="editor-window doc-code-window">
               <div class="editor-titlebar"><span></span><span></span><span></span><strong>package.json</strong></div>
@@ -264,8 +265,8 @@ npm install mpegts.js</code></pre>
 }</code></pre>
             </div>
             <div class="doc-callout">
-              <strong>Umi / utoo PDF 兼容配置</strong>
-              <p>如果 PDF 文件和 worker 都能正常访问，但预览仍进入 fallback，并且控制台出现 <code>Cannot set properties of undefined (setting 'onPull')</code>，可以开启 <code>useFetchData</code>，让主线程先读取 PDF 字节再交给 pdf.js，绕开 worker 网络流兼容问题。</p>
+              <strong data-i18n="api.optional.umiTitle">Umi / utoo PDF compatibility</strong>
+              <p data-i18n="api.optional.umiBody">If the PDF and worker are reachable but the preview still falls back with <code>Cannot set properties of undefined (setting 'onPull')</code>, enable <code>useFetchData</code>. The main thread will read the PDF bytes before passing them to pdf.js, avoiding worker network-stream compatibility issues.</p>
             </div>
             <div class="editor-window doc-code-window">
               <div class="editor-titlebar"><span></span><span></span><span></span><strong>viewer.ts</strong></div>
@@ -277,8 +278,8 @@ npm install mpegts.js</code></pre>
           </section>
 
           <section class="doc-panel" id="quick-start">
-            <p class="doc-eyebrow">Quick Start</p>
-            <h2>如何接入</h2>
+            <p class="doc-eyebrow" data-i18n="api.eyebrow.quickStart">Quick Start</p>
+            <h2 data-i18n="api.quickStart.title">Integration examples</h2>
             <div class="doc-tabs">
               <article>
                 <h3>Vanilla JS</h3>
@@ -377,46 +378,46 @@ const plugins = [imagePlugin(), pdfPlugin({ workerSrc }), officePlugin(), textPl
           </section>
 
           <section class="doc-panel" id="options">
-            <p class="doc-eyebrow">Core API</p>
+            <p class="doc-eyebrow" data-i18n="api.eyebrow.core">Core API</p>
             <h2><code>createViewer(options)</code></h2>
             <div class="doc-table">
-              <div><strong>container</strong><code>HTMLElement | string</code><span>必填。预览器挂载容器，传字符串时会通过 <code>document.querySelector</code> 查找。</span></div>
-              <div><strong>file</strong><code>File | Blob | string | ArrayBuffer</code><span>单文件预览源。URL 需要目标资源允许跨域访问。</span></div>
-              <div><strong>files</strong><code>(PreviewSource | PreviewItem)[]</code><span>多文件队列。配合默认工具栏可以上一份、下一份切换。</span></div>
-              <div><strong>initialIndex</strong><code>number</code><span>多文件队列初始下标，默认从第一个文件开始。</span></div>
-              <div><strong>fileName</strong><code>string</code><span>当文件源不是 <code>File</code> 时建议传入，插件会根据扩展名判断格式。</span></div>
-              <div><strong>mimeType</strong><code>string</code><span>补充 MIME 类型，适合 Blob、ArrayBuffer 或扩展名不可靠的远程地址。</span></div>
-              <div><strong>width / height</strong><code>number | string</code><span>预览容器尺寸。常用 <code>100%</code>、<code>640px</code>、<code>70vh</code>。</span></div>
-              <div><strong>fit</strong><code>contain | cover | width | height | actual | scale-down</code><span>内容适配方式。不同插件会尽量遵循同一语义。</span></div>
-              <div><strong>plugins</strong><code>PreviewPlugin[]</code><span>插件列表。按数组顺序匹配，建议把更具体的业务插件放在通用插件前面。</span></div>
-              <div><strong>fallback</strong><code>inline | download | custom</code><span>不支持格式的降级策略。需要完全自定义时配合 <code>renderFallback</code>。</span></div>
-              <div><strong>toolbar</strong><code>boolean | PreviewToolbarOptions</code><span>默认工具栏开关或配置对象，可控制按钮、文案、图标、顺序和业务动作。</span></div>
-              <div><strong>theme</strong><code>light | dark | auto</code><span>预览器主题。<code>auto</code> 会跟随系统或宿主环境。</span></div>
-              <div><strong>className</strong><code>string</code><span>添加到根节点的业务 class，便于局部样式覆盖。</span></div>
-              <div><strong>onLoad</strong><code>(file) =&gt; void</code><span>当前文件加载成功后触发。</span></div>
-              <div><strong>onError</strong><code>(error, file?) =&gt; void</code><span>插件渲染或文件读取失败时触发。</span></div>
-              <div><strong>onUnsupported</strong><code>(file) =&gt; void</code><span>没有插件匹配当前文件时触发。</span></div>
+              <div><strong>container</strong><code>HTMLElement | string</code><span data-i18n="api.options.container">Required. The viewer mount element; string values are resolved with <code>document.querySelector</code>.</span></div>
+              <div><strong>file</strong><code>File | Blob | string | ArrayBuffer</code><span data-i18n="api.options.file">Single-file source. Remote URLs must allow cross-origin access.</span></div>
+              <div><strong>files</strong><code>(PreviewSource | PreviewItem)[]</code><span data-i18n="api.options.files">Multi-file queue. The default toolbar can navigate to the previous and next item.</span></div>
+              <div><strong>initialIndex</strong><code>number</code><span data-i18n="api.options.initialIndex">Initial queue index. Defaults to the first file.</span></div>
+              <div><strong>fileName</strong><code>string</code><span data-i18n="api.options.fileName">Recommended when the source is not a <code>File</code>, because plugins use the extension for format detection.</span></div>
+              <div><strong>mimeType</strong><code>string</code><span data-i18n="api.options.mimeType">Additional MIME type for Blob, ArrayBuffer or remote URLs with unreliable extensions.</span></div>
+              <div><strong>width / height</strong><code>number | string</code><span data-i18n="api.options.size">Viewer dimensions. Common values include <code>100%</code>, <code>640px</code> and <code>70vh</code>.</span></div>
+              <div><strong>fit</strong><code>contain | cover | width | height | actual | scale-down</code><span data-i18n="api.options.fit">Content fitting mode. Plugins follow the same semantics where possible.</span></div>
+              <div><strong>plugins</strong><code>PreviewPlugin[]</code><span data-i18n="api.options.plugins">Ordered plugin list. Put specific product plugins before general-purpose plugins.</span></div>
+              <div><strong>fallback</strong><code>inline | download | custom</code><span data-i18n="api.options.fallback">Fallback strategy for unsupported files. Use with <code>renderFallback</code> for complete customization.</span></div>
+              <div><strong>toolbar</strong><code>boolean | PreviewToolbarOptions</code><span data-i18n="api.options.toolbar">Default toolbar switch or configuration for actions, labels, icons, order and custom commands.</span></div>
+              <div><strong>theme</strong><code>light | dark | auto</code><span data-i18n="api.options.theme">Viewer theme. <code>auto</code> follows the system or host environment.</span></div>
+              <div><strong>className</strong><code>string</code><span data-i18n="api.options.className">Custom class added to the root element for scoped style overrides.</span></div>
+              <div><strong>onLoad</strong><code>(file) =&gt; void</code><span data-i18n="api.options.onLoad">Runs after the current file loads successfully.</span></div>
+              <div><strong>onError</strong><code>(error, file?) =&gt; void</code><span data-i18n="api.options.onError">Runs when plugin rendering or file reading fails.</span></div>
+              <div><strong>onUnsupported</strong><code>(file) =&gt; void</code><span data-i18n="api.options.onUnsupported">Runs when no plugin matches the current file.</span></div>
             </div>
           </section>
 
           <section class="doc-panel" id="instance">
-            <p class="doc-eyebrow">Viewer Instance</p>
-            <h2>实例方法</h2>
+            <p class="doc-eyebrow" data-i18n="api.eyebrow.instance">Viewer Instance</p>
+            <h2 data-i18n="api.instance.title">Instance methods</h2>
             <div class="doc-table compact">
-              <div><strong>reload(file?)</strong><code>Promise&lt;void&gt;</code><span>重新加载当前文件，或传入新文件源进行替换。</span></div>
-              <div><strong>next()</strong><code>Promise&lt;void&gt;</code><span>切换到队列中的下一个文件。</span></div>
-              <div><strong>previous()</strong><code>Promise&lt;void&gt;</code><span>切换到队列中的上一个文件。</span></div>
-              <div><strong>goTo(index)</strong><code>Promise&lt;void&gt;</code><span>切换到指定下标。</span></div>
-              <div><strong>getCurrentIndex()</strong><code>number</code><span>返回当前队列下标。</span></div>
-              <div><strong>resize()</strong><code>void</code><span>容器尺寸变化后主动通知当前插件重新计算布局。</span></div>
-              <div><strong>destroy()</strong><code>void</code><span>销毁预览器、清理事件和插件资源。</span></div>
+              <div><strong>reload(file?)</strong><code>Promise&lt;void&gt;</code><span data-i18n="api.instance.reload">Reload the current file or replace it with a new source.</span></div>
+              <div><strong>next()</strong><code>Promise&lt;void&gt;</code><span data-i18n="api.instance.next">Move to the next file in the queue.</span></div>
+              <div><strong>previous()</strong><code>Promise&lt;void&gt;</code><span data-i18n="api.instance.previous">Move to the previous file in the queue.</span></div>
+              <div><strong>goTo(index)</strong><code>Promise&lt;void&gt;</code><span data-i18n="api.instance.goTo">Move to a specific queue index.</span></div>
+              <div><strong>getCurrentIndex()</strong><code>number</code><span data-i18n="api.instance.getIndex">Return the current queue index.</span></div>
+              <div><strong>resize()</strong><code>void</code><span data-i18n="api.instance.resize">Ask the active plugin to recalculate after the container size changes.</span></div>
+              <div><strong>destroy()</strong><code>void</code><span data-i18n="api.instance.destroy">Destroy the viewer and release event listeners and plugin resources.</span></div>
             </div>
           </section>
 
           <section class="doc-panel" id="toolbar">
-            <p class="doc-eyebrow">Toolbar</p>
-            <h2>工具栏自定义</h2>
-            <p>工具栏可以从轻到重分三层定制：配置内置按钮、增加业务按钮、完全替换渲染。样式层也可以覆盖 <code>.ofv-toolbar</code>、<code>.ofv-toolbar button</code>、<code>.ofv-toolbar-search</code>。</p>
+            <p class="doc-eyebrow" data-i18n="api.eyebrow.toolbar">Toolbar</p>
+            <h2 data-i18n="api.toolbar.title">Toolbar customization</h2>
+            <p data-i18n="api.toolbar.body">Customize the toolbar at three levels: configure built-in actions, add product actions or replace the renderer. You can also override <code>.ofv-toolbar</code>, <code>.ofv-toolbar button</code> and <code>.ofv-toolbar-search</code>.</p>
             <div class="editor-window doc-code-window">
               <div class="editor-titlebar"><span></span><span></span><span></span><strong>toolbar.ts</strong></div>
               <pre><code data-language="typescript">createViewer({
@@ -424,27 +425,27 @@ const plugins = [imagePlugin(), pdfPlugin({ workerSrc }), officePlugin(), textPl
   file,
   toolbar: {
     labels: {
-      download: "下载",
-      fullscreen: "全屏",
-      search: "搜索"
+      download: "Download",
+      fullscreen: "Fullscreen",
+      search: "Search"
     },
     order: ["search", "download", "favorite", "approve", "share", "fullscreen"],
     actions: [
-      { id: "favorite", label: "收藏", onClick: (ctx) =&gt; favoriteFile(ctx.file) },
-      { id: "approve", label: "审批", onClick: (ctx) =&gt; openApproval(ctx.file) },
-      { id: "share", label: "分享", onClick: (ctx) =&gt; shareFile(ctx.file) }
+      { id: "favorite", label: "Favorite", onClick: (ctx) =&gt; favoriteFile(ctx.file) },
+      { id: "approve", label: "Approve", onClick: (ctx) =&gt; openApproval(ctx.file) },
+      { id: "share", label: "Share", onClick: (ctx) =&gt; shareFile(ctx.file) }
     ]
   },
   plugins
 });</code></pre>
             </div>
             <div class="doc-card-grid">
-              <article><strong>自定义文案</strong><p>通过 <code>labels</code> 和 <code>titles</code> 把 Download、Search 等按钮改成中文或业务词。</p></article>
-              <article><strong>自定义顺序</strong><p><code>order</code> 同时支持内置按钮 ID 和业务按钮 ID。</p></article>
-              <article><strong>自定义图标</strong><p><code>icons</code> 接收 SVG 字符串、HTMLElement 或 SVGElement。</p></article>
-              <article><strong>业务按钮</strong><p><code>actions</code> 可增加审批、收藏、分享等按钮，并支持 hidden / disabled 函数。</p></article>
+              <article><strong data-i18n="api.toolbar.labelsTitle">Custom labels</strong><p data-i18n="api.toolbar.labelsBody">Use <code>labels</code> and <code>titles</code> to adapt actions to product terminology.</p></article>
+              <article><strong data-i18n="api.toolbar.orderTitle">Custom order</strong><p data-i18n="api.toolbar.orderBody"><code>order</code> accepts both built-in and custom action IDs.</p></article>
+              <article><strong data-i18n="api.toolbar.iconsTitle">Custom icons</strong><p data-i18n="api.toolbar.iconsBody"><code>icons</code> accepts SVG strings, HTMLElement or SVGElement values.</p></article>
+              <article><strong data-i18n="api.toolbar.actionsTitle">Product actions</strong><p data-i18n="api.toolbar.actionsBody"><code>actions</code> adds approval, favorite, sharing and other actions with hidden and disabled functions.</p></article>
             </div>
-            <h3>React / Vue / Svelte 完全替换工具栏</h3>
+            <h3 data-i18n="api.toolbar.replaceTitle">Replace the toolbar in React, Vue or Svelte</h3>
             <div class="doc-tabs">
               <article>
                 <h3>React render prop</h3>
@@ -453,10 +454,10 @@ const plugins = [imagePlugin(), pdfPlugin({ workerSrc }), officePlugin(), textPl
   toolbar
   renderToolbar={(ctx) =&gt; (
     &lt;div className="business-toolbar"&gt;
-      &lt;button onClick={ctx.previous} disabled={!ctx.canPrevious}&gt;上一份&lt;/button&gt;
+      &lt;button onClick={ctx.previous} disabled={!ctx.canPrevious}&gt;Previous&lt;/button&gt;
       &lt;span&gt;{ctx.index + 1} / {ctx.length}&lt;/span&gt;
-      &lt;button onClick={ctx.download}&gt;下载&lt;/button&gt;
-      &lt;button onClick={() =&gt; approve(ctx.file)}&gt;审批&lt;/button&gt;
+      &lt;button onClick={ctx.download}&gt;Download&lt;/button&gt;
+      &lt;button onClick={() =&gt; approve(ctx.file)}&gt;Approve&lt;/button&gt;
     &lt;/div&gt;
   )}
 /&gt;</code></pre>
@@ -466,10 +467,10 @@ const plugins = [imagePlugin(), pdfPlugin({ workerSrc }), officePlugin(), textPl
                 <pre><code data-language="markup">&lt;OpenFileViewer :file="file" toolbar&gt;
   &lt;template #toolbar="ctx"&gt;
     &lt;div class="business-toolbar"&gt;
-      &lt;button @click="ctx.previous()" :disabled="!ctx.canPrevious"&gt;上一份&lt;/button&gt;
+      &lt;button @click="ctx.previous()" :disabled="!ctx.canPrevious"&gt;Previous&lt;/button&gt;
       &lt;span&gt;{{ ctx.index + 1 }} / {{ ctx.length }}&lt;/span&gt;
-      &lt;button @click="ctx.download()"&gt;下载&lt;/button&gt;
-      &lt;button @click="approve(ctx.file)"&gt;审批&lt;/button&gt;
+      &lt;button @click="ctx.download()"&gt;Download&lt;/button&gt;
+      &lt;button @click="approve(ctx.file)"&gt;Approve&lt;/button&gt;
     &lt;/div&gt;
   &lt;/template&gt;
 &lt;/OpenFileViewer&gt;</code></pre>
@@ -479,10 +480,10 @@ const plugins = [imagePlugin(), pdfPlugin({ workerSrc }), officePlugin(), textPl
                 <pre><code data-language="markup">&lt;OpenFileViewer {file} toolbar&gt;
   &lt;svelte:fragment slot="toolbar" let:ctx&gt;
     &lt;div class="business-toolbar"&gt;
-      &lt;button on:click={ctx.previous} disabled={!ctx.canPrevious}&gt;上一份&lt;/button&gt;
+      &lt;button on:click={ctx.previous} disabled={!ctx.canPrevious}&gt;Previous&lt;/button&gt;
       &lt;span&gt;{ctx.index + 1} / {ctx.length}&lt;/span&gt;
-      &lt;button on:click={ctx.download}&gt;下载&lt;/button&gt;
-      &lt;button on:click={() =&gt; approve(ctx.file)}&gt;审批&lt;/button&gt;
+      &lt;button on:click={ctx.download}&gt;Download&lt;/button&gt;
+      &lt;button on:click={() =&gt; approve(ctx.file)}&gt;Approve&lt;/button&gt;
     &lt;/div&gt;
   &lt;/svelte:fragment&gt;
 &lt;/OpenFileViewer&gt;</code></pre>
@@ -491,9 +492,9 @@ const plugins = [imagePlugin(), pdfPlugin({ workerSrc }), officePlugin(), textPl
           </section>
 
           <section class="doc-panel" id="plugins">
-            <p class="doc-eyebrow">Plugin Protocol</p>
-            <h2>插件机制</h2>
-            <p>插件只需要实现 <code>match(file)</code> 和 <code>render(ctx)</code>。当文件进入预览器时，core 会按插件数组顺序查找第一个匹配项，并把统一的上下文交给它渲染。</p>
+            <p class="doc-eyebrow" data-i18n="api.eyebrow.plugins">Plugin Protocol</p>
+            <h2 data-i18n="api.plugins.title">Plugin protocol</h2>
+            <p data-i18n="api.plugins.body">A plugin only needs to implement <code>match(file)</code> and <code>render(ctx)</code>. The core selects the first matching plugin in array order and passes it a consistent rendering context.</p>
             <div class="editor-window doc-code-window">
               <div class="editor-titlebar"><span></span><span></span><span></span><strong>custom-plugin.ts</strong></div>
               <pre><code data-language="typescript">import type { PreviewPlugin } from "@open-file-viewer/core";
@@ -530,42 +531,42 @@ export function customReportPlugin(): PreviewPlugin {
 }</code></pre>
             </div>
             <div class="doc-callout">
-              <strong>插件顺序很重要</strong>
-              <p>如果你有业务专属格式或服务端转换结果，建议把自定义插件放在通用插件之前，避免被 textPlugin 或 fallback 先匹配。</p>
+              <strong data-i18n="api.plugins.orderTitle">Plugin order matters</strong>
+              <p data-i18n="api.plugins.orderBody">Put product-specific formats or server conversion plugins before general-purpose plugins so <code>textPlugin</code> or a fallback does not match first.</p>
             </div>
           </section>
 
           <section class="doc-panel" id="formats">
-            <p class="doc-eyebrow">Built-in Plugins</p>
-            <h2>内置插件清单</h2>
+            <p class="doc-eyebrow" data-i18n="api.eyebrow.builtIn">Built-in Plugins</p>
+            <h2 data-i18n="api.builtIn.title">Built-in plugins</h2>
             <div class="doc-card-grid three">
-              <article><strong>imagePlugin</strong><p>jpg、png、gif、webp、avif、svg、bmp、ico、heic、heif 等图片格式。</p></article>
-              <article><strong>pdfPlugin</strong><p>PDF 渲染、缩放、搜索、打印和高清画布渲染。</p></article>
-              <article><strong>officePlugin</strong><p>doc、docx、xls、xlsx、pptx、rtf、odt、ods、odp 等 Office 与开放文档格式。</p></article>
-              <article><strong>textPlugin</strong><p>txt、md、json、yaml、toml、代码文件和语法高亮。</p></article>
-              <article><strong>archivePlugin</strong><p>zip、rar、7z、tar、gz 等压缩包目录和文件结构。</p></article>
-              <article><strong>gisPlugin</strong><p>geojson、kml、kmz、gpx、topojson、shp 等地图数据。</p></article>
-              <article><strong>model3dPlugin</strong><p>gltf、glb、obj、stl、fbx、dae、3mf、usdz 等 3D 模型。</p></article>
-              <article><strong>cadPlugin</strong><p>dxf、step、ifc、gds、oas 等工程图纸与芯片版图预览；DWG 默认尝试 LibreDWG WASM，失败回缩略图/元信息，也可通过 binaryRenderer 接入 CADViewer、MxCAD 或转换服务。</p></article>
-              <article><strong>emailPlugin</strong><p>eml、msg、mbox 邮件正文、头部信息和附件结构。</p></article>
+              <article><strong>imagePlugin</strong><p data-i18n="api.builtIn.image">Image formats including jpg, png, gif, webp, avif, svg, bmp, ico, heic and heif.</p></article>
+              <article><strong>pdfPlugin</strong><p data-i18n="api.builtIn.pdf">PDF rendering, zoom, search, print and high-resolution canvas output.</p></article>
+              <article><strong>officePlugin</strong><p data-i18n="api.builtIn.office">Office and OpenDocument formats including doc, docx, xls, xlsx, pptx, rtf, odt, ods and odp.</p></article>
+              <article><strong>textPlugin</strong><p data-i18n="api.builtIn.text">txt, md, json, yaml, toml, source code and syntax highlighting.</p></article>
+              <article><strong>archivePlugin</strong><p data-i18n="api.builtIn.archive">Archive directories and file structures for zip, rar, 7z, tar, gz and more.</p></article>
+              <article><strong>gisPlugin</strong><p data-i18n="api.builtIn.gis">Map data including geojson, kml, kmz, gpx, topojson and shp.</p></article>
+              <article><strong>model3dPlugin</strong><p data-i18n="api.builtIn.model3d">3D models including gltf, glb, obj, stl, fbx, dae, 3mf and usdz.</p></article>
+              <article><strong>cadPlugin</strong><p data-i18n="api.builtIn.cad">Engineering drawings and chip layouts including dxf, step, ifc, gds and oas. DWG tries LibreDWG WASM first, then falls back to a thumbnail or metadata; <code>binaryRenderer</code> can connect CADViewer, MxCAD or a conversion service.</p></article>
+              <article><strong>emailPlugin</strong><p data-i18n="api.builtIn.email">Email bodies, headers and attachment structures for eml, msg and mbox.</p></article>
             </div>
           </section>
 
           <section class="doc-panel" id="faq">
-            <p class="doc-eyebrow">FAQ</p>
-            <h2>常见问题</h2>
+            <p class="doc-eyebrow" data-i18n="api.eyebrow.faq">FAQ</p>
+            <h2 data-i18n="api.faq.title">Frequently asked questions</h2>
             <div class="doc-faq">
               <details open>
-                <summary>远程 URL 预览为什么失败？</summary>
-                <p>浏览器必须能直接访问文件，并且目标地址需要允许 CORS。对于私有文件，建议由业务后端签发临时 URL，或先 fetch 成 Blob 再传给预览器。</p>
+                <summary data-i18n="api.faq.remoteTitle">Why does a remote URL preview fail?</summary>
+                <p data-i18n="api.faq.remoteBody">The browser must be able to access the file directly and the origin must allow CORS. For private files, use a temporary URL from your backend or fetch the resource into a Blob before passing it to the viewer.</p>
               </details>
               <details>
-                <summary>容器宽度变化后如何避免排版问题？</summary>
-                <p>优先给外层容器稳定的 width / height，并在布局变化后调用实例的 <code>resize()</code>。内置插件会尽量把滚动限制在预览容器内部。</p>
+                <summary data-i18n="api.faq.resizeTitle">How do I avoid layout issues after the container width changes?</summary>
+                <p data-i18n="api.faq.resizeBody">Give the outer container stable width and height values, then call <code>resize()</code> after layout changes. Built-in plugins keep scrolling inside the preview container where possible.</p>
               </details>
               <details>
-                <summary>如何接入服务端转换？</summary>
-                <p>可以写一个自定义插件，在 <code>render(ctx)</code> 中调用你的转换服务，然后把返回的 HTML、图片、PDF 或结构化数据渲染到 <code>ctx.viewport</code>。</p>
+                <summary data-i18n="api.faq.convertTitle">How do I connect a server-side conversion service?</summary>
+                <p data-i18n="api.faq.convertBody">Create a custom plugin, call the conversion service from <code>render(ctx)</code>, then render the returned HTML, image, PDF or structured data into <code>ctx.viewport</code>.</p>
               </details>
             </div>
           </section>
@@ -575,7 +576,7 @@ export function customReportPlugin(): PreviewPlugin {
 
     <footer class="site-footer">
       <span>Open File Viewer</span>
-      <span>面向现代 Web 产品的文件预览 SDK。</span>
+      <span data-i18n="footer.text">Framework-agnostic file preview SDK for modern web products.</span>
     </footer>
 
     <script type="module" src="/src/api.ts"></script>

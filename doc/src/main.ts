@@ -64,43 +64,53 @@ const translations: Record<Language, Record<string, string>> = {
     "hero.works": "原生 JS、Vue、React、Svelte 全兼容",
     "ways.eyebrow": "两种集成方式",
     "ways.title": "直接嵌入默认预览器，或基于插件构建自己的文件工作台。",
-    "ways.dropin.label": "Drop-in",
-    "ways.dropin.title": "OpenFileViewer Component",
+    "ways.dropin.label": "即插即用",
+    "ways.dropin.title": "开箱即用预览器",
     "ways.dropin.desc": "用内置 UI 快速上线，获得工具栏、主题、多文件队列、容器自适应和失败降级。",
-    "ways.headless.label": "Composable",
-    "ways.headless.title": "Plugin-first Core",
+    "ways.headless.label": "自由组合",
+    "ways.headless.title": "插件优先核心",
     "ways.headless.desc": "通过插件协议接入自定义渲染器、WASM 或服务端转换结果，React/Vue/Svelte/原生 JS 共用同一核心。",
-    "feature.one.title": "Batteries included",
+    "feature.one.title": "功能开箱即用",
     "feature.one.desc": "PDF、Office、OFD、EPUB、XPS、图片、音视频、压缩包、邮件、CAD、GIS、3D 和文本插件开箱可用。",
-    "feature.two.title": "Framework agnostic",
+    "feature.two.title": "不绑定框架",
     "feature.two.desc": "原生 JavaScript、React、Vue 和 Svelte 使用同一套 core 能力，方便团队跨产品复用。",
-    "feature.three.title": "Container-first",
+    "feature.three.title": "容器优先",
     "feature.three.desc": "所有预览都在你的 DOM 容器内完成，支持尺寸变化、黑色模式、下载和错误边界。",
     "integration.eyebrow": "框架兼容",
     "integration.title": "Vanilla JS、React、Vue、Svelte 都能快速接入。",
     "integration.desc": "选择 Vanilla JS、React、Vue 或 Svelte。底层插件一致，UI 可以先用默认组件，再逐步定制。",
-    "playground.eyebrow": "Try it live",
-    "playground.title": "Drop files and preview them instantly.",
+    "playground.eyebrow": "在线体验",
+    "playground.title": "拖入文件，即刻预览。",
     "playground.desc": "本地文件只在浏览器内读取，不会上传。你也可以用内置示例体验 Markdown、JSON、Office、SVG、DXF、3D、GDSII、OASIS 和 DWG。",
-    "playground.dropTitle": "Choose or drop files",
-    "playground.dropDesc": "Multi-file preview queue supported",
+    "playground.dropTitle": "选择或拖入文件",
+    "playground.dropDesc": "支持多文件预览队列",
     "playground.chooseFile": "选择文件",
     "playground.noFile": "未选择文件",
-    "playground.sample": "Built-in sample",
+    "playground.sample": "内置示例",
     "playground.urlLabel": "文件链接",
     "playground.urlAction": "预览链接",
     "playground.urlHint": "请输入允许跨域访问的公开文件 URL。",
-    "playground.width": "Width",
-    "playground.height": "Height",
-    "playground.fit": "Fit",
-    "playground.viewerTheme": "Theme",
-    "playground.apply": "Apply settings",
-    "playground.current": "Current file",
-    "formats.eyebrow": "Format matrix",
-    "formats.title": "Built for real product attachments.",
-    "api.eyebrow": "API Reference",
-    "api.title": "A small API surface with room to extend.",
+    "playground.width": "宽度",
+    "playground.height": "高度",
+    "playground.fit": "适配方式",
+    "playground.viewerTheme": "主题",
+    "playground.apply": "应用设置",
+    "playground.current": "当前文件",
+    "formats.eyebrow": "格式矩阵",
+    "formats.title": "为真实业务附件而设计。",
+    "api.eyebrow": "API 参考",
+    "api.title": "精简易用，也为扩展留足空间。",
     "api.desc": "核心 API 保持克制：容器、文件、插件、尺寸、主题和事件回调。复杂格式能力由插件扩展。",
+    "api.frameworks.title": "框架接入",
+    "api.frameworks.desc": "查看 Vanilla JS、React、Vue 和 Svelte 的安装与接入方式。",
+    "api.options.title": "核心参数",
+    "api.options.desc": "完整了解文件源、队列、尺寸、主题、回调、降级和实例方法。",
+    "api.plugins.title": "插件协议",
+    "api.plugins.desc": "通过 match/render 协议扩展自定义格式、服务端转换结果或业务专属渲染器。",
+    "showcase.search": "搜索",
+    "showcase.zoom": "缩放",
+    "showcase.rotate": "旋转",
+    "showcase.download": "下载",
     "toolbar.title": "工具栏自定义",
     "toolbar.desc": "支持自定义文案、顺序、图标、审批/收藏/分享等业务按钮，也可以完全替换工具栏。",
     "about.eyebrow": "About us",
@@ -121,9 +131,9 @@ const translations: Record<Language, Record<string, string>> = {
     "about.wechatPayDesc": "请作者喝杯咖啡",
     "about.alipayTitle": "支付宝打赏",
     "about.alipayDesc": "请作者喝瓶娃哈哈矿泉水",
-    "cta.title": "Ship file previews without building every renderer from scratch.",
+    "cta.title": "无需从头开发每一种渲染器，也能快速上线文件预览。",
     "cta.desc": "从一个稳定容器开始，让文件预览能力持续进化。",
-    "cta.action": "Try the playground",
+    "cta.action": "在线体验",
     "footer.text": "面向现代 Web 产品的文件预览 SDK。"
   },
   en: {
@@ -180,6 +190,16 @@ const translations: Record<Language, Record<string, string>> = {
     "api.eyebrow": "API Reference",
     "api.title": "A small API surface with room to extend.",
     "api.desc": "The API stays focused: container, file, plugins, size, theme and lifecycle callbacks. Complex formats are extended through plugins.",
+    "api.frameworks.title": "Frameworks",
+    "api.frameworks.desc": "Installation and integration guidance for Vanilla JS, React, Vue and Svelte.",
+    "api.options.title": "PreviewOptions",
+    "api.options.desc": "Complete reference for file sources, queues, sizing, themes, callbacks, fallbacks and instance methods.",
+    "api.plugins.title": "Plugin Protocol",
+    "api.plugins.desc": "Extend custom formats, server-converted results or product-specific renderers through the match/render protocol.",
+    "showcase.search": "Search",
+    "showcase.zoom": "Zoom",
+    "showcase.rotate": "Rotate",
+    "showcase.download": "Download",
     "toolbar.title": "Toolbar Customization",
     "toolbar.desc": "Change labels, order, icons, approval/favorite/share actions or replace the toolbar completely.",
     "about.eyebrow": "About us",
@@ -1491,7 +1511,7 @@ const phoneViewerHeight = "min(520px, 60vh)";
 let viewer: FileViewer | null = null;
 let currentFiles: Array<File | Blob | string> = [demoFiles[0].file];
 let currentFileName: string | undefined;
-let language: Language = readStorage("ofv-language") === "en" ? "en" : "zh";
+let language: Language = readStorage("ofv-language") === "zh" ? "zh" : "en";
 let siteTheme: SiteTheme = readStorage("ofv-site-theme") === "dark" ? "dark" : "light";
 let activeCodeTab: CodeTab = "vanilla";
 let viewerHeightIsResponsive = true;
@@ -1529,7 +1549,34 @@ function renderViewer() {
     height: heightInput.value,
     fit: fitInput.value as PreviewFit,
     theme: themeInput.value as PreviewTheme,
-    toolbar: true,
+    locale: language === "zh" ? "zh-CN" : "en-US",
+    toolbar:
+      language === "zh"
+        ? {
+            labels: {
+              previous: "上一个",
+              next: "下一个",
+              "rotate-right": "旋转",
+              download: "下载",
+              fullscreen: "全屏",
+              print: "打印",
+              search: "搜索"
+            },
+            titles: {
+              previous: "上一个文件",
+              next: "下一个文件",
+              queue: "当前文件位置",
+              "zoom-out": "缩小",
+              "zoom-in": "放大",
+              "zoom-reset": "重置缩放",
+              "rotate-right": "向右旋转",
+              download: "下载文件",
+              fullscreen: "全屏预览",
+              print: "打印预览",
+              search: "搜索预览内容"
+            }
+          }
+        : true,
     plugins: createPlugins(),
     onLoad(file) {
       currentFileLabel.textContent = file.name;
@@ -1587,6 +1634,7 @@ function syncResponsiveViewerHeight(options: { rerender?: boolean } = {}) {
 }
 
 function applyLanguage(nextLanguage: Language) {
+  const languageChanged = language !== nextLanguage;
   language = nextLanguage;
   document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
   for (const element of document.querySelectorAll<HTMLElement>("[data-i18n]")) {
@@ -1601,6 +1649,9 @@ function applyLanguage(nextLanguage: Language) {
   populateFormats();
   updateFilePickerLabel();
   setCodeSample(activeCodeTab);
+  if (languageChanged && viewer) {
+    renderViewer();
+  }
 }
 
 function applySiteTheme(nextTheme: SiteTheme) {

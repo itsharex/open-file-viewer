@@ -36,7 +36,7 @@ let viewer: FileViewer | null = null;
 let currentFiles: Array<File | Blob> = [
   new File(
     [
-      `Open File Viewer\n\n请选择一个本地文件。\n\n这个预览器会固定渲染在右侧容器里，不会跳转新窗口。`
+      `Open File Viewer\n\nChoose a local file.\n\nThe viewer stays inside the container on the right and never opens a new window.`
     ],
     "welcome.txt",
     { type: "text/plain" }

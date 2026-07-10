@@ -24,7 +24,7 @@
 
   let theme: PreviewTheme = "light";
   let files: Array<File | Blob> = [
-    new File(["Svelte adapter demo\n\n选择本地文件后会在自定义容器内预览。"], "welcome.txt", {
+    new File(["Svelte adapter demo\n\nChoose a local file to preview it inside the custom container."], "welcome.txt", {
       type: "text/plain"
     })
   ];
@@ -64,7 +64,7 @@
   <header>
     <h1>Svelte File Viewer</h1>
     <input type="file" multiple on:change={chooseFiles} />
-    <select aria-label="主题" bind:value={theme}>
+    <select aria-label="Theme" bind:value={theme}>
       <option value="light">light</option>
       <option value="dark">dark</option>
       <option value="auto">auto</option>

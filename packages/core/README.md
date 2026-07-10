@@ -228,15 +228,15 @@ createViewer({
   file,
   toolbar: {
     labels: {
-      download: "下载",
-      fullscreen: "全屏",
-      search: "搜索"
+      download: "Download",
+      fullscreen: "Fullscreen",
+      search: "Search"
     },
     order: ["search", "download", "approve", "fullscreen"],
     actions: [
       {
         id: "approve",
-        label: "审批",
+        label: "Approve",
         onClick(ctx) {
           openApprovalDialog(ctx.file);
         }
@@ -251,13 +251,13 @@ Use `toolbar.render(ctx)` when you need to replace the toolbar completely. The c
 
 ## Locale and Fallback Text
 
-Fallback text defaults to Simplified Chinese for compatibility. Set `locale: "en-US"` for English built-in loading and unsupported-file messages, or override individual strings with `messages`:
+Fallback text defaults to English. Set `locale: "zh-CN"` for Simplified Chinese built-in loading and unsupported-file messages, or override individual strings with `messages`:
 
 ```ts
 createViewer({
   container: "#viewer",
   file,
-  locale: "en-US",
+  locale: "zh-CN",
   messages: {
     unsupportedTitle: "No inline preview available",
     downloadFile: "Download original file"

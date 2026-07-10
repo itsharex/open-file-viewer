@@ -970,7 +970,7 @@ h1 {
   border-bottom: 1px solid var(--border);
 }
 
-.paper-toolbar span {
+.paper-toolbar > span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -989,19 +989,19 @@ h1 {
   height: 13px;
 }
 
-.paper-toolbar span:nth-child(1) {
+.paper-toolbar > span:nth-child(1) {
   color: var(--brand);
 }
 
-.paper-toolbar span:nth-child(2) {
+.paper-toolbar > span:nth-child(2) {
   color: var(--brand-2);
 }
 
-.paper-toolbar span:nth-child(3) {
+.paper-toolbar > span:nth-child(3) {
   color: var(--brand-3);
 }
 
-.paper-toolbar span:nth-child(4) {
+.paper-toolbar > span:nth-child(4) {
   color: var(--brand-4);
 }
 
@@ -3071,12 +3071,12 @@ pre .token.important {
     padding: 10px;
   }
 
-  .paper-toolbar span {
+  .paper-toolbar > span {
     padding: 6px 9px;
     font-size: 11px;
   }
 
-  .paper-toolbar span:nth-child(n + 4) {
+  .paper-toolbar > span:nth-child(n + 4) {
     display: none;
   }
 
@@ -3292,7 +3292,7 @@ pre .token.important {
     padding-inline: 8px;
   }
 
-  .paper-toolbar span {
+  .paper-toolbar > span {
     flex: 1 1 calc(50% - 6px);
     justify-content: center;
   }

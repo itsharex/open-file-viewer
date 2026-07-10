@@ -27,7 +27,7 @@ const App = {
   components: { OpenFileViewer },
   setup() {
     const files = ref<Array<File | Blob>>([
-      new File(["Vue adapter demo\n\n选择本地文件后会在自定义容器内预览。"], "welcome.txt", {
+      new File(["Vue adapter demo\n\nChoose a local file to preview it inside the custom container."], "welcome.txt", {
         type: "text/plain"
       })
     ]);
@@ -72,7 +72,7 @@ const App = {
         h(
           "select",
           {
-            "aria-label": "主题",
+            "aria-label": "Theme",
             value: this.theme,
             onChange: (event: Event) => {
               this.theme = (event.target as HTMLSelectElement).value as PreviewTheme;

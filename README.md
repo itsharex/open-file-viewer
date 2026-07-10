@@ -1,9 +1,9 @@
 # Open File Viewer
 
 <p align="right">
-  <strong>简体中文</strong>
+  <a href="./README.zh-CN.md">Simplified Chinese</a>
   |
-  <a href="./README.en.md">English</a>
+  <strong>English</strong>
   |
   <a href="./README.ja.md">日本語</a>
   |
@@ -14,21 +14,21 @@
   <a href="./README.pt-BR.md">Português</a>
 </p>
 
-Open File Viewer 是一个面向现代 Web 产品的文件预览 SDK。它把 PDF、Office、图片、音视频、压缩包、邮件、图纸、3D、GIS 和代码文件放进同一个可控容器里，并同时支持原生 JavaScript、React、Vue 和 Svelte。
+Open File Viewer is a file preview SDK for modern web applications. It brings PDFs, Office documents, images, audio and video, archives, emails, drawings, 3D files, GIS data, and source code into one controlled container, with support for vanilla JavaScript, React, Vue, and Svelte.
 
 <p>
-  <a href="https://open-file-viewer-workspace.void.app">官网</a>
-  ·
-  <a href="https://open-file-viewer-workspace.void.app/about.html">关于我们</a>
-  ·
+  <a href="https://open-file-viewer-workspace.void.app">Website</a>
+  |
+  <a href="https://open-file-viewer-workspace.void.app/about.html">About</a>
+  |
   <a href="https://github.com/xushanpei/open-file-viewer">GitHub</a>
-  ·
+  |
   <a href="https://www.npmjs.com/package/@open-file-viewer/core">NPM Core</a>
-  ·
+  |
   <a href="https://www.npmjs.com/package/@open-file-viewer/react">React</a>
-  ·
+  |
   <a href="https://www.npmjs.com/package/@open-file-viewer/vue">Vue</a>
-  ·
+  |
   <a href="https://www.npmjs.com/package/@open-file-viewer/svelte">Svelte</a>
 </p>
 
@@ -39,18 +39,18 @@ Open File Viewer 是一个面向现代 Web 产品的文件预览 SDK。它把 PD
 [![Svelte](https://img.shields.io/npm/v/@open-file-viewer/svelte?label=svelte&color=ff3e00)](https://www.npmjs.com/package/@open-file-viewer/svelte)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-## 为什么选择它
+## Why Choose It
 
-多数业务系统都会遇到附件预览：合同、表格、图纸、压缩包、邮件、图片、视频、代码文件。Open File Viewer 的目标不是做一个只能打开 PDF 的 demo，而是提供一套可以长期演进的文件预览基础设施。
+Most business systems eventually need attachment preview: contracts, spreadsheets, drawings, archives, emails, images, videos, and source files. Open File Viewer is not a PDF-only demo. It is a file preview foundation that can evolve with real product needs over time.
 
-- **容器优先**：所有内容渲染在你传入的 DOM 容器内，不跳窗口，不打断业务页面。
-- **多框架兼容**：原生 JavaScript、React、Vue、Svelte 共用同一套 core 能力。
-- **格式插件化**：不同文件格式由独立插件负责，方便替换、裁剪和扩展。
-- **响应式预览**：支持 `px`、`%`、`vh`、`vw`、`rem`、`calc()` 等 CSS 尺寸，自动响应容器变化。
-- **产品级状态**：内置 loading、error、unsupported、download fallback、工具栏、主题和多文件队列。
-- **复杂格式可进化**：浏览器能直接预览的格式优先本地渲染，复杂格式可以逐步接入 WASM、专用解析器或服务端转换。
+- **Container-first**: all content renders inside the DOM container you provide. It does not open a new window or interrupt the host business page.
+- **Multi-framework compatibility**: vanilla JavaScript, React, Vue, and Svelte share the same core capabilities.
+- **Plugin-based formats**: each file format is handled by an independent plugin, making behavior easier to replace, trim, and extend.
+- **Responsive preview**: supports CSS sizes such as `px`, `%`, `vh`, `vw`, `rem`, and `calc()`, and responds automatically to container changes.
+- **Application-ready states**: includes loading, error, unsupported, download fallback, toolbar, theme, and multi-file queue behavior.
+- **Progressive enhancement for complex formats**: formats that browsers can preview directly are rendered locally first; complex formats can gradually integrate WASM, dedicated parsers, or server-side conversion.
 
-## 安装
+## Installation
 
 ```bash
 pnpm add @open-file-viewer/core
@@ -74,22 +74,28 @@ Svelte:
 pnpm add @open-file-viewer/core @open-file-viewer/svelte
 ```
 
-PDF 预览需要安装 `pdfjs-dist`：
+PDF preview requires `pdfjs-dist` when you use `pdfPlugin()`:
 
 ```bash
 pnpm add pdfjs-dist
 ```
 
-也可以使用 npm 或 yarn：
+You can also use npm or yarn:
 
 ```bash
 npm install @open-file-viewer/core
 yarn add @open-file-viewer/core
 ```
 
-## 快速开始
+Import the shared stylesheet once in your application:
 
-### 原生 JavaScript
+```ts
+import "@open-file-viewer/core/style.css";
+```
+
+## Quick Start
+
+### Vanilla JavaScript
 
 ```ts
 import {
@@ -140,22 +146,6 @@ const viewer = createViewer({
 viewer.resize();
 viewer.destroy();
 ```
-
-### Umi / utoo 中 PDF 预览失败
-
-如果在 Umi Max、utoo pack 等环境中看到 PDF fallback，并且控制台里有 pdf.js 的
-`Cannot set properties of undefined (setting 'onPull')`，通常是构建器和 pdf.js worker
-的流式读取通道不兼容。可以开启 `useFetchData`，由主线程先把 PDF 拉成字节后再交给
-pdf.js 渲染：
-
-```ts
-pdfPlugin({
-  workerSrc,
-  useFetchData: true
-});
-```
-
-这个选项会多占用一份 PDF 文件内存，建议只在遇到上述兼容问题时开启。
 
 ### React
 
@@ -252,112 +242,63 @@ const plugins = [
 />
 ```
 
-## 适合的场景
+## Use Cases
 
-| 场景 | Open File Viewer 提供什么 |
+| Scenario | What Open File Viewer Provides |
 | --- | --- |
-| OA / ERP / CRM 附件中心 | 合同、表格、图片、邮件、压缩包统一容器预览 |
-| 网盘 / 知识库 / 文档系统 | 多文件队列、下载、搜索、全屏、主题适配 |
-| 低代码 / 表单系统 | 原生 JS 接入，不强依赖 React、Vue 或 Svelte |
-| 工程 / 制造 / GIS 系统 | CAD、3D、GIS、图纸类文件识别和渐进增强 |
-| 开发者平台 / 日志平台 | 文本、配置、Markdown、代码高亮和大文件保护 |
+| OA / ERP / CRM attachment centers | A unified container preview for contracts, spreadsheets, images, emails, and archives |
+| Cloud drives / knowledge bases / document systems | Multi-file queues, download, search, fullscreen, and theme adaptation |
+| Low-code / form systems | Vanilla JS integration without forcing React, Vue, or Svelte |
+| Engineering / manufacturing / GIS systems | Recognition and progressive enhancement for CAD, 3D, GIS, and drawing files |
+| Developer platforms / log platforms | Text, config, Markdown, code highlighting, and large-file protection |
 
-## 能力概览
+## Feature Overview
 
-| 能力 | 状态 |
+| Capability | Status |
 | --- | --- |
-| 原生 JS / React / Vue / Svelte 接入 | 已支持 |
-| 自定义容器、宽高和响应式尺寸 | 已支持 |
-| 多文件队列、切换、当前索引 | 已支持 |
-| 工具栏、下载、全屏、打印、搜索 | 已支持 |
-| 明暗主题和 `auto` 主题 | 已支持 |
-| 本地 `File` / `Blob` / URL / `ArrayBuffer` | 已支持 |
-| 插件协议和自定义 fallback | 已支持 |
-| PDF、图片、音视频、文本/代码 | 已支持 |
-| Office、OFD、EPUB、XPS、邮件、压缩包 | 基础到增强预览，XPS 含轻量 FixedPage SVG 版式 |
-| CAD、3D、GIS、绘图白板、设计资产、数据文件 | 识别、基础预览和增强中，SQLite/PSD/PDF-compatible AI 已内置前端内容预览 |
+| Vanilla JS / React / Vue / Svelte integration | Supported |
+| Custom container, width, height, and responsive sizing | Supported |
+| Multi-file queue, switching, and current index | Supported |
+| Toolbar, download, fullscreen, print, and search | Supported |
+| Light, dark, and `auto` themes | Supported |
+| Local `File` / `Blob` / URL / `ArrayBuffer` sources | Supported |
+| Plugin protocol and custom fallback | Supported |
+| PDF, images, audio/video, text/code | Supported |
+| Office, OFD, EPUB, XPS, email, and archives | Basic to enhanced preview |
+| CAD, 3D, GIS, drawing boards, and design assets | Detection, basic preview, and ongoing enhancements |
 
-## 格式覆盖
+## Format Coverage
 
-| 类别 | 插件 | 代表格式 |
+| Category | Plugin | Representative Formats |
 | --- | --- | --- |
-| 图片 | `imagePlugin()` | `jpg`, `png`, `gif`, `webp`, `avif`, `svg`, `bmp`, `tiff`, `heic`, `heif` |
-| 视频 | `videoPlugin()` | `mp4`, `webm`, `mov`, `m4v`, `avi`, `mkv`, `flv`, `wmv`, `m3u8`, `m2ts` |
-| 音频 | `audioPlugin()` | `mp3`, `wav`, `ogg`, `aac`, `m4a`, `flac`, `opus`, `mid`, `wma` |
-| 文本 / 代码 | `textPlugin()` | `txt`, `md`, `json`, `yaml`, `xml`, `csv`, `js`, `ts`, `tsx`, `vue`, `html`, `css`, `py`, `go`, `rs`, `sql`, `sh` |
-| PDF / 电子书 | `pdfPlugin()`, `epubPlugin()`, `xpsPlugin()` | `pdf`, `epub`, `xps`, `oxps` |
+| Images | `imagePlugin()` | `jpg`, `png`, `gif`, `webp`, `avif`, `svg`, `bmp`, `tiff`, `heic`, `heif` |
+| Video | `videoPlugin()` | `mp4`, `webm`, `mov`, `m4v`, `avi`, `mkv`, `flv`, `wmv`, `m3u8`, `m2ts` |
+| Audio | `audioPlugin()` | `mp3`, `wav`, `ogg`, `aac`, `m4a`, `flac`, `opus`, `mid`, `wma` |
+| Text / code | `textPlugin()` | `txt`, `md`, `json`, `yaml`, `xml`, `csv`, `js`, `ts`, `tsx`, `vue`, `html`, `css`, `py`, `go`, `rs`, `sql`, `sh` |
+| PDF / ebooks | `pdfPlugin()`, `epubPlugin()`, `xpsPlugin()` | `pdf`, `epub`, `xps`, `oxps` |
 | Office | `officePlugin()` | `doc`, `docx`, `docm`, `dot`, `rtf`, `odt`, `xls`, `xlsx`, `xlsm`, `xlsb`, `csv`, `pptx`, `pptm`, `odp`, `wps`, `et`, `dps` |
 | OFD | `ofdPlugin()` | `ofd` |
-| 压缩包 | `archivePlugin()` | `zip`, `rar`, `7z`, `tar`, `gz`, `tgz`, `bz2`, `xz` |
-| 数据 / 资产 | `assetPlugin()` | `sqlite`, `db`, `parquet`, `avro`, `wasm`, `psd`, `psb`, `ai`, `eps`, `ps`, `webarchive`, `ttf`, `otf`, `woff`, `woff2` |
-| 邮件 | `emailPlugin()` | `eml`, `msg`, `mbox` |
-| 绘图 / 白板 | `drawingPlugin()` | `drawio`, `dio`, `excalidraw`, `tldraw` |
-| CAD / 工程 / 芯片版图 | `cadPlugin()` | `dxf`, `dwg`, `dwf`, `step`, `stp`, `iges`, `igs`, `ifc`, `skp`, `sldprt`, `gds`, `oas`, `oasis` |
-| 3D 模型 | `model3dPlugin()` | `gltf`, `glb`, `obj`, `stl`, `fbx`, `dae`, `ply`, `3mf`, `usd`, `usdz` |
+| Archives | `archivePlugin()` | `zip`, `rar`, `7z`, `tar`, `gz`, `tgz`, `bz2`, `xz` |
+| Email | `emailPlugin()` | `eml`, `msg`, `mbox` |
+| Drawing / whiteboard | `drawingPlugin()` | `drawio`, `dio`, `excalidraw`, `tldraw` |
+| CAD / engineering | `cadPlugin()` | `dxf`, `dwg`, `dwf`, `step`, `stp`, `iges`, `igs`, `ifc`, `skp`, `sldprt` |
+| 3D models | `model3dPlugin()` | `gltf`, `glb`, `obj`, `stl`, `fbx`, `dae`, `ply`, `3mf`, `usd`, `usdz` |
 | GIS | `gisPlugin()` | `geojson`, `topojson`, `kml`, `kmz`, `gpx`, `shp` |
-| 资产识别 | `assetPlugin()` | `ttf`, `woff2`, `psd`, `ai`, `eps`, `sqlite`, `wasm`, `parquet`, `avro` |
+| Asset recognition | `assetPlugin()` | `ttf`, `woff2`, `psd`, `ai`, `eps`, `sqlite`, `wasm`, `parquet`, `avro` |
 
-复杂格式的预览质量会受浏览器能力、文件结构和依赖解析器影响。当前版本优先保证所有格式都在容器内走可控预览路径；高保真 Office、CAD、设计稿和专有二进制格式可以继续接入专用引擎或服务端转换。
+Preview quality for complex formats depends on browser capabilities, file structure, and the parser used by each plugin. The current version focuses on making every format enter a controlled preview path inside the container. High-fidelity Office, CAD, design, and proprietary binary formats can continue to integrate dedicated engines or server-side conversion.
 
-### 高保真 Office 转 PDF
+Plugin order matters because the first matching plugin renders the file. For example, `csv` and `tsv` can match both `textPlugin()` and `officePlugin()`; place `officePlugin()` earlier if you want spreadsheet-style table preview.
 
-浏览器端 DOCX/PPTX/XLSX 解析无法完全复刻 Word/WPS 的排版引擎。带有文本框、绝对定位、复杂字体、页眉页脚或旧版二进制格式的 Office 文件，建议在业务服务端用 LibreOffice、OnlyOffice 或 Microsoft Graph 转成 PDF，再交给内置 PDF 预览渲染。
+### DWG / DWF Two-Layer Preview Model
 
-`officePlugin` 提供可选的 `convert` 钩子。默认不会上传文件；只有业务显式配置这个钩子时，复杂 DOCX 和旧版 Office 才会走转换链路：
+DWG is AutoCAD's proprietary binary format. `cadPlugin()` uses a two-layer design: the default built-in path tries local preview first, while the external enhancement path lets applications provide high-fidelity rendering.
 
-```ts
-officePlugin({
-  pdf: {
-    workerSrc: pdfWorkerSrc
-  },
-  async convert({ file, arrayBuffer, reason }) {
-    const form = new FormData();
-    form.append("file", new Blob([arrayBuffer]), file.name);
-    form.append("reason", reason);
+- **Default built-in path**: `cadPlugin()` automatically tries LibreDWG WASM for DWG model-space linework. If the linework looks unreliable but the file contains an embedded thumbnail, it shows the DWG thumbnail. If LibreDWG is not installed, the WASM path is not configured, or parsing fails, it falls back to DWG/DWF metadata, version hints, structure probes, and conversion guidance.
+- **External enhancement path**: use `cadPlugin({ binaryRenderer })` to integrate your own frontend engine, CADViewer, MxCAD, or a backend service that converts to PNG/PDF/SVG/DXF. `binaryRenderer` has the highest priority and fully takes over DWG/DWF preview when it returns an instance.
+- **High-fidelity commercial route**: for complex fonts, external references, paper-space layouts, large drawings, and professional CAD fidelity, integrate a mature CAD SDK or server-side conversion pipeline.
 
-    const response = await fetch("/api/office/convert-to-pdf", {
-      method: "POST",
-      body: form
-    });
-
-    if (!response.ok) {
-      throw new Error("Office 转 PDF 失败");
-    }
-
-    return {
-      blob: await response.blob(),
-      fileName: file.name.replace(/\.[^.]+$/, ".pdf"),
-      mimeType: "application/pdf"
-    };
-  }
-});
-```
-
-`reason` 目前会标记为 `complex-docx` 或 `legacy-office`。如果转换接口返回的是可访问的 PDF URL，也可以直接 `return { url, fileName: "preview.pdf", mimeType: "application/pdf" }`。
-
-视频预览中，MP4、WebM、MOV 等浏览器原生格式不需要额外依赖；HLS 由内置的 `hls.js` 处理；FLV 和 MPEG-TS/M2TS 属于可选增强能力，需要业务项目自行安装 `mpegts.js`。未安装时会展示下载 fallback，避免安装 `@open-file-viewer/core` 时被 `mpegts.js` 的 git 子依赖影响。
-
-如果业务确实需要 FLV/M2TS，并且 pnpm 11 开启了 `blockExoticSubdeps`，可以在业务项目中覆盖 `mpegts.js` 的传递依赖：
-
-```json
-{
-  "pnpm": {
-    "overrides": {
-      "webworkify-webpack": "2.1.5"
-    }
-  }
-}
-```
-
-### DWG / DWF 两层预览模型
-
-DWG 是 AutoCAD 专有二进制格式，`cadPlugin()` 采用“两层能力”设计：默认内置能力负责尽可能本地预览，外部增强能力负责业务高保真渲染。
-
-- **默认内置能力**：`cadPlugin()` 会自动尝试 LibreDWG WASM 渲染 DWG 模型空间线稿；如果线稿不可靠但文件包含内置缩略图，会展示 DWG 缩略图；如果 LibreDWG 未安装、WASM 未配置或解析失败，则展示 DWG/DWF 元信息、版本、结构线索和转换建议。
-- **外部增强能力**：通过 `cadPlugin({ binaryRenderer })` 接入自己的前端引擎、CADViewer、MxCAD、后端转换 PNG/PDF/SVG/DXF 等。`binaryRenderer` 优先级最高，返回实例后会完全接管 DWG/DWF 预览。
-- **高保真商用链路**：复杂字体、外部参照、布局/打印空间、大图纸和专业 CAD 效果，建议接入成熟 CAD SDK 或服务端转换。
-
-启用默认 LibreDWG 线稿预览时，将 WASM 放到公开静态目录：
+To enable the default LibreDWG linework path, place the WASM file in a public static directory:
 
 ```ts
 cadPlugin({
@@ -376,8 +317,8 @@ cadPlugin({
     stage.className = "my-dwg-stage";
     panel.append(stage);
 
-    // 在这里按需加载你的 DWG 引擎、worker、字体和资源包。
-    // 例如：await renderDwgWithYourEngine(stage, arrayBuffer, { fileName });
+    // Load your DWG engine, worker, fonts, and assets on demand here.
+    // Example: await renderDwgWithYourEngine(stage, arrayBuffer, { fileName });
 
     return {
       destroy() {
@@ -388,7 +329,7 @@ cadPlugin({
 });
 ```
 
-## 核心 API
+## Core API
 
 ```ts
 createViewer(options: PreviewOptions): FileViewer;
@@ -396,52 +337,33 @@ createViewer(options: PreviewOptions): FileViewer;
 
 ### PreviewOptions
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `container` | `HTMLElement \| string` | 必填 | 预览容器 |
-| `file` | `File \| Blob \| string \| ArrayBuffer` | - | 单文件预览源 |
-| `files` | `(PreviewSource \| PreviewItem)[]` | - | 多文件预览队列 |
-| `initialIndex` | `number` | `0` | 初始文件索引 |
-| `fileName` | `string` | 自动推断 | 文件名，用于扩展名识别 |
-| `mimeType` | `string` | 自动推断 | MIME 类型 |
-| `width` | `number \| string` | 容器原始宽度 | 预览容器宽度 |
-| `height` | `number \| string` | 容器原始高度 | 预览容器高度 |
-| `zoom` | `number` | `1` | 初始缩放比例，`1` 表示 100% |
-| `fit` | `contain \| cover \| width \| height \| actual \| scale-down` | `contain` | 内容适配方式 |
-| `plugins` | `PreviewPlugin[]` | `[]` | 插件列表，按顺序匹配 |
-| `fallback` | `inline \| download \| custom` | `inline` | 不支持时的兜底策略 |
-| `locale` | `zh-CN \| en-US` | `zh-CN` | 内置状态和 fallback 文案语言 |
-| `messages` | `Partial<PreviewMessages>` | - | 覆盖 loading、unsupported、download fallback 等基础文案 |
-| `renderFallback` | `(ctx) => PreviewInstance` | - | 自定义 fallback 渲染器 |
-| `toolbar` | `boolean \| PreviewToolbarOptions` | `false` | 工具栏配置 |
-| `theme` | `light \| dark \| auto` | `light` | 预览器主题 |
-| `className` | `string` | - | 容器附加类名 |
-| `onLoad` | `(file) => void` | - | 加载完成回调 |
-| `onError` | `(error, file) => void` | - | 错误回调 |
-| `onUnsupported` | `(file) => void` | - | 不支持格式回调 |
+| `container` | `HTMLElement \| string` | Required | Preview container |
+| `file` | `File \| Blob \| string \| ArrayBuffer` | - | Single-file preview source |
+| `files` | `(PreviewSource \| PreviewItem)[]` | - | Multi-file preview queue |
+| `initialIndex` | `number` | `0` | Initial file index |
+| `fileName` | `string` | Auto inferred | File name used for extension detection |
+| `mimeType` | `string` | Auto inferred | MIME type |
+| `width` | `number \| string` | Original container width | Preview container width |
+| `height` | `number \| string` | Original container height | Preview container height |
+| `zoom` | `number` | `1` | Initial zoom level, where `1` means 100% |
+| `fit` | `contain \| cover \| width \| height \| actual \| scale-down` | `contain` | Content fitting mode |
+| `plugins` | `PreviewPlugin[]` | `[]` | Plugin list, matched in order |
+| `fallback` | `inline \| download \| custom` | `inline` | Fallback strategy for unsupported formats |
+| `renderFallback` | `(ctx) => PreviewInstance` | - | Custom fallback renderer |
+| `toolbar` | `boolean \| PreviewToolbarOptions` | `false` | Toolbar configuration |
+| `theme` | `light \| dark \| auto` | `light` | Viewer theme |
+| `className` | `string` | - | Extra container class name |
+| `onLoad` | `(file) => void` | - | Callback after loading completes |
+| `onError` | `(error, file) => void` | - | Error callback |
+| `onUnsupported` | `(file) => void` | - | Unsupported-format callback |
 
-### 多语言和 fallback 文案
+## Toolbar Customization
 
-默认 fallback 文案保持中文。英文产品可以设置 `locale: "en-US"`，也可以用 `messages` 覆盖单条文案：
+`toolbar: true` enables the default toolbar, including multi-file navigation, zoom, rotate, download, fullscreen, print, and search when supported by the active plugin. You can extend it for business workflows without rewriting the whole viewer.
 
-```ts
-createViewer({
-  container: "#viewer",
-  file,
-  locale: "en-US",
-  messages: {
-    unsupportedTitle: "No inline preview available",
-    downloadFile: "Download original file"
-  },
-  plugins
-});
-```
-
-## 工具栏自定义
-
-`toolbar: true` 会启用默认工具栏。需要业务化时可以逐步扩展，不必重写整套预览器。
-
-### 自定义文案、顺序和图标
+### Custom Labels, Order, and Icons
 
 ```ts
 createViewer({
@@ -454,16 +376,16 @@ createViewer({
     fullscreen: true,
     search: true,
     labels: {
-      download: "下载",
-      fullscreen: "全屏",
-      search: "搜索",
-      "zoom-in": "放大",
-      "zoom-out": "缩小",
-      "zoom-reset": "原始比例",
-      "rotate-right": "旋转"
+      download: "Download",
+      fullscreen: "Fullscreen",
+      search: "Search",
+      "zoom-in": "Zoom in",
+      "zoom-out": "Zoom out",
+      "zoom-reset": "Actual size",
+      "rotate-right": "Rotate"
     },
     titles: {
-      download: "下载当前文件"
+      download: "Download current file"
     },
     icons: {
       download: '<svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>'
@@ -474,7 +396,7 @@ createViewer({
 });
 ```
 
-### 增加业务按钮
+### Add Business Actions
 
 ```ts
 createViewer({
@@ -485,21 +407,21 @@ createViewer({
     actions: [
       {
         id: "favorite",
-        label: "收藏",
+        label: "Favorite",
         onClick(ctx) {
           favoriteFile(ctx.file);
         }
       },
       {
         id: "approve",
-        label: "审批",
+        label: "Approve",
         onClick(ctx) {
           openApprovalDialog(ctx.file);
         }
       },
       {
         id: "share",
-        label: "分享",
+        label: "Share",
         disabled(ctx) {
           return !ctx.file;
         },
@@ -513,7 +435,7 @@ createViewer({
 });
 ```
 
-### 完全替换工具栏
+### Fully Replace the Toolbar
 
 ```ts
 createViewer({
@@ -529,13 +451,13 @@ createViewer({
 
       const next = document.createElement("button");
       next.type = "button";
-      next.textContent = "下一份";
+      next.textContent = "Next";
       next.disabled = !ctx.canNext;
       next.onclick = () => void ctx.next();
 
       const download = document.createElement("button");
       download.type = "button";
-      download.textContent = "下载";
+      download.textContent = "Download";
       download.onclick = ctx.download;
 
       bar.append(name, next, download);
@@ -546,9 +468,9 @@ createViewer({
 });
 ```
 
-`render(ctx)` 的上下文包含 `file`、`index`、`length`、`previous()`、`next()`、`command()`、`download()`、`fullscreen()`、`print()`、`search()` 和 `clearSearch()`。
+The `render(ctx)` context includes `file`, `index`, `length`, `previous()`, `next()`, `command()`, `download()`, `fullscreen()`, `print()`, `search()`, and `clearSearch()`. In core, `toolbar.render(ctx)` returns a DOM `HTMLElement | void`; React, Vue, and Svelte expose framework-native toolbar APIs.
 
-### React 自定义工具栏
+### React Custom Toolbar
 
 ```tsx
 <FileViewer
@@ -556,62 +478,62 @@ createViewer({
   plugins={plugins}
   renderToolbar={(ctx) => (
     <>
-      <button disabled={!ctx.canPrevious} onClick={() => void ctx.previous()}>上一份</button>
+      <button disabled={!ctx.canPrevious} onClick={() => void ctx.previous()}>Previous</button>
       <span>{ctx.index + 1} / {ctx.length}</span>
-      <button disabled={!ctx.canNext} onClick={() => void ctx.next()}>下一份</button>
-      <button onClick={ctx.download}>下载</button>
-      <button onClick={() => openApprovalDialog(ctx.file)}>审批</button>
+      <button disabled={!ctx.canNext} onClick={() => void ctx.next()}>Next</button>
+      <button onClick={ctx.download}>Download</button>
+      <button onClick={() => openApprovalDialog(ctx.file)}>Approve</button>
     </>
   )}
 />
 ```
 
-### Vue 自定义工具栏
+### Vue Custom Toolbar
 
 ```vue
 <OpenFileViewer :files="files" :plugins="plugins">
   <template #toolbar="ctx">
-    <button :disabled="!ctx.canPrevious" @click="ctx.previous()">上一份</button>
+    <button :disabled="!ctx.canPrevious" @click="ctx.previous()">Previous</button>
     <span>{{ ctx.index + 1 }} / {{ ctx.length }}</span>
-    <button :disabled="!ctx.canNext" @click="ctx.next()">下一份</button>
-    <button @click="ctx.download()">下载</button>
-    <button @click="openApprovalDialog(ctx.file)">审批</button>
+    <button :disabled="!ctx.canNext" @click="ctx.next()">Next</button>
+    <button @click="ctx.download()">Download</button>
+    <button @click="openApprovalDialog(ctx.file)">Approve</button>
   </template>
 </OpenFileViewer>
 ```
 
-### Svelte 自定义工具栏
+### Svelte Custom Toolbar
 
 ```svelte
 <OpenFileViewer files={files} plugins={plugins}>
   <svelte:fragment slot="toolbar" let:ctx>
     {#if ctx}
-      <button disabled={!ctx.canPrevious} on:click={() => void ctx.previous()}>上一份</button>
+      <button disabled={!ctx.canPrevious} on:click={() => void ctx.previous()}>Previous</button>
       <span>{ctx.index + 1} / {ctx.length}</span>
-      <button disabled={!ctx.canNext} on:click={() => void ctx.next()}>下一份</button>
-      <button on:click={ctx.download}>下载</button>
-      <button on:click={() => openApprovalDialog(ctx.file)}>审批</button>
+      <button disabled={!ctx.canNext} on:click={() => void ctx.next()}>Next</button>
+      <button on:click={ctx.download}>Download</button>
+      <button on:click={() => openApprovalDialog(ctx.file)}>Approve</button>
     {/if}
   </svelte:fragment>
 </OpenFileViewer>
 ```
 
-样式层面仍然可以覆盖 `.ofv-toolbar`、`.ofv-toolbar button`、`.ofv-toolbar-search` 等 class。自定义图标按钮会额外生成 `.ofv-toolbar-icon` 和 `.ofv-toolbar-label`，方便控制对齐、间距和省略。
+At the style layer, you can still override classes such as `.ofv-toolbar`, `.ofv-toolbar button`, and `.ofv-toolbar-search`. Custom icon buttons also generate `.ofv-toolbar-icon` and `.ofv-toolbar-label`, making alignment, spacing, and truncation easier to control.
 
 ### FileViewer
 
-| 方法 | 说明 |
+| Method | Description |
 | --- | --- |
-| `reload(file?)` | 重新加载当前文件或指定文件 |
-| `next()` / `previous()` | 多文件队列切换 |
-| `goTo(index)` | 跳转到指定文件 |
-| `getCurrentIndex()` | 获取当前索引 |
-| `resize()` | 主动触发尺寸重算 |
-| `destroy()` | 销毁预览器并清理资源 |
+| `reload(file?)` | Reload the current file or a specified file |
+| `next()` / `previous()` | Switch through the multi-file queue |
+| `goTo(index)` | Jump to a specified file |
+| `getCurrentIndex()` | Get the current index |
+| `resize()` | Manually trigger size recalculation |
+| `destroy()` | Destroy the viewer and clean up resources |
 
-## 插件开发
+## Plugin Development
 
-每一种格式都通过插件接入。插件只需要回答两个问题：这个文件是否匹配，以及如何渲染到 `ctx.viewport`。
+Each format is integrated through a plugin. A plugin only needs to answer two questions: whether the file matches, and how to render into `ctx.viewport`.
 
 ```ts
 import type { PreviewPlugin } from "@open-file-viewer/core";
@@ -640,37 +562,37 @@ export function customPlugin(): PreviewPlugin {
 }
 ```
 
-插件约束：
+Plugin constraints:
 
-- 只渲染到 `ctx.viewport` 中。
-- 不默认打开新窗口。
-- 需要响应容器变化时实现 `resize(size)`。
-- 需要清理事件、Object URL、定时器、Canvas/WebGL 资源时实现 `destroy()`。
+- Render only into `ctx.viewport`.
+- Do not open a new window by default.
+- Implement `resize(size)` when the plugin needs to react to container size changes.
+- Implement `destroy()` to clean up events, object URLs, timers, Canvas/WebGL resources, and other side effects.
 
-## 包结构
+## Package Structure
 
 ```txt
 packages/
-  core/      # 框架无关的预览核心和插件
-  react/     # React 适配层
-  vue/       # Vue 适配层
-  svelte/    # Svelte 适配层
+  core/      # Framework-agnostic preview core and plugins
+  react/     # React adapter
+  vue/       # Vue adapter
+  svelte/    # Svelte adapter
 examples/
-  vanilla/   # 原生 JavaScript 示例
-  react/     # React 示例
-  vue/       # Vue 示例
-  svelte/    # Svelte 示例
-doc/         # 官网和在线体验
+  vanilla/   # Vanilla JavaScript example
+  react/     # React example
+  vue/       # Vue example
+  svelte/    # Svelte example
+doc/         # Website and online experience
 ```
 
-## 本地开发
+## Local Development
 
 ```bash
 pnpm install
 pnpm check
 ```
 
-常用命令：
+Common commands:
 
 ```bash
 pnpm dev:doc
@@ -686,76 +608,76 @@ pnpm build:doc
 pnpm pack:check
 ```
 
-`pnpm check` 会依次执行测试、类型检查、packages 构建、examples 构建、官网构建和 package exports 校验。
+`pnpm check` runs tests, type checks, package builds, example builds, website build, and package export validation in sequence.
 
-## 路线图
+## Roadmap
 
-| 版本 | 重点 |
+| Version | Focus |
 | --- | --- |
-| `0.1.x` | Core 插件系统、容器内预览、React/Vue/Svelte/Vanilla 接入、多格式基础预览 |
-| `0.2.x` | 工具栏、主题、图片交互、PDF 搜索、统一状态和 fallback |
-| `0.3.x` | Markdown/代码阅读器、Office 表格和文档体验增强 |
-| `0.4.x` | OFD、邮件、压缩包、绘图和国内业务高频格式增强 |
-| `0.5.x` | CAD、3D、GIS、专用解析器和服务端转换协作 |
-| `1.0.0` | API 稳定、完整文档站、视觉回归测试和插件开发指南 |
+| `0.1.x` | Core plugin system, in-container preview, React/Vue/Svelte/Vanilla integration, basic multi-format preview |
+| `0.2.x` | Toolbar, themes, image interactions, PDF search, unified states, and fallback |
+| `0.3.x` | Markdown/code reader, enhanced Office spreadsheets and document experience |
+| `0.4.x` | OFD, email, archives, drawing files, and enhancements for high-frequency domestic business formats |
+| `0.5.x` | CAD, 3D, GIS, dedicated parsers, and server-side conversion collaboration |
+| `1.0.0` | Stable API, complete documentation site, visual regression tests, and plugin development guide |
 
-## 社区与支持
+## Community and Support
 
-Open File Viewer 会持续完善更多格式预览、框架接入和真实业务场景。开源项目不容易，如果它帮你节省了开发时间，欢迎给项目点一个免费的 Star，这对项目后续迭代非常重要。
+Open File Viewer will continue improving format preview, framework integration, and real business scenarios. Open source is not easy. If it saves you development time, a free GitHub star is a meaningful way to support future iteration.
 
-- 反馈问题：欢迎通过 GitHub Issue、交流群或作者微信反馈文件样例、排版问题、容器适配问题和新的格式诉求。
-- 交流学习：公众号「前端开发爱好者」会持续分享前端工程、组件开发和开源实践。
-- 支持作者：如果你愿意请作者喝杯咖啡，哪怕喝瓶娃哈哈矿泉水，也是非常真诚的鼓励。打赏用户欢迎添加作者微信，后续交流前端相关问题。
+- Feedback: use GitHub Issues, the community group, or the author's WeChat to share file samples, layout problems, container adaptation issues, and new format requests.
+- Learning and discussion: the official account "Frontend Development Enthusiasts" will continue sharing frontend engineering, component development, and open-source practice.
+- Support the author: if you would like to buy the author a coffee, or even a bottle of mineral water, that encouragement is appreciated. Donation users are welcome to add the author's WeChat for future frontend discussions.
 
 <table>
   <tr>
     <td align="center" width="20%">
-      <img src="./doc/public/images/official-account-qr.jpg" width="140" alt="公众号二维码：前端开发爱好者" />
+      <img src="./doc/public/images/official-account-qr.jpg" width="140" alt="Official account QR code: Frontend Development Enthusiasts" />
       <br />
-      <strong>公众号</strong>
+      <strong>Official Account</strong>
       <br />
-      前端开发爱好者
+      Frontend Development Enthusiasts
     </td>
     <td align="center" width="20%">
-      <img src="./doc/public/images/community-group-qr.png" width="140" alt="交流群二维码" />
+      <img src="./doc/public/images/community-group-qr.png" width="140" alt="Community group QR code" />
       <br />
-      <strong>交流群</strong>
+      <strong>Community Group</strong>
       <br />
-      前端技术交流
+      Frontend technology discussion
     </td>
     <td align="center" width="20%">
-      <img src="./doc/public/images/author-wechat-qr.png" width="140" alt="作者微信二维码" />
+      <img src="./doc/public/images/author-wechat-qr.png" width="140" alt="Author WeChat QR code" />
       <br />
-      <strong>作者微信</strong>
+      <strong>Author WeChat</strong>
       <br />
-      交流前端问题
+      Frontend discussion
     </td>
     <td align="center" width="20%">
-      <img src="./doc/public/images/wechat-donation-qr.png" width="140" alt="微信打赏二维码" />
+      <img src="./doc/public/images/wechat-donation-qr.png" width="140" alt="WeChat donation QR code" />
       <br />
-      <strong>微信打赏</strong>
+      <strong>WeChat Donation</strong>
       <br />
-      请作者喝杯咖啡
+      Buy the author a coffee
     </td>
     <td align="center" width="20%">
-      <img src="./doc/public/images/alipay-donation-qr.png" width="140" alt="支付宝打赏二维码" />
+      <img src="./doc/public/images/alipay-donation-qr.png" width="140" alt="Alipay donation QR code" />
       <br />
-      <strong>支付宝打赏</strong>
+      <strong>Alipay Donation</strong>
       <br />
-      请作者喝瓶水
+      Buy the author a bottle of water
     </td>
   </tr>
 </table>
 
-## 链接
+## Links
 
-- 官网：https://open-file-viewer-workspace.void.app
-- 关于我们：https://open-file-viewer-workspace.void.app/about.html
-- GitHub：https://github.com/xushanpei/open-file-viewer
-- NPM Core：https://www.npmjs.com/package/@open-file-viewer/core
-- NPM React：https://www.npmjs.com/package/@open-file-viewer/react
-- NPM Vue：https://www.npmjs.com/package/@open-file-viewer/vue
-- NPM Svelte：https://www.npmjs.com/package/@open-file-viewer/svelte
+- Website: https://open-file-viewer-workspace.void.app
+- About: https://open-file-viewer-workspace.void.app/about.html
+- GitHub: https://github.com/xushanpei/open-file-viewer
+- NPM Core: https://www.npmjs.com/package/@open-file-viewer/core
+- NPM React: https://www.npmjs.com/package/@open-file-viewer/react
+- NPM Vue: https://www.npmjs.com/package/@open-file-viewer/vue
+- NPM Svelte: https://www.npmjs.com/package/@open-file-viewer/svelte
 
 ## License
 

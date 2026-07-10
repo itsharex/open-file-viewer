@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -61,7 +61,7 @@
         transition: none !important;
       }
     </style>
-    <title>关于我们 - Open File Viewer</title>
+    <title>About - Open File Viewer</title>
   </head>
   <body class="api-doc-page about-doc-page">
     <svg class="icon-sprite" aria-hidden="true" focusable="false">
@@ -114,49 +114,50 @@
         <span>Open File Viewer</span>
       </a>
       <nav class="desktop-nav" aria-label="Primary navigation">
-        <a href="/#docs"><svg><use href="#icon-docs"></use></svg><span>文档</span></a>
-        <a href="/#frameworks"><svg><use href="#icon-framework"></use></svg><span>框架</span></a>
-        <a href="/#formats"><svg><use href="#icon-grid"></use></svg><span>格式</span></a>
+        <a href="/#docs"><svg><use href="#icon-docs"></use></svg><span data-i18n="nav.docs">Documentation</span></a>
+        <a href="/#frameworks"><svg><use href="#icon-framework"></use></svg><span data-i18n="nav.frameworks">Frameworks</span></a>
+        <a href="/#formats"><svg><use href="#icon-grid"></use></svg><span data-i18n="nav.formats">Formats</span></a>
         <a href="/api.html"><svg><use href="#icon-api"></use></svg><span>API</span></a>
-        <a href="/#playground"><svg><use href="#icon-play"></use></svg><span>在线使用</span></a>
-        <a class="active" href="/about.html"><svg><use href="#icon-heart"></use></svg><span>关于我们</span></a>
+        <a href="/#playground"><svg><use href="#icon-play"></use></svg><span data-i18n="nav.playground">Live Demo</span></a>
+        <a class="active" href="/about.html"><svg><use href="#icon-heart"></use></svg><span data-i18n="nav.about">About</span></a>
       </nav>
       <div class="nav-actions">
         <button class="ghost-icon" id="themeToggle" type="button" aria-label="Toggle dark mode"><svg><use href="#icon-moon"></use></svg></button>
+        <button class="ghost-icon" id="languageToggle" type="button" aria-label="Switch to Chinese">ZH</button>
         <a class="github-button" href="https://github.com/xushanpei/open-file-viewer" target="_blank" rel="noreferrer"><svg><use href="#icon-github"></use></svg><span>GitHub</span></a>
       </div>
     </header>
 
     <main id="top">
       <section class="api-doc-hero about-doc-hero">
-        <p>About Open File Viewer</p>
-        <h1>开源不易，感谢每一次认真使用。</h1>
+        <p data-i18n="about.hero.eyebrow">About Open File Viewer</p>
+        <h1 data-i18n="about.hero.title">Open source takes time. Thank you for every thoughtful use.</h1>
         <div>
           <a class="primary-button" href="https://github.com/xushanpei/open-file-viewer" target="_blank" rel="noreferrer"><span>GitHub Star</span><svg><use href="#icon-arrow"></use></svg></a>
-          <a class="secondary-button" href="/#playground"><svg><use href="#icon-eye"></use></svg><span>在线体验</span></a>
+          <a class="secondary-button" href="/#playground"><svg><use href="#icon-eye"></use></svg><span data-i18n="action.liveDemo">Live Demo</span></a>
         </div>
       </section>
 
       <section class="api-doc-layout about-doc-layout">
         <aside class="api-sidebar" aria-label="About sections">
-          <strong>目录</strong>
-          <a href="#opensource">开源项目</a>
-          <a href="#community">社区交流</a>
-          <a href="#support">支持作者</a>
-          <a href="#thanks">致谢</a>
+          <strong data-i18n="contents">Contents</strong>
+          <a href="#opensource" data-i18n="about.sidebar.openSource">Open source</a>
+          <a href="#community" data-i18n="about.sidebar.community">Community</a>
+          <a href="#support" data-i18n="about.sidebar.support">Support the author</a>
+          <a href="#thanks" data-i18n="about.sidebar.thanks">Thanks</a>
         </aside>
 
         <div class="api-doc-content">
           <section class="doc-panel" id="opensource">
-            <p class="doc-eyebrow">Open Source</p>
-            <h2>把复杂文件预览沉淀成长期可维护的基础设施</h2>
-            <p>
-              Open File Viewer 会持续完善更多格式预览、框架接入和真实业务场景。项目希望为原生 JavaScript、Vue、React、Svelte 等技术栈提供一套稳定、可扩展、适合生产环境迭代的 Web 文件预览能力。
+            <p class="doc-eyebrow" data-i18n="about.eyebrow.openSource">Open Source</p>
+            <h2 data-i18n="about.openSource.title">Turn complex file previews into maintainable infrastructure</h2>
+            <p data-i18n="about.openSource.body">
+              Open File Viewer keeps improving format coverage, framework integrations and production workflows. The project provides stable, extensible web file previews for vanilla JavaScript, React, Vue and Svelte.
             </p>
             <div class="doc-kpi-grid">
               <div><strong>4</strong><span>Native JS / React / Vue / Svelte</span></div>
-              <div><strong>15+</strong><span>文件格式与插件能力</span></div>
-              <div><strong>1</strong><span>统一预览容器与插件协议</span></div>
+              <div><strong>15+</strong><span data-i18n="about.openSource.formats">Format and plugin capabilities</span></div>
+              <div><strong>1</strong><span data-i18n="about.openSource.protocol">Unified viewer and plugin protocol</span></div>
             </div>
           </section>
 
@@ -164,58 +165,58 @@
             <div class="about-panel">
               <div class="about-copy">
                 <span class="about-icon"><svg><use href="#icon-heart"></use></svg></span>
-                <h3>支持这个项目继续进化</h3>
-                <p>开源项目不容易。如果该项目帮到了您，节省了您宝贵的开发时间，还请您不吝给项目点个免费的赞。</p>
-                <p>当然了，如果您能请作者喝杯咖啡，哪怕喝瓶娃哈哈矿泉水，也是对作者最真诚的鼓励。打赏用户欢迎添加微信，后续交流前端相关问题。</p>
+                <h3 data-i18n="about.support.title">Help the project keep moving</h3>
+                <p data-i18n="about.support.body">If this open source project saved you development time, please consider giving it a free GitHub Star.</p>
+                <p data-i18n="about.support.coffee">You can also buy the author a coffee or a bottle of water. Supporters are welcome to add the author's WeChat for future frontend discussions.</p>
                 <div class="about-actions">
                   <a class="primary-button" href="https://github.com/xushanpei/open-file-viewer" target="_blank" rel="noreferrer"><svg><use href="#icon-github"></use></svg><span>GitHub Star</span></a>
-                  <a class="secondary-button" href="/#playground"><svg><use href="#icon-play"></use></svg><span>在线体验</span></a>
+                  <a class="secondary-button" href="/#playground"><svg><use href="#icon-play"></use></svg><span data-i18n="action.liveDemo">Live Demo</span></a>
                 </div>
               </div>
               <div class="qr-grid" aria-label="Community and donation QR codes">
                 <article class="qr-card" id="community">
                   <div class="qr-code qr-code-image">
-                    <img src="/images/official-account-qr.jpg" alt="公众号二维码：前端开发爱好者" />
+                    <img src="/images/official-account-qr.jpg" alt="Official account QR code" data-i18n-alt="about.alt.official" />
                   </div>
                   <div class="qr-card-copy">
-                    <strong>公众号</strong>
-                    <p>前端开发爱好者</p>
+                    <strong data-i18n="about.community.officialTitle">Official Account</strong>
+                    <p data-i18n="about.community.officialBody">Frontend development community</p>
                   </div>
                 </article>
                 <article class="qr-card">
                   <div class="qr-code qr-code-image">
-                    <img src="/images/community-group-qr.png" alt="交流群二维码" />
+                    <img src="/images/community-group-qr.png" alt="Community group QR code" data-i18n-alt="about.alt.group" />
                   </div>
                   <div class="qr-card-copy">
-                    <strong>交流群</strong>
-                    <p>扫码加入前端技术交流</p>
+                    <strong data-i18n="about.community.groupTitle">Community Group</strong>
+                    <p data-i18n="about.community.groupBody">Scan to join frontend discussions</p>
                   </div>
                 </article>
                 <article class="qr-card">
                   <div class="qr-code qr-code-image">
-                    <img src="/images/author-wechat-qr.png" alt="作者微信二维码" />
+                    <img src="/images/author-wechat-qr.png" alt="Author WeChat QR code" data-i18n-alt="about.alt.wechat" />
                   </div>
                   <div class="qr-card-copy">
-                    <strong>作者微信</strong>
-                    <p>打赏用户可添加，交流前端问题</p>
+                    <strong data-i18n="about.community.wechatTitle">Author WeChat</strong>
+                    <p data-i18n="about.community.wechatBody">Supporters can connect for frontend Q&amp;A</p>
                   </div>
                 </article>
                 <article class="qr-card">
                   <div class="qr-code qr-code-image">
-                    <img src="/images/wechat-donation-qr.png" alt="微信打赏二维码" />
+                    <img src="/images/wechat-donation-qr.png" alt="WeChat donation QR code" data-i18n-alt="about.alt.wechatPay" />
                   </div>
                   <div class="qr-card-copy">
-                    <strong>微信打赏</strong>
-                    <p>请作者喝杯咖啡</p>
+                    <strong data-i18n="about.community.wechatPayTitle">WeChat Donation</strong>
+                    <p data-i18n="about.community.wechatPayBody">Buy the author a coffee</p>
                   </div>
                 </article>
                 <article class="qr-card">
                   <div class="qr-code qr-code-image">
-                    <img src="/images/alipay-donation-qr.png" alt="支付宝打赏二维码" />
+                    <img src="/images/alipay-donation-qr.png" alt="Alipay donation QR code" data-i18n-alt="about.alt.alipay" />
                   </div>
                   <div class="qr-card-copy">
-                    <strong>支付宝打赏</strong>
-                    <p>请作者喝瓶娃哈哈矿泉水</p>
+                    <strong data-i18n="about.community.alipayTitle">Alipay Donation</strong>
+                    <p data-i18n="about.community.alipayBody">Buy the author bottled water</p>
                   </div>
                 </article>
               </div>
@@ -223,14 +224,14 @@
           </section>
 
           <section class="doc-panel" id="thanks">
-            <p class="doc-eyebrow">Thanks</p>
-            <h2>每一次反馈，都会让预览体验更进一步</h2>
-            <p>
-              欢迎通过 GitHub Issue、交流群或作者微信反馈真实业务里的文件样例、排版问题、容器适配问题和新的格式诉求。这个项目会持续围绕“更稳定的预览、更清晰的接入、更完整的格式覆盖”向前迭代。
+            <p class="doc-eyebrow" data-i18n="about.eyebrow.thanks">Thanks</p>
+            <h2 data-i18n="about.thanks.title">Every report helps improve the preview experience</h2>
+            <p data-i18n="about.thanks.body">
+              Share production file samples, layout issues, container integration problems and format requests through GitHub Issues or the community channels. The project will keep improving stability, integration clarity and format coverage.
             </p>
             <div class="doc-card-grid">
-              <article><strong>反馈问题</strong><p>遇到格式识别、渲染异常、移动端适配或工具栏交互问题时，欢迎提交可复现信息。</p></article>
-              <article><strong>贡献案例</strong><p>如果你在业务中接入了 Open File Viewer，也欢迎分享使用场景和优化建议。</p></article>
+              <article><strong data-i18n="about.thanks.issueTitle">Report an issue</strong><p data-i18n="about.thanks.issueBody">Please include reproducible details for format detection, rendering, responsive layout or toolbar interaction problems.</p></article>
+              <article><strong data-i18n="about.thanks.caseTitle">Share a use case</strong><p data-i18n="about.thanks.caseBody">If you use Open File Viewer in production, share your workflow and improvement ideas.</p></article>
             </div>
           </section>
         </div>
@@ -239,7 +240,7 @@
 
     <footer class="site-footer">
       <span>Open File Viewer</span>
-      <span>面向现代 Web 产品的文件预览 SDK。</span>
+      <span data-i18n="footer.text">Framework-agnostic file preview SDK for modern web products.</span>
     </footer>
 
     <script type="module" src="/src/api.ts"></script>
