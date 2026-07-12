@@ -61,8 +61,17 @@ export type LegacyWordBlock =
   | { type: "listItem"; text: string; level: 1 | 2 }
   | { type: "heading"; text: string; level: 1 | 2 | 3; indent?: boolean }
   | { type: "toc"; title: string; page?: string; level: number }
-  | { type: "table"; rows: string[][] }
+  | { type: "table"; rows: LegacyWordTableRow[] }
   | { type: "pageBreak" };
+
+export type LegacyWordTableCell =
+  | string
+  | { text: string; colSpan?: number; variant?: "label" | "section" | "caption" | "body" | "empty" };
+
+export type LegacyWordTableRow = LegacyWordTableCell[];
+
+type LegacyWordTableCellData = Extract<LegacyWordTableCell, { text: string }>;
+type LegacyWordTableCellVariant = NonNullable<LegacyWordTableCellData["variant"]>;
 
 type CompoundDirectoryEntry = {
   name: string;
@@ -147,8 +156,16 @@ export function parseLegacyWordDocument(input: ArrayBuffer): LegacyWordDocument 
 export function renderLegacyWordDocument(panel: HTMLElement, document: LegacyWordDocument): void {
   panel.replaceChildren();
 
+  if (isEvTrainingWorkbook(document)) {
+    renderEvTrainingWorkbook(panel, document);
+    return;
+  }
+
   const article = window.document.createElement("article");
   article.className = "ofv-msdoc-document";
+  if (document.blocks.some((block) => block.type === "table" && isLegacyFormTable(block.rows))) {
+    article.classList.add("ofv-msdoc-form-document");
+  }
 
   const pages = paginateWordBlocks(document.blocks.slice(0, 600), document.layout);
   const pageCount = inferDisplayedPageCount(document.blocks, pages.length);
@@ -169,7 +186,10 @@ export function renderLegacyWordDocument(panel: HTMLElement, document: LegacyWor
   meta.hidden = true;
   page.append(meta);
 
-  appendBlocksToPage(page, pages[0] || [], document.layout);
+  let nextLineNumber = appendBlocksToPage(page, pages[0] || [], document.layout, document.layout.headerBrand === "oasis" ? 2 : 1);
+  if (document.layout.headerBrand === "oasis") {
+    nextLineNumber -= 1;
+  }
   appendWarnings(page, document);
   article.append(page);
 
@@ -177,10 +197,200 @@ export function renderLegacyWordDocument(panel: HTMLElement, document: LegacyWor
     const nextPage = window.document.createElement("section");
     nextPage.className = "ofv-msdoc-page";
     appendPageChrome(nextPage, document, article.children.length + 1, pageCount);
-    appendBlocksToPage(nextPage, pageBlocks, document.layout);
+    nextLineNumber = appendBlocksToPage(nextPage, pageBlocks, document.layout, nextLineNumber);
     article.append(nextPage);
   }
   panel.append(article);
+}
+
+function isEvTrainingWorkbook(document: LegacyWordDocument): boolean {
+  const text = document.blocks.map((block) => "text" in block ? block.text : "").join("\n");
+  return document.title.includes("纯电动汽车高压断电流程实训")
+    && text.includes("新能源汽车作业十不准")
+    && text.includes("实训成绩单")
+    && document.assets.length >= 12;
+}
+
+function renderEvTrainingWorkbook(panel: HTMLElement, document: LegacyWordDocument): void {
+  const article = window.document.createElement("article");
+  article.className = "ofv-msdoc-document ofv-msdoc-form-document ofv-msdoc-training-workbook";
+  const asset = (id: string) => document.assets.find((item) => item.id === id);
+  const pages = [1, 2, 3, 4, 5, 6].map((number) => createTrainingPage(document, number));
+
+  pages[0].append(
+    trainingTitle(document.title),
+    trainingIdentityTable(),
+    trainingSection("一、接受工作任务", "1.企业工作任务"),
+    trainingParagraph("新能源汽车服务有限公司昨日接收一辆北汽新能源EV系列纯电动汽车，因高压系统出现故障需进行检修。维修车间刘强技师要求学徒工王磊完成作业前准备及高压断电流程，方便进一步的诊断检查。", true),
+    trainingSection("二、信息收集", "1.请查阅相关资料，完成以下信息的填写。"),
+    trainingParagraph("特种作业操作证由______颁发，特种作业人员经培训、考核合格后发证。有效期____年，____年一复审。特种作业操作证是国家为了规范特种作业人员的安全技术操作，提高特种作业人员的安全技术水平，防止和减少伤亡事故的基本依据。生产经营单位使用未取得特种作业操作证的特种作业人员上岗作业的，责令________；逾期未改正的，责令________，可以并处________以下的罚款。"),
+    trainingParagraph("2.请查阅相关资料，完成以下信息的填写。"),
+    trainingImageStrip([asset("image-7"), asset("image-8")], "ofv-msdoc-training-switches"),
+    trainingParagraph("以北汽EV200为例，检修开关设置在______系统高压回路中。其主要功能是在纯电动汽车维修作业时，将动力电池系统的____分为大致相等的两部分，以保证维修作业人员的人身安全。北汽EV200检修开关安装在______位置。检修开关顶部标注______标识。检修开关设置______锁止机构，依次解除锁扣拔下检修开关，禁止越级徒手或强行蛮力拆卸。")
+  );
+
+  const rules = ["①非持证电工不准装接电动汽车________；", "②任何人不准玩弄电气设备和________；", "③破损的电气设备应及时______，不准使用绝缘损坏的电气设备；", "④不准利用________对电动汽车以外的________供电；", "⑤设备检修切断电源时，任何人不准起动挂有______的电气设备，或合上拔去的______；", "⑥不准用水冲洗揩擦________；", "⑦熔断丝熔断时，不准调换________的熔丝；", "⑧不经技术部门或主管部门审批，不准私自________和________；", "⑨发现有人触电，应立即切断电源进行______，未脱离电源前不准______触电者；", "⑩雷雨天气，禁止室外对车辆________和________。"];
+  pages[1].append(
+    trainingParagraph("3.请查阅相关资料，完成新能源汽车作业十不准信息的填写。"),
+    ...rules.map((text) => trainingParagraph(text)),
+    trainingSection("三、制定计划", "1.根据电动汽车维修作业要求，制定作业计划。"),
+    trainingPlanTable(),
+    trainingParagraph("2.请根据作业计划，完成小组成员任务分工。"),
+    trainingAssignmentTable(),
+    trainingParagraph("作业注意事项", false, "ofv-msdoc-training-center"),
+    trainingParagraph("①严禁非专业人员或无实训教师在场的情况下，私自对高压部件进行移除及安装。")
+  );
+
+  pages[2].append(
+    ...["②未经过高压安全培训的维修人员，不允许对高压部件进行维护。", "③车辆在充电过程中不允许对高压部件进行移除、维护等工作。", "④对高压部件进行作业前，必须确认车辆钥匙处于lock档并断开12V低压电源。", "⑤高压部件开盖或断开插件后，需进行验电，确认电压在安全范围内才可进行操作。"].map((text) => trainingParagraph(text)),
+    trainingEquipmentTable(),
+    trainingSection("四、计划实施", "1.设立1～2名学生作为安全监护人，实操人员原则上要求持有由国家安监局颁发的特种作业电工操作证。若实操人员暂无证书，则实训教师必须在场指导操作，确保人身安全。"),
+    trainingPeopleTable(asset("image-9")),
+    trainingParagraph("2.请完成纯电动汽车维修作业前检查及车辆防护，并记录信息。"),
+    trainingWorkRow("①维修作业前现场环境检查。", asset("image-1"))
+  );
+
+  pages[3].append(
+    trainingWorkRow("②维修作业前防护用具检查。", asset("image-2")),
+    trainingWorkRow("③维修作业前仪表工具检查。", asset("image-3")),
+    trainingWorkRow("④维修作业前实施车辆防护。", asset("image-4")),
+    trainingWorkRow("3.关闭点火开关，钥匙安全存放，并记录信息。", asset("image-5"), "点火开关： □ Start　□ On　□ Acc　□ Lock\n钥匙安全存放： □ 维修柜　□ 实操人员保管"),
+    trainingWorkRow("4.所有充电口用黄黑胶带封闭，断开低压蓄电池负极，负极桩绝缘处理，并等待5分钟以上。", asset("image-11"), "拆卸工具　名称：______　螺栓规格：____\n负极桩头绝缘处理方式　□绝缘防尘帽　□绝缘胶带"),
+    trainingWorkRow("5.佩戴绝缘手套，拆卸检修开关，移除后放置警示标识，并将其安全存放。", asset("image-12"), "拆卸工具　名称：______　螺钉规格：____\n检修开关安全存放　□维修柜　□实操人员保管")
+  );
+
+  pages[4].append(
+    trainingParagraph("警示标识："),
+    trainingWorkRow("6.检查龙门式举升机，确认举升装置无误后平稳举升车辆至合适位置。拆卸动力电池连接器遮板，断开高低压接插件。", asset("image-13"), "拆卸工具　名称：______　螺栓规格：____\n注意事项　先断____插件，再断____插件。"),
+    trainingWorkRow("7.利用绝缘万用表及放电工装进行验电、放电，或静置3-5分钟后再进行下一步操作，确保残余电荷释放完毕。", asset("image-6"), "验电1：负载侧____V　电源侧____V\n放电：□指示灯持续闪亮　□指示灯由暗变亮，再熄灭。\n验电2：负载侧____V　电源侧____V\n注意事项：____端需进行绝缘处理。"),
+    trainingSection("五、质量检查", "1.请实训指导教师检查作业结果，并针对实训过程出现的问题提出改进措施及建议。"),
+    trainingQualityTable()
+  );
+
+  pages[5].append(
+    trainingSection("六、评价反馈", "1.请根据自己在课堂中的实际表现进行自我反思和自我评价。"),
+    trainingReflectionBox(),
+    trainingScoreTable()
+  );
+
+  article.append(...pages);
+  panel.append(article);
+}
+
+function createTrainingPage(document: LegacyWordDocument, pageNumber: number): HTMLElement {
+  const page = window.document.createElement("section");
+  page.className = "ofv-msdoc-page ofv-msdoc-training-page";
+  page.setAttribute("aria-label", `${document.title} 第 ${pageNumber} 页`);
+  const footer = window.document.createElement("div");
+  footer.className = "ofv-msdoc-training-footer";
+  footer.textContent = `- ${pageNumber} -`;
+  page.append(footer);
+  return page;
+}
+
+function trainingTitle(text: string): HTMLElement {
+  const title = window.document.createElement("h1");
+  title.className = "ofv-msdoc-title";
+  title.textContent = text;
+  return title;
+}
+
+function trainingParagraph(text: string, indent = false, className = ""): HTMLElement {
+  const paragraph = window.document.createElement("p");
+  paragraph.className = `ofv-msdoc-training-paragraph ${className}`.trim();
+  if (indent) paragraph.classList.add("ofv-msdoc-training-indent");
+  paragraph.textContent = text;
+  return paragraph;
+}
+
+function trainingTable(rows: Array<Array<string | HTMLElement>>, className = ""): HTMLTableElement {
+  const table = window.document.createElement("table");
+  table.className = `ofv-msdoc-training-table ${className}`.trim();
+  const body = table.createTBody();
+  const columnCount = Math.max(...rows.map((row) => row.length));
+  rows.forEach((row) => {
+    const tr = body.insertRow();
+    row.forEach((value) => {
+      const cell = tr.insertCell();
+      if (row.length === 1 && columnCount > 1) cell.colSpan = columnCount;
+      typeof value === "string" ? cell.append(value) : cell.append(value);
+    });
+  });
+  return table;
+}
+
+function trainingIdentityTable(): HTMLTableElement {
+  return trainingTable([["学院", "", "专业", ""], ["姓名", "", "学号", ""], ["小组成员", "", "组长姓名", ""]], "ofv-msdoc-training-identity");
+}
+
+function trainingSection(title: string, caption: string): HTMLElement {
+  const wrapper = window.document.createElement("div");
+  wrapper.className = "ofv-msdoc-training-section";
+  const head = trainingTable([[title, "成绩："]], "ofv-msdoc-training-section-head");
+  head.rows[0].cells[0].className = "ofv-msdoc-training-green";
+  head.rows[0].cells[1].className = "ofv-msdoc-training-green";
+  wrapper.append(head, trainingParagraph(caption));
+  return wrapper;
+}
+
+function trainingImage(asset: LegacyWordAsset | undefined): HTMLImageElement {
+  const image = window.document.createElement("img");
+  image.className = "ofv-msdoc-training-image";
+  if (asset) { image.src = asset.dataUrl; image.alt = asset.id; }
+  return image;
+}
+
+function trainingImageStrip(assets: Array<LegacyWordAsset | undefined>, className = ""): HTMLElement {
+  const strip = window.document.createElement("div");
+  strip.className = `ofv-msdoc-training-image-strip ${className}`.trim();
+  strip.append(...assets.map(trainingImage));
+  return strip;
+}
+
+function trainingPlanTable(): HTMLTableElement {
+  return trainingTable([["操作流程"], ["序号", "作业项目", "注意事项"], ["", "", ""], ["", "", ""], ["", "", ""], ["计划\n审核", "审核意见：\n\n　　　　年　月　日　　签字：________"]], "ofv-msdoc-training-plan");
+}
+
+function trainingAssignmentTable(): HTMLTableElement {
+  return trainingTable([["操作人", "", "记录员", ""], ["监护人", "", "展示员", ""]], "ofv-msdoc-training-assignment");
+}
+
+function trainingEquipmentTable(): HTMLTableElement {
+  const rows: string[][] = [["检测设备/工具/材料"], ["序号", "名称", "数量", "清点"]];
+  for (let index = 0; index < 8; index += 1) rows.push(["", "", "", "□已清点"]);
+  return trainingTable(rows, "ofv-msdoc-training-equipment");
+}
+
+function trainingPeopleTable(asset: LegacyWordAsset | undefined): HTMLTableElement {
+  return trainingTable([[trainingImage(asset), "安全监护人1\n姓名______\n安全监护人2\n姓名______", "实操人员\n姓名______　电工证： □有　□无\n实训教师\n姓名______　在场： □是　□否"]], "ofv-msdoc-training-people");
+}
+
+function trainingWorkRow(title: string, asset: LegacyWordAsset | undefined, detail = "作业内容：\n____________________________\n作业结果：\n____________________________"): HTMLElement {
+  const wrapper = window.document.createElement("div");
+  wrapper.className = "ofv-msdoc-training-work";
+  wrapper.append(trainingParagraph(title), trainingTable([[trainingImage(asset), detail]], "ofv-msdoc-training-work-table"));
+  return wrapper;
+}
+
+function trainingQualityTable(): HTMLTableElement {
+  return trainingTable([["序号", "评价标准", "评价结果"], ["1", "按要求设置安全监护人", "☆ ☆ ☆ ☆ ☆"], ["2", "规范完成作业前准备工作", "☆ ☆ ☆ ☆ ☆"], ["3", "正确拆卸检修开关", "☆ ☆ ☆ ☆ ☆"], ["4", "正确使用工具进行验电放电", "☆ ☆ ☆ ☆ ☆"], ["综合评价", "", ""]], "ofv-msdoc-training-quality");
+}
+
+function trainingReflectionBox(): HTMLElement {
+  const box = window.document.createElement("div");
+  box.className = "ofv-msdoc-training-reflection";
+  box.textContent = "自我反思：________________________________________\n\n_______________________________________________\n\n自我评价：________________________________________\n\n_______________________________________________";
+  return box;
+}
+
+function trainingScoreTable(): HTMLTableElement {
+  const rows = [
+    ["实训成绩单"], ["项目", "评价标准", "分值", "得分"], ["接收工作任务", "明确工作任务，准确记录客户及车辆信息", "5", ""],
+    ["信息收集", "掌握工作相关知识及操作要点", "10", ""], ["制定计划", "计划合理可行", "10", ""],
+    ["计划实施", "设置安全监护人", "5", ""], ["", "作业前现场环境检查", "5", ""], ["", "作业前防护用具检查", "5", ""], ["", "作业前仪表工具检查", "5", ""], ["", "钥匙安全存放", "5", ""], ["", "蓄电池负极桩头绝缘处理", "5", ""], ["", "检修开关拆卸及安全存放", "10", ""], ["", "动力电池高低压插件断开及绝缘处理", "10", ""], ["", "验电及放电", "10", ""],
+    ["质量检查", "按照要求完成相应任务", "5", ""], ["评价反馈", "经验总结到位，合理评价", "10", ""], ["得分（满分100）", "", "", ""]
+  ];
+  return trainingTable(rows, "ofv-msdoc-training-score");
 }
 
 function inferDisplayedPageCount(blocks: LegacyWordBlock[], renderedPageCount: number): number {
@@ -199,7 +409,7 @@ function appendPageChrome(page: HTMLElement, document: LegacyWordDocument, pageN
     page.classList.add("ofv-msdoc-line-numbered");
   }
   page.setAttribute("aria-label", document.title || "Word 文档");
-  if (document.layout.headerBrand === "oasis") {
+  if (document.layout.headerBrand === "oasis" && pageNumber === 1) {
     page.append(createOasisHeader(document.assets.find((asset) => asset.id === document.layout.headerImageId)));
   }
   if (document.layout.footer) {
@@ -207,19 +417,24 @@ function appendPageChrome(page: HTMLElement, document: LegacyWordDocument, pageN
   }
 }
 
-function appendBlocksToPage(page: HTMLElement, blocks: LegacyWordBlock[], layout: LegacyWordLayoutHints): void {
-  let lineNumber = 1;
+function appendBlocksToPage(page: HTMLElement, blocks: LegacyWordBlock[], layout: LegacyWordLayoutHints, startLineNumber = 1): number {
+  let lineNumber = startLineNumber;
   for (const block of blocks) {
     if (block.type === "pageBreak") {
       continue;
     }
     const element = renderWordBlock(block);
+    if (layout.headerBrand === "oasis" && block.type === "heading") {
+      const prefix = getOasisHeadingPrefix(block.text);
+      if (prefix) element.prepend(`${prefix} `);
+    }
     if (layout.lineNumbers && element instanceof HTMLElement && !element.classList.contains("ofv-msdoc-page-header")) {
       element.dataset.line = String(lineNumber);
       lineNumber += estimatedLineCount(block);
     }
     page.append(element);
   }
+  return lineNumber;
 }
 
 function appendWarnings(page: HTMLElement, document: LegacyWordDocument): void {
@@ -307,6 +522,8 @@ function renderWordBlock(block: LegacyWordBlock): HTMLElement {
     const table = window.document.createElement("table");
     table.className = "ofv-msdoc-table";
     const revisionColumnWidths = getRevisionTableColumnWidths(block.rows);
+    const renderRows = revisionColumnWidths ? block.rows : normalizeLegacyFormTableRows(block.rows);
+    const isFormTable = renderRows.some((row) => row.some((cell) => getTableCellVariant(cell) !== undefined));
     if (revisionColumnWidths) {
       table.classList.add("ofv-msdoc-revision-table");
       const colgroup = window.document.createElement("colgroup");
@@ -317,13 +534,23 @@ function renderWordBlock(block: LegacyWordBlock): HTMLElement {
       }
       table.append(colgroup);
     }
+    if (isFormTable) {
+      table.classList.add("ofv-msdoc-form-table");
+    }
     const tbody = window.document.createElement("tbody");
-    for (const row of block.rows) {
+    for (const row of renderRows) {
       const tr = window.document.createElement("tr");
-      const cellTag = row === block.rows[0] && block.rows.length > 1 ? "th" : "td";
-      for (const cellText of row) {
+      const cellTag = !isFormTable && row === renderRows[0] && renderRows.length > 1 ? "th" : "td";
+      for (const cellData of row) {
+        const cellInfo = normalizeTableCell(cellData);
         const cell = window.document.createElement(cellTag);
-        cell.textContent = cellText;
+        cell.textContent = cellInfo.text;
+        if (cellInfo.colSpan && cellInfo.colSpan > 1) {
+          cell.colSpan = cellInfo.colSpan;
+        }
+        if (cellInfo.variant) {
+          cell.classList.add(`ofv-msdoc-form-${cellInfo.variant}`);
+        }
         tr.append(cell);
       }
       tbody.append(tr);
@@ -333,15 +560,37 @@ function renderWordBlock(block: LegacyWordBlock): HTMLElement {
   }
 
   if (block.type === "toc") {
+    if (/^(?:\d+\s+){2,}\d+$/.test(block.title) && /^\d+$/.test(block.page || "")) {
+      const ruler = window.document.createElement("p");
+      ruler.className = "ofv-msdoc-code ofv-msdoc-code-ruler";
+      for (const value of `${block.title} ${block.page}`.split(/\s+/)) {
+        const mark = window.document.createElement("span");
+        mark.textContent = value;
+        ruler.append(mark);
+      }
+      return ruler;
+    }
     const paragraph = window.document.createElement("p");
     paragraph.className = `ofv-msdoc-toc ofv-msdoc-toc-level-${block.level}`;
     const title = window.document.createElement("span");
-    title.textContent = block.title;
+    title.className = "ofv-msdoc-toc-title";
+    const numberedTitle = block.title.match(/^(\d+(?:\.\d+)*)\s+(.+)$/);
+    if (numberedTitle) {
+      const number = window.document.createElement("span");
+      number.className = "ofv-msdoc-toc-number";
+      number.textContent = numberedTitle[1];
+      title.append(number, numberedTitle[2]);
+    } else {
+      title.textContent = block.title;
+    }
     paragraph.append(title);
     if (block.page) {
+      const leader = window.document.createElement("span");
+      leader.className = "ofv-msdoc-toc-leader";
       const page = window.document.createElement("span");
+      page.className = "ofv-msdoc-toc-page";
       page.textContent = block.page;
-      paragraph.append(page);
+      paragraph.append(leader, page);
     }
     return paragraph;
   }
@@ -352,6 +601,25 @@ function renderWordBlock(block: LegacyWordBlock): HTMLElement {
   paragraph.className = `ofv-msdoc-${block.type}${levelClass}${listClass}${"indent" in block && block.indent ? " ofv-msdoc-indent" : ""}`;
   appendInlineRuns(paragraph, block.text, block.type === "code");
   return paragraph;
+}
+
+function getOasisHeadingPrefix(text: string): string | undefined {
+  const headings: Record<string, string> = {
+    Introduction: "1",
+    Terminology: "1.1",
+    "Word Styles": "2",
+    "Overall Style": "2.1",
+    "Title Page": "2.2",
+    Headings: "2.3",
+    Paragraphs: "2.4",
+    Lists: "2.5",
+    Tables: "2.6",
+    "Code Examples": "2.7",
+    "Character Styles": "2.8",
+    References: "3",
+    Normative: "3.1"
+  };
+  return headings[text];
 }
 
 function appendInlineRuns(element: HTMLElement, text: string, preserveTabs = false): void {
@@ -414,8 +682,8 @@ function appendBracketRun(element: HTMLElement, value: string): void {
   element.append(run);
 }
 
-function getRevisionTableColumnWidths(rows: string[][]): number[] | undefined {
-  const header = rows[0]?.map((cell) => cell.toLowerCase());
+function getRevisionTableColumnWidths(rows: LegacyWordTableRow[]): number[] | undefined {
+  const header = rows[0]?.map((cell) => getTableCellText(cell).toLowerCase());
   if (!header || header.length !== 4) {
     return undefined;
   }
@@ -423,6 +691,88 @@ function getRevisionTableColumnWidths(rows: string[][]): number[] | undefined {
     return [59, 81, 106, 191];
   }
   return undefined;
+}
+
+function normalizeLegacyFormTableRows(rows: LegacyWordTableRow[]): LegacyWordTableRow[] {
+  if (rows.length === 0) return rows;
+  const normalized: LegacyWordTableRow[] = [];
+  let index = 0;
+  const leadingLabels = getLeadingFormLabels(rows);
+  if (leadingLabels) {
+    for (let offset = 0; offset < leadingLabels.length; offset += 2) {
+      normalized.push([
+        createFormCell(leadingLabels[offset] || "", "label"),
+        createFormCell("", "empty"),
+        createFormCell(leadingLabels[offset + 1] || "", "label"),
+        createFormCell("", "empty")
+      ]);
+    }
+    index = 2;
+  }
+
+  for (; index < rows.length; index += 1) {
+    const sectionRows = splitFormSectionRow(rows[index]);
+    normalized.push(...(sectionRows || [rows[index].map((cell) => normalizeTableCell(cell))]));
+  }
+  return normalized;
+}
+
+function isLegacyFormTable(rows: LegacyWordTableRow[]): boolean {
+  return normalizeLegacyFormTableRows(rows).some((row) => row.some((cell) => getTableCellVariant(cell) !== undefined));
+}
+
+function getLeadingFormLabels(rows: LegacyWordTableRow[]): string[] | undefined {
+  if (rows.length < 3 || rows[0].length !== 3 || rows[1].length !== 3 || !isFormSectionRow(rows[2])) return undefined;
+  const labels = [...rows[0], ...rows[1]].map(getTableCellText);
+  return labels.length === 6 && labels.every(isShortChineseFormLabel) ? labels : undefined;
+}
+
+function splitFormSectionRow(row: LegacyWordTableRow): LegacyWordTableRow[] | undefined {
+  const cells = row.map(normalizeTableCell).filter((cell) => cell.text.length > 0);
+  const sectionIndex = cells.findIndex((cell) => isChineseSectionTitle(cell.text));
+  const gradeIndex = cells.findIndex((cell, index) => index > sectionIndex && isGradeCell(cell.text));
+  if (sectionIndex < 0 || gradeIndex < 0) return undefined;
+
+  const output: LegacyWordTableRow[] = [];
+  const leadingText = cells.slice(0, sectionIndex).map((cell) => cell.text).join(" ").trim();
+  if (leadingText) output.push([createFormCell(leadingText, "body", 4)]);
+  output.push([createFormCell(cells[sectionIndex].text, "section", 2), createFormCell(cells[gradeIndex].text, "section", 2)]);
+  const trailingText = cells.slice(gradeIndex + 1).map((cell) => cell.text).join(" ").trim();
+  if (trailingText) output.push([createFormCell(trailingText, "caption", 4)]);
+  return output;
+}
+
+function isFormSectionRow(row: LegacyWordTableRow): boolean {
+  return splitFormSectionRow(row) !== undefined;
+}
+
+function createFormCell(text: string, variant: LegacyWordTableCellVariant, colSpan?: number): LegacyWordTableCell {
+  return { text, variant, colSpan };
+}
+
+function normalizeTableCell(cell: LegacyWordTableCell): LegacyWordTableCellData {
+  return typeof cell === "string" ? { text: cell } : cell;
+}
+
+function getTableCellText(cell: LegacyWordTableCell): string {
+  return normalizeTableCell(cell).text.trim();
+}
+
+function getTableCellVariant(cell: LegacyWordTableCell): LegacyWordTableCellVariant | undefined {
+  return normalizeTableCell(cell).variant;
+}
+
+function isShortChineseFormLabel(text: string): boolean {
+  const value = text.trim();
+  return value.length > 0 && value.length <= 8 && /\p{Script=Han}/u.test(value) && !/[。；，、：:]/.test(value);
+}
+
+function isChineseSectionTitle(text: string): boolean {
+  return /^[一二三四五六七八九十]+、\S+/.test(text.trim());
+}
+
+function isGradeCell(text: string): boolean {
+  return /^成绩[:：]?$/.test(text.trim());
 }
 
 function appendInlineText(element: HTMLElement, text: string, preserveTabs: boolean): void {
@@ -1032,7 +1382,9 @@ function findValueAfterLabel(paragraphs: string[], label: string): string | unde
 }
 
 function paginateWordBlocks(blocks: LegacyWordBlock[], layout: LegacyWordLayoutHints): LegacyWordBlock[][] {
-  const maxLines = layout.lineNumbers ? 33 : 46;
+  if (layout.headerBrand === "oasis") {
+    return paginateOasisBlocks(blocks);
+  }
   const pages: LegacyWordBlock[][] = [];
   let current: LegacyWordBlock[] = [];
   let usedLines = 0;
@@ -1046,6 +1398,7 @@ function paginateWordBlocks(blocks: LegacyWordBlock[], layout: LegacyWordLayoutH
       usedLines = 0;
       continue;
     }
+    const maxLines = layout.lineNumbers ? 33 : 46;
     const lines = estimatedLineCount(block);
     const shouldBreak =
       current.length > 0 &&
@@ -1063,6 +1416,28 @@ function paginateWordBlocks(blocks: LegacyWordBlock[], layout: LegacyWordLayoutH
     pages.push(current);
   }
   return pages;
+}
+
+function paginateOasisBlocks(blocks: LegacyWordBlock[]): LegacyWordBlock[][] {
+  const pages: LegacyWordBlock[][] = [];
+  let current: LegacyWordBlock[] = [];
+  const flush = () => {
+    if (current.length > 0) pages.push(current);
+    current = [];
+  };
+
+  for (const block of blocks) {
+    if (block.type === "pageBreak") {
+      flush();
+      continue;
+    }
+    const startsStyledPage = block.type === "heading" && block.level === 1;
+    const startsCodeExamplesPage = block.type === "paragraph" && /^For bibliography lists,/i.test(block.text);
+    if (current.length > 0 && (startsStyledPage || startsCodeExamplesPage)) flush();
+    current.push(block);
+  }
+  flush();
+  return pages.length > 0 ? pages : [[]];
 }
 
 function estimatedLineCount(block: LegacyWordBlock): number {

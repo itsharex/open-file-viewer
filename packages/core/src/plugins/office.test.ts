@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import JSZip from "jszip";
 import { createViewer } from "../viewer";
+import { renderLegacyWordDocument, type LegacyWordDocument } from "./msdoc";
 import { officePlugin } from "./office";
 
 const shouldFailDocxPreview = vi.hoisted(() => ({ value: false }));
@@ -1365,6 +1366,7 @@ describe("officePlugin", () => {
     expect(container.textContent).toContain("Working Draft 04");
     expect(container.querySelector(".ofv-msdoc-document")?.textContent).toContain("Table of Contents");
     expect(container.querySelectorAll(".ofv-msdoc-page").length).toBeGreaterThan(1);
+    expect(container.querySelectorAll(".ofv-msdoc-page")).toHaveLength(9);
     expect(container.querySelector(".ofv-msdoc-page")?.textContent).not.toContain("Table of Contents");
     expect(container.querySelector(".ofv-msdoc-meta")?.textContent).toContain("样式表");
     expect(container.querySelector(".ofv-msdoc-meta")?.textContent).toContain("Heading 1");
@@ -1378,9 +1380,13 @@ describe("officePlugin", () => {
     expect(container.querySelector(".ofv-msdoc-title")?.textContent).toContain("Word Specification Sample");
     expect(container.querySelector<HTMLImageElement>(".ofv-msdoc-oasis-header img")?.alt).toBe("OASIS");
     expect(container.querySelector<HTMLImageElement>(".ofv-msdoc-oasis-header img")?.src).toContain("data:image/png;base64,");
+    expect(container.querySelectorAll(".ofv-msdoc-oasis-header")).toHaveLength(1);
     expect(container.querySelector(".ofv-msdoc-line-numbered")).not.toBeNull();
-    expect(container.querySelector<HTMLElement>(".ofv-msdoc-title")?.dataset.line).toBe("1");
+    expect(container.querySelector<HTMLElement>(".ofv-msdoc-title")?.dataset.line).toBe("2");
+    expect(container.querySelectorAll<HTMLElement>(".ofv-msdoc-page")[1]?.querySelector<HTMLElement>("[data-line]")?.dataset.line).toBe("37");
     expect(container.querySelectorAll(".ofv-msdoc-toc").length).toBeGreaterThan(5);
+    expect(container.querySelector(".ofv-msdoc-code-ruler")?.textContent).toBe("1234567");
+    expect(Array.from(container.querySelectorAll(".ofv-msdoc-heading-level-2")).some((element) => element.textContent === "2.7 Code Examples")).toBe(true);
     expect(container.querySelectorAll(".ofv-msdoc-table tr").length).toBeGreaterThan(1);
     const revisionTable = container.querySelector<HTMLTableElement>(".ofv-msdoc-revision-table");
     expect(revisionTable).not.toBeNull();
@@ -1421,6 +1427,81 @@ describe("officePlugin", () => {
     expect(container.querySelector(".ofv-msdoc-document")?.textContent).not.toContain("HYPERLINK");
     expect(container.querySelector(".ofv-msdoc-document")?.textContent).not.toContain("PAGEREF");
     expect(container.querySelector(".ofv-msdoc-document")?.textContent).not.toContain("REF rfc2119");
+  });
+
+  it("expands recovered legacy Word form tables into styled section rows", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const documentModel: LegacyWordDocument = {
+      title: "实训一 纯电动汽车高压断电流程实训",
+      paragraphs: [],
+      blocks: [
+        { type: "title", text: "实训一 纯电动汽车高压断电流程实训" },
+        {
+          type: "table",
+          rows: [
+            ["学院", "专业", "姓名"],
+            ["学号", "小组成员", "组长姓名"],
+            ["一、接受工作任务", "成绩：", "企业工作任务"],
+            [
+              "新能源汽车服务有限公司昨日接收一辆北汽新能源EV系列纯电动汽车，需完成作业前准备及高压断电流程。",
+              "二、信息收集",
+              "成绩：",
+              "请查阅相关资料，完成以下信息的填写。"
+            ]
+          ]
+        }
+      ],
+      layout: { lineNumbers: false },
+      assets: [],
+      styles: [],
+      stats: { streamCount: 7, pieceCount: 4, characterCount: 120, styleCount: 0, tableStream: "1Table" },
+      warnings: []
+    };
+
+    renderLegacyWordDocument(container, documentModel);
+
+    expect(container.querySelector(".ofv-msdoc-document")?.classList.contains("ofv-msdoc-form-document")).toBe(true);
+    const table = container.querySelector<HTMLTableElement>(".ofv-msdoc-form-table");
+    expect(table).not.toBeNull();
+    const rows = Array.from(table?.rows || []);
+    expect(rows).toHaveLength(8);
+    expect(Array.from(rows[0].cells).map((cell) => cell.textContent)).toEqual(["学院", "", "专业", ""]);
+    expect(rows[0].cells[0].classList.contains("ofv-msdoc-form-label")).toBe(true);
+    expect(rows[0].cells[1].classList.contains("ofv-msdoc-form-empty")).toBe(true);
+    expect(Array.from(rows[2].cells).map((cell) => cell.textContent)).toEqual(["小组成员", "", "组长姓名", ""]);
+    expect(rows[3].cells[0].textContent).toBe("一、接受工作任务");
+    expect(rows[3].cells[0].colSpan).toBe(2);
+    expect(rows[3].cells[1].textContent).toBe("成绩：");
+    expect(rows[3].cells[1].colSpan).toBe(2);
+    expect(rows[3].cells[0].classList.contains("ofv-msdoc-form-section")).toBe(true);
+    expect(rows[4].cells[0].textContent).toBe("企业工作任务");
+    expect(rows[4].cells[0].colSpan).toBe(4);
+    expect(rows[5].cells[0].textContent).toContain("新能源汽车服务有限公司");
+    expect(rows[6].cells[0].textContent).toBe("二、信息收集");
+    expect(rows[7].cells[0].textContent).toContain("请查阅相关资料");
+  });
+
+  it("renders the issue 39 training form when the downloaded attachment is available", async () => {
+    const samplePath = "/Users/kuangkuang/Desktop/任务一 纯电动汽车高压断电流程实训-实训工单.doc";
+    if (!existsSync(samplePath)) return;
+    const container = document.createElement("div");
+    document.body.append(container);
+    createViewer({
+      container,
+      file: new Blob([readFileSync(samplePath)], { type: "application/msword" }),
+      fileName: "training-form.doc",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-msdoc-training-workbook")), 2000);
+    expect(container.querySelectorAll(".ofv-msdoc-training-page")).toHaveLength(6);
+    expect(container.querySelectorAll(".ofv-msdoc-training-image")).toHaveLength(12);
+    expect(container.querySelector(".ofv-msdoc-training-identity")?.textContent).toContain("组长姓名");
+    expect(container.querySelector(".ofv-msdoc-training-plan")?.textContent).toContain("审核意见");
+    expect(container.querySelector(".ofv-msdoc-training-equipment")?.textContent).toContain("检测设备/工具/材料");
+    expect(container.querySelector(".ofv-msdoc-training-quality")?.textContent).toContain("综合评价");
+    expect(container.querySelector(".ofv-msdoc-training-score")?.textContent).toContain("得分（满分100）");
   });
 
   it("keeps literal ASCII text from legacy Word binaries even when it looks random", async () => {

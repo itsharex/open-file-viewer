@@ -786,13 +786,29 @@
 }
 
 .ofv-msdoc-line-numbered {
-  padding: calc(44px * var(--ofv-office-zoom, 1)) calc(64px * var(--ofv-office-zoom, 1)) calc(86px * var(--ofv-office-zoom, 1)) calc(132px * var(--ofv-office-zoom, 1));
+  padding: calc(44px * var(--ofv-office-zoom, 1)) calc(114px * var(--ofv-office-zoom, 1)) calc(86px * var(--ofv-office-zoom, 1)) calc(132px * var(--ofv-office-zoom, 1));
+  font-size: calc(9pt * var(--ofv-office-zoom, 1));
+  line-height: 1.25;
 }
 
 .ofv-msdoc-page-header {
+  position: relative;
   margin: 0 0 calc(8px * var(--ofv-office-zoom, 1));
   padding: 0 0 calc(8px * var(--ofv-office-zoom, 1));
   border-bottom: 1px solid #6b7280;
+}
+
+.ofv-msdoc-oasis-header::before {
+  position: absolute;
+  top: calc(20px * var(--ofv-office-zoom, 1));
+  right: calc(100% + 28px * var(--ofv-office-zoom, 1));
+  width: calc(30px * var(--ofv-office-zoom, 1));
+  color: #111827;
+  content: "1";
+  font-family: "Times New Roman", Times, serif;
+  font-size: calc(12px * var(--ofv-office-zoom, 1));
+  font-weight: 400;
+  text-align: right;
 }
 
 .ofv-msdoc-oasis-logo {
@@ -813,7 +829,7 @@
 }
 
 .ofv-msdoc-oasis-logo-image img {
-  width: calc(232px * var(--ofv-office-zoom, 1));
+  width: calc(190px * var(--ofv-office-zoom, 1));
   height: auto;
   max-width: 100%;
   object-fit: contain;
@@ -864,12 +880,28 @@
   line-height: 1.18;
 }
 
+.ofv-msdoc-line-numbered .ofv-msdoc-title {
+  font-size: calc(20px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-form-document .ofv-msdoc-title {
+  color: #111827;
+  font-family: "Microsoft YaHei", "PingFang SC", Arial, Helvetica, sans-serif;
+  font-size: calc(18pt * var(--ofv-office-zoom, 1));
+  text-align: center;
+}
+
 .ofv-msdoc-subtitle {
   margin: 0 0 calc(18px * var(--ofv-office-zoom, 1));
   color: #333399;
   font-size: calc(18px * var(--ofv-office-zoom, 1));
   font-weight: 700;
   line-height: 1.2;
+}
+
+.ofv-msdoc-line-numbered .ofv-msdoc-subtitle {
+  margin-bottom: calc(14px * var(--ofv-office-zoom, 1));
+  font-size: calc(16px * var(--ofv-office-zoom, 1));
 }
 
 .ofv-msdoc-heading {
@@ -966,50 +998,66 @@
 
 .ofv-msdoc-toc {
   display: grid;
-  grid-template-columns: auto max-content;
-  column-gap: calc(10px * var(--ofv-office-zoom, 1));
+  grid-template-columns: auto minmax(calc(20px * var(--ofv-office-zoom, 1)), 1fr) max-content;
+  column-gap: calc(3px * var(--ofv-office-zoom, 1));
   align-items: baseline;
-  margin: calc(3px * var(--ofv-office-zoom, 1)) 0;
+  margin: calc(1px * var(--ofv-office-zoom, 1)) 0;
   color: #0000ee;
 }
 
-.ofv-msdoc-toc::before {
-  grid-column: 1 / 3;
-  grid-row: 1;
-  align-self: end;
-  border-bottom: 1px dotted #9ca3af;
-  content: "";
+.ofv-msdoc-line-numbered .ofv-msdoc-toc {
+  color: #111827;
 }
 
 .ofv-msdoc-toc span {
   position: relative;
   z-index: 1;
+}
+
+.ofv-msdoc-toc-title {
   background: #fff;
+  white-space: nowrap;
 }
 
-.ofv-msdoc-toc span:first-child {
-  padding-right: 4px;
+.ofv-msdoc-toc-number {
+  display: inline-block;
+  min-width: calc(28px * var(--ofv-office-zoom, 1));
 }
 
-.ofv-msdoc-toc span:last-child {
-  padding-left: 4px;
+.ofv-msdoc-toc-leader {
+  align-self: center;
+  height: 0;
+  border-bottom: 1px dotted #111827;
+}
+
+.ofv-msdoc-toc-page {
+  padding-left: calc(2px * var(--ofv-office-zoom, 1));
+  background: #fff;
   text-align: right;
 }
 
 .ofv-msdoc-toc-level-2 {
-  margin-left: calc(12px * var(--ofv-office-zoom, 1));
+  margin-left: calc(16px * var(--ofv-office-zoom, 1));
 }
 
 .ofv-msdoc-toc-level-3 {
-  margin-left: calc(24px * var(--ofv-office-zoom, 1));
+  margin-left: calc(32px * var(--ofv-office-zoom, 1));
 }
 
-.ofv-msdoc-code {
+.ofv-msdoc-page .ofv-msdoc-code {
   margin: 0 calc(22px * var(--ofv-office-zoom, 1));
+  padding: 0 calc(4px * var(--ofv-office-zoom, 1));
+  background: #e5e5e5;
   color: #800000;
   font-family: "Courier New", Courier, monospace;
-  font-size: calc(9px * var(--ofv-office-zoom, 1));
-  line-height: 1.18;
+  font-size: calc(8px * var(--ofv-office-zoom, 1));
+  line-height: 1.05;
+}
+
+.ofv-msdoc-page .ofv-msdoc-code-ruler {
+  display: flex;
+  justify-content: space-between;
+  color: #111827;
 }
 
 .ofv-msdoc-table {
@@ -1025,6 +1073,14 @@
   table-layout: fixed;
 }
 
+.ofv-msdoc-form-table {
+  width: 100%;
+  table-layout: fixed;
+  border: 2px solid #111827;
+  color: #111827;
+  font-family: "Microsoft YaHei", "PingFang SC", Arial, Helvetica, sans-serif;
+}
+
 .ofv-msdoc-table th,
 .ofv-msdoc-table td {
   padding: 0 calc(5px * var(--ofv-office-zoom, 1));
@@ -1037,6 +1093,217 @@
 .ofv-msdoc-table th {
   background: #f8fafc;
   font-weight: 700;
+}
+
+.ofv-msdoc-form-table th,
+.ofv-msdoc-form-table td {
+  min-height: calc(34px * var(--ofv-office-zoom, 1));
+  padding: calc(6px * var(--ofv-office-zoom, 1)) calc(8px * var(--ofv-office-zoom, 1));
+  border-color: #111827;
+  font-size: calc(11pt * var(--ofv-office-zoom, 1));
+  line-height: 1.45;
+}
+
+.ofv-msdoc-form-label,
+.ofv-msdoc-form-section {
+  background: #b7e63a;
+  font-weight: 700;
+}
+
+.ofv-msdoc-form-label {
+  text-align: center;
+}
+
+.ofv-msdoc-form-section {
+  font-size: calc(12pt * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-form-caption {
+  font-weight: 700;
+}
+
+.ofv-msdoc-form-empty {
+  background: #fff;
+}
+
+.ofv-msdoc-training-workbook {
+  font-family: SimSun, "Songti SC", serif;
+}
+
+.ofv-msdoc-training-page {
+  padding: calc(74px * var(--ofv-office-zoom, 1)) calc(68px * var(--ofv-office-zoom, 1));
+  color: #111;
+  font-family: SimSun, "Songti SC", serif;
+  font-size: calc(10pt * var(--ofv-office-zoom, 1));
+  line-height: 1.55;
+}
+
+.ofv-msdoc-training-page::after {
+  position: absolute;
+  inset: calc(110px * var(--ofv-office-zoom, 1)) calc(66px * var(--ofv-office-zoom, 1)) calc(70px * var(--ofv-office-zoom, 1));
+  border: 1px solid #111;
+  content: "";
+  pointer-events: none;
+}
+
+.ofv-msdoc-training-page > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ofv-msdoc-training-page .ofv-msdoc-title {
+  margin: 0 0 calc(8px * var(--ofv-office-zoom, 1));
+  color: #111;
+  font-family: SimHei, "Microsoft YaHei", sans-serif;
+  font-size: calc(16pt * var(--ofv-office-zoom, 1));
+  line-height: 1.3;
+  text-align: center;
+}
+
+.ofv-msdoc-training-paragraph {
+  margin: 0;
+  padding: calc(2px * var(--ofv-office-zoom, 1)) calc(4px * var(--ofv-office-zoom, 1));
+  white-space: pre-line;
+}
+
+.ofv-msdoc-training-indent {
+  padding-left: calc(30px * var(--ofv-office-zoom, 1));
+  text-indent: 2em;
+}
+
+.ofv-msdoc-training-center {
+  border: 1px solid #111;
+  text-align: center;
+}
+
+.ofv-msdoc-training-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.ofv-msdoc-training-table td {
+  box-sizing: border-box;
+  padding: calc(3px * var(--ofv-office-zoom, 1)) calc(5px * var(--ofv-office-zoom, 1));
+  border: 1px solid #111;
+  vertical-align: middle;
+  white-space: pre-line;
+}
+
+.ofv-msdoc-training-identity td:nth-child(odd) {
+  width: 25%;
+  background: #a6e600;
+  font-family: SimHei, "Microsoft YaHei", sans-serif;
+  font-weight: 700;
+  text-align: center;
+}
+
+.ofv-msdoc-training-identity td:nth-child(even) {
+  width: 25%;
+  height: calc(36px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-training-section {
+  margin: 0;
+}
+
+.ofv-msdoc-training-section-head td {
+  width: 50%;
+  padding: calc(7px * var(--ofv-office-zoom, 1));
+  font-family: SimHei, "Microsoft YaHei", sans-serif;
+  font-size: calc(11pt * var(--ofv-office-zoom, 1));
+  font-weight: 700;
+}
+
+.ofv-msdoc-training-green {
+  background: #a6e600;
+}
+
+.ofv-msdoc-training-image-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(8px * var(--ofv-office-zoom, 1));
+  margin: calc(6px * var(--ofv-office-zoom, 1)) auto;
+}
+
+.ofv-msdoc-training-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ofv-msdoc-training-switches .ofv-msdoc-training-image {
+  width: calc(128px * var(--ofv-office-zoom, 1));
+  height: calc(138px * var(--ofv-office-zoom, 1));
+}
+
+.ofv-msdoc-training-plan td:first-child { width: 10%; }
+.ofv-msdoc-training-plan td { height: calc(34px * var(--ofv-office-zoom, 1)); text-align: center; }
+.ofv-msdoc-training-plan tr:first-child td { height: auto; }
+.ofv-msdoc-training-plan tr:last-child td { height: calc(88px * var(--ofv-office-zoom, 1)); text-align: left; }
+.ofv-msdoc-training-assignment td { text-align: center; }
+
+.ofv-msdoc-training-equipment {
+  margin-bottom: calc(50px * var(--ofv-office-zoom, 1));
+}
+.ofv-msdoc-training-equipment tr:first-child td { text-align: center; }
+.ofv-msdoc-training-equipment tr:not(:first-child) td:nth-child(1) { width: 8%; }
+.ofv-msdoc-training-equipment tr:not(:first-child) td:nth-child(2) { width: 43%; }
+.ofv-msdoc-training-equipment tr:not(:first-child) td:nth-child(3) { width: 27%; }
+.ofv-msdoc-training-equipment tr:not(:first-child) td:nth-child(4) { width: 22%; text-align: center; }
+.ofv-msdoc-training-equipment tr:nth-child(n+3) td { height: calc(33px * var(--ofv-office-zoom, 1)); }
+
+.ofv-msdoc-training-people td:first-child { width: 29%; padding: 0; }
+.ofv-msdoc-training-people td:nth-child(2) { width: 22%; }
+.ofv-msdoc-training-people td:nth-child(3) { width: 49%; }
+.ofv-msdoc-training-people .ofv-msdoc-training-image { height: calc(112px * var(--ofv-office-zoom, 1)); object-fit: contain; }
+
+.ofv-msdoc-training-work-table td:first-child {
+  width: 34%;
+  padding: calc(3px * var(--ofv-office-zoom, 1));
+}
+.ofv-msdoc-training-work-table td:last-child { width: 66%; }
+.ofv-msdoc-training-work-table .ofv-msdoc-training-image { height: calc(115px * var(--ofv-office-zoom, 1)); }
+.ofv-msdoc-training-work { break-inside: avoid; }
+
+.ofv-msdoc-training-quality td:first-child { width: 18%; text-align: center; }
+.ofv-msdoc-training-quality td:nth-child(2) { width: 55%; }
+.ofv-msdoc-training-quality td:nth-child(3) { width: 27%; text-align: center; }
+.ofv-msdoc-training-quality tr:last-child td { height: calc(105px * var(--ofv-office-zoom, 1)); }
+
+.ofv-msdoc-training-reflection {
+  margin: calc(20px * var(--ofv-office-zoom, 1));
+  padding: calc(12px * var(--ofv-office-zoom, 1));
+  border: 1px solid #111;
+  white-space: pre-line;
+}
+
+.ofv-msdoc-training-score {
+  margin-top: calc(18px * var(--ofv-office-zoom, 1));
+}
+.ofv-msdoc-training-score tr:first-child td {
+  background: #a6e600;
+  font-family: SimHei, "Microsoft YaHei", sans-serif;
+  font-size: calc(12pt * var(--ofv-office-zoom, 1));
+  font-weight: 700;
+  text-align: center;
+}
+.ofv-msdoc-training-score td:first-child { width: 20%; text-align: center; }
+.ofv-msdoc-training-score td:nth-child(2) { width: 58%; }
+.ofv-msdoc-training-score td:nth-child(3),
+.ofv-msdoc-training-score td:nth-child(4) { width: 11%; text-align: center; }
+
+.ofv-msdoc-training-footer {
+  position: absolute !important;
+  right: 0;
+  bottom: calc(54px * var(--ofv-office-zoom, 1));
+  left: 0;
+  color: #9ca3af;
+  font-size: calc(8px * var(--ofv-office-zoom, 1));
+  text-align: center;
 }
 
 .ofv-msdoc-meta,
