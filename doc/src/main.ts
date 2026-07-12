@@ -54,6 +54,7 @@ const translations: Record<Language, Record<string, string>> = {
     "nav.api": "API",
     "nav.playground": "在线使用",
     "nav.about": "关于我们",
+    "nav.primaryAria": "主导航",
     "hero.badge": "开源文件预览 SDK",
     "hero.title": "面向现代 Web 的文件预览基础设施",
     "hero.lede":
@@ -62,6 +63,8 @@ const translations: Record<Language, Record<string, string>> = {
     "hero.secondary": "在线体验",
     "hero.tertiary": "查看格式",
     "hero.works": "原生 JS、Vue、React、Svelte 全兼容",
+    "hero.frameworksAria": "支持的框架",
+    "showcase.productAria": "产品预览",
     "ways.eyebrow": "两种集成方式",
     "ways.title": "直接嵌入默认预览器，或基于插件构建自己的文件工作台。",
     "ways.dropin.label": "即插即用",
@@ -79,6 +82,7 @@ const translations: Record<Language, Record<string, string>> = {
     "integration.eyebrow": "框架兼容",
     "integration.title": "Vanilla JS、React、Vue、Svelte 都能快速接入。",
     "integration.desc": "选择 Vanilla JS、React、Vue 或 Svelte。底层插件一致，UI 可以先用默认组件，再逐步定制。",
+    "integration.examplesAria": "框架示例",
     "playground.eyebrow": "在线体验",
     "playground.title": "拖入文件，即刻预览。",
     "playground.desc": "本地文件只在浏览器内读取，不会上传。你也可以用内置示例体验 Markdown、JSON、Office、SVG、DXF、3D、GDSII、OASIS 和 DWG。",
@@ -143,6 +147,7 @@ const translations: Record<Language, Record<string, string>> = {
     "nav.api": "API",
     "nav.playground": "Live Demo",
     "nav.about": "About",
+    "nav.primaryAria": "Primary navigation",
     "hero.badge": "Open source file preview SDK",
     "hero.title": "Preview any file without the pain",
     "hero.lede":
@@ -151,6 +156,8 @@ const translations: Record<Language, Record<string, string>> = {
     "hero.secondary": "Live Demo",
     "hero.tertiary": "Formats",
     "hero.works": "Works seamlessly with",
+    "hero.frameworksAria": "Framework support",
+    "showcase.productAria": "Product preview",
     "ways.eyebrow": "Two ways to integrate",
     "ways.title": "Use the ready-made viewer, or build your own.",
     "ways.dropin.label": "Drop-in",
@@ -168,6 +175,7 @@ const translations: Record<Language, Record<string, string>> = {
     "integration.eyebrow": "Drop-in Integration",
     "integration.title": "Add a viewer in minutes.",
     "integration.desc": "Pick Vanilla JS, React, Vue or Svelte. The plugin capability stays consistent, while the UI can start default and evolve later.",
+    "integration.examplesAria": "Framework examples",
     "playground.eyebrow": "Try it live",
     "playground.title": "Drop files and preview them instantly.",
     "playground.desc": "Local files stay in your browser and are not uploaded. Built-in samples cover Markdown, JSON, Office, SVG, DXF, 3D, GDSII, OASIS and DWG.",
@@ -1637,18 +1645,30 @@ function applyLanguage(nextLanguage: Language) {
   const languageChanged = language !== nextLanguage;
   language = nextLanguage;
   document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
+  document.title =
+    language === "zh"
+      ? "Open File Viewer - JavaScript、React、Vue 和 Svelte 文件预览 SDK"
+      : "Open File Viewer - File Preview SDK for JS, React, Vue and Svelte";
   for (const element of document.querySelectorAll<HTMLElement>("[data-i18n]")) {
     const key = element.dataset.i18n;
     if (key && translations[language][key]) {
       element.textContent = translations[language][key];
     }
   }
+  for (const element of document.querySelectorAll<HTMLElement>("[data-i18n-aria-label]")) {
+    const key = element.dataset.i18nAriaLabel;
+    if (key && translations[language][key]) {
+      element.setAttribute("aria-label", translations[language][key]);
+    }
+  }
   languageToggle.textContent = language === "zh" ? "EN" : "ZH";
+  languageToggle.setAttribute("aria-label", language === "zh" ? "切换到英文" : "Switch to Chinese");
   writeStorage("ofv-language", language);
   populateSamples();
   populateFormats();
   updateFilePickerLabel();
   setCodeSample(activeCodeTab);
+  applySiteTheme(siteTheme);
   if (languageChanged && viewer) {
     renderViewer();
   }
@@ -1658,7 +1678,16 @@ function applySiteTheme(nextTheme: SiteTheme) {
   siteTheme = nextTheme;
   document.documentElement.dataset.siteTheme = siteTheme;
   themeToggle.innerHTML = iconSvg(siteTheme === "dark" ? "icon-sun" : "icon-moon");
-  themeToggle.setAttribute("aria-label", siteTheme === "dark" ? "Switch to light mode" : "Switch to dark mode");
+  themeToggle.setAttribute(
+    "aria-label",
+    language === "zh"
+      ? siteTheme === "dark"
+        ? "切换到浅色模式"
+        : "切换到深色模式"
+      : siteTheme === "dark"
+        ? "Switch to light mode"
+        : "Switch to dark mode"
+  );
   writeStorage("ofv-site-theme", siteTheme);
 }
 
@@ -1934,7 +1963,6 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-code-ta
   });
 }
 
-applySiteTheme(siteTheme);
 applyLanguage(language);
 highlightStaticCodeBlocks();
 syncNavigationState();

@@ -21,6 +21,10 @@ const zhTranslations: Record<string, string> = {
   "action.liveDemo": "在线体验",
   contents: "目录",
   "footer.text": "面向现代 Web 产品的文件预览 SDK。",
+  "aria.primaryNav": "主导航",
+  "aria.apiSections": "API 章节",
+  "aria.aboutSections": "关于我们章节",
+  "aria.communityQr": "社区与打赏二维码",
   "api.pageTitle": "API 参考 - Open File Viewer",
   "api.hero.title": "Open File Viewer 接入与 API 指南",
   "api.hero.eyebrow": "API 文档",
@@ -198,6 +202,12 @@ const englishContent = new Map(
 const englishAlt = new Map(
   Array.from(document.querySelectorAll<HTMLElement>("[data-i18n-alt]")).map((element) => [element, element.getAttribute("alt") || ""])
 );
+const englishAria = new Map(
+  Array.from(document.querySelectorAll<HTMLElement>("[data-i18n-aria-label]")).map((element) => [
+    element,
+    element.getAttribute("aria-label") || ""
+  ])
+);
 const englishTitle = document.title;
 const pageTitleKey = document.body.classList.contains("about-doc-page") ? "about.pageTitle" : "api.pageTitle";
 let language: Language = readStorage("ofv-language") === "zh" ? "zh" : "en";
@@ -260,6 +270,10 @@ function applyLanguage(nextLanguage: Language) {
   for (const [element, alt] of englishAlt) {
     const key = element.dataset.i18nAlt;
     element.setAttribute("alt", language === "zh" && key && zhTranslations[key] ? zhTranslations[key] : alt);
+  }
+  for (const [element, ariaLabel] of englishAria) {
+    const key = element.dataset.i18nAriaLabel;
+    element.setAttribute("aria-label", language === "zh" && key && zhTranslations[key] ? zhTranslations[key] : ariaLabel);
   }
 
   languageToggle.textContent = language === "zh" ? "EN" : "ZH";
