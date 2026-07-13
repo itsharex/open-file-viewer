@@ -578,6 +578,61 @@ describe("createViewer", () => {
     viewer.destroy();
   });
 
+  it("ignores hidden preview text when searching", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    const plugin: PreviewPlugin = {
+      name: "hidden-search",
+      match: () => true,
+      render(ctx) {
+        const visible = document.createElement("p");
+        visible.className = "visible-source";
+        visible.textContent = "visible needle";
+
+        const hidden = document.createElement("section");
+        hidden.className = "hidden-source";
+        hidden.hidden = true;
+        hidden.setAttribute("aria-hidden", "true");
+        hidden.style.display = "none";
+        const hiddenText = document.createElement("span");
+        hiddenText.textContent = "hidden needle";
+        hidden.append(hiddenText);
+
+        ctx.viewport.append(visible, hidden);
+        return { destroy: vi.fn() };
+      }
+    };
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["hello"], { type: "text/plain" }),
+      fileName: "hello.txt",
+      toolbar: true,
+      plugins: [plugin]
+    });
+
+    await waitFor(() => container.textContent?.includes("visible needle") === true);
+
+    const searchInput = container.querySelector<HTMLInputElement>('input[aria-label="Search preview text"]');
+    expect(searchInput).not.toBeNull();
+    searchInput!.value = "needle";
+    searchInput!.dispatchEvent(new InputEvent("input", { bubbles: true }));
+
+    expect(container.querySelector(".ofv-toolbar-search-count")?.textContent).toBe("1");
+    expect(container.querySelectorAll("mark.ofv-search-match")).toHaveLength(1);
+    expect(container.querySelector(".visible-source mark.ofv-search-match")?.textContent).toBe("needle");
+    expect(container.querySelector(".hidden-source mark.ofv-search-match")).toBeNull();
+
+    searchInput!.value = "hidden";
+    searchInput!.dispatchEvent(new InputEvent("input", { bubbles: true }));
+
+    expect(container.querySelector(".ofv-toolbar-search-count")?.textContent).toBe("0");
+    expect(container.querySelectorAll("mark.ofv-search-match")).toHaveLength(0);
+
+    viewer.destroy();
+  });
+
   it("resets command support and zoom state when navigating between different preview types", async () => {
     const container = document.createElement("div");
     document.body.append(container);

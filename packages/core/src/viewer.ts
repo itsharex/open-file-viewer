@@ -1036,6 +1036,9 @@ function collectSearchableTextNodes(root: HTMLElement): Text[] {
       if (["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "BUTTON"].includes(parent.tagName)) {
         return NodeFilter.FILTER_REJECT;
       }
+      if (hasHiddenSearchAncestor(parent, root)) {
+        return NodeFilter.FILTER_REJECT;
+      }
       return NodeFilter.FILTER_ACCEPT;
     }
   });
@@ -1046,6 +1049,25 @@ function collectSearchableTextNodes(root: HTMLElement): Text[] {
     current = walker.nextNode();
   }
   return nodes;
+}
+
+function hasHiddenSearchAncestor(element: HTMLElement, root: HTMLElement): boolean {
+  let current: HTMLElement | null = element;
+  while (current) {
+    if (
+      current.hidden ||
+      current.getAttribute("aria-hidden") === "true" ||
+      current.style.display === "none" ||
+      current.style.visibility === "hidden"
+    ) {
+      return true;
+    }
+    if (current === root) {
+      break;
+    }
+    current = current.parentElement;
+  }
+  return false;
 }
 
 function printPreview(viewport: HTMLElement): void {
