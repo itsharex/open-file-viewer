@@ -21,9 +21,10 @@ export function createViewer(options: PreviewOptions): FileViewer {
   const container = resolveContainer(options.container);
   applyBoxSize(container, options.width, options.height);
 
+  const customClassNames = parseClassNameTokens(options.className);
   container.classList.add("ofv-root");
-  if (options.className) {
-    container.classList.add(options.className);
+  if (customClassNames.length > 0) {
+    container.classList.add(...customClassNames);
   }
   const theme = applyTheme(container, options.theme || "light");
 
@@ -186,11 +187,15 @@ export function createViewer(options: PreviewOptions): FileViewer {
       theme.destroy();
       container.replaceChildren();
       container.classList.remove("ofv-root");
-      if (options.className) {
-        container.classList.remove(options.className);
+      if (customClassNames.length > 0) {
+        container.classList.remove(...customClassNames);
       }
     }
   };
+}
+
+function parseClassNameTokens(className: string | undefined): string[] {
+  return className?.trim().split(/\s+/).filter(Boolean) ?? [];
 }
 
 function destroyPreviewInstance(instance: PreviewInstance | undefined): void {

@@ -46,6 +46,37 @@ describe("createViewer", () => {
     expect(container.childElementCount).toBe(0);
   });
 
+  it("supports multiple className tokens on the viewer container", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["hello"], { type: "text/plain" }),
+      fileName: "hello.txt",
+      className: "viewer-shell viewer-wide",
+      plugins: [
+        {
+          name: "test",
+          match: (file) => file.extension === "txt",
+          render(ctx) {
+            ctx.viewport.textContent = ctx.file.name;
+            return { destroy: vi.fn() };
+          }
+        }
+      ]
+    });
+
+    expect(container.classList.contains("viewer-shell")).toBe(true);
+    expect(container.classList.contains("viewer-wide")).toBe(true);
+    expect(container.classList.contains("ofv-root")).toBe(true);
+
+    viewer.destroy();
+    expect(container.classList.contains("viewer-shell")).toBe(false);
+    expect(container.classList.contains("viewer-wide")).toBe(false);
+    expect(container.classList.contains("ofv-root")).toBe(false);
+  });
+
   it("disables toolbar commands unsupported by the active preview", async () => {
     const container = document.createElement("div");
     document.body.append(container);
