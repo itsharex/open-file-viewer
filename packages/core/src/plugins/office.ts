@@ -3392,9 +3392,15 @@ function pptxRenderTimeoutMs(): number {
 function normalizePptxLayout(container: HTMLElement): void {
   const slideCanvases = findPptxSlideCanvases(container);
   for (const slide of slideCanvases) {
-    slide.style.backgroundColor = "#FFFFFF";
+    if (!hasInlineBackground(slide)) {
+      slide.style.backgroundColor = "#FFFFFF";
+    }
   }
   normalizePptxMirroredText(container);
+}
+
+function hasInlineBackground(element: HTMLElement): boolean {
+  return Boolean(element.style.background || element.style.backgroundColor || element.style.backgroundImage);
 }
 
 function normalizePptxMirroredText(container: HTMLElement): void {
