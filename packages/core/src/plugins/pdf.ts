@@ -127,7 +127,6 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
 
   const showDocumentFallback = (error: unknown) => {
     viewer.remove();
-    options.viewport.classList.add("ofv-center");
     const fileLike = {
       source: options.fileUrl,
       name: options.fileName,
@@ -143,6 +142,9 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
           action: options.encryptedAction || "下载 PDF"
         })
       : createPdfFallback(options.fileName, options.fileUrl, normalizePdfError(error), options.fallbackTitle);
+    if (!fallback.classList.contains("ofv-pdf-web-fallback")) {
+      options.viewport.classList.add("ofv-center");
+    }
     options.viewport.append(fallback);
   };
 
@@ -630,6 +632,10 @@ function createPageStatus(className: string, text: string): HTMLDivElement {
 }
 
 function createPdfFallback(fileName: string, url: string, message: string, titleText = "PDF 预览失败"): HTMLElement {
+  if (isEmbeddableRemoteUrl(url)) {
+    return createPdfWebFallback(fileName, url);
+  }
+
   const fallback = document.createElement("div");
   fallback.className = "ofv-fallback";
 
@@ -646,6 +652,25 @@ function createPdfFallback(fileName: string, url: string, message: string, title
 
   fallback.append(title, meta, download);
   return fallback;
+}
+
+function createPdfWebFallback(fileName: string, url: string): HTMLElement {
+  const fallback = document.createElement("div");
+  fallback.className = "ofv-pdf-web-fallback";
+
+  const iframe = document.createElement("iframe");
+  iframe.className = "ofv-pdf-web-fallback-frame";
+  iframe.src = url;
+  iframe.title = `${fileName} HTML preview`;
+  iframe.referrerPolicy = "no-referrer";
+  iframe.setAttribute("sandbox", "allow-forms allow-popups allow-presentation allow-same-origin");
+
+  fallback.append(iframe);
+  return fallback;
+}
+
+function isEmbeddableRemoteUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
 }
 
 function normalizePdfError(error: unknown): string {

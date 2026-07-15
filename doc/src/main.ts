@@ -16,7 +16,9 @@ import {
   textPlugin,
   videoPlugin,
   type FileViewer,
+  type PreviewItem,
   type PreviewFit,
+  type PreviewSource,
   type PreviewTheme,
   xpsPlugin
 } from "@open-file-viewer/core";
@@ -1517,7 +1519,7 @@ const tabletViewerHeight = "min(560px, 62vh)";
 const phoneViewerHeight = "min(520px, 60vh)";
 
 let viewer: FileViewer | null = null;
-let currentFiles: Array<File | Blob | string> = [demoFiles[0].file];
+let currentFiles: Array<PreviewSource | PreviewItem> = [demoFiles[0].file];
 let currentFileName: string | undefined;
 let language: Language = readStorage("ofv-language") === "zh" ? "zh" : "en";
 let siteTheme: SiteTheme = readStorage("ofv-site-theme") === "dark" ? "dark" : "light";
@@ -1529,7 +1531,7 @@ function createPlugins() {
     imagePlugin(),
     videoPlugin(),
     audioPlugin(),
-    pdfPlugin({ workerSrc: pdfWorkerSrc }),
+    pdfPlugin({ workerSrc: pdfWorkerSrc, useFetchData: true }),
     epubPlugin(),
     xpsPlugin(),
     officePlugin(),
@@ -1546,13 +1548,14 @@ function createPlugins() {
 }
 
 function renderViewer() {
-  const firstFile = currentFiles[0];
+  const firstItem = currentFiles[0];
+  const firstFile = getPreviewSource(firstItem);
   viewer?.destroy();
   viewer = createViewer({
     container,
     file: firstFile,
     files: currentFiles,
-    fileName: firstFile instanceof File ? firstFile.name : currentFileName || inferFileNameFromSource(firstFile),
+    fileName: firstFile instanceof File ? firstFile.name : getPreviewFileName(firstItem),
     width: widthInput.value,
     height: heightInput.value,
     fit: fitInput.value as PreviewFit,
@@ -1595,11 +1598,25 @@ function renderViewer() {
   });
 }
 
-function inferFileNameFromSource(source: File | Blob | string): string {
+function isPreviewQueueItem(item: PreviewSource | PreviewItem): item is PreviewItem {
+  return typeof item === "object" && item !== null && "file" in item;
+}
+
+function getPreviewSource(item: PreviewSource | PreviewItem): PreviewSource {
+  return isPreviewQueueItem(item) ? item.file : item;
+}
+
+function getPreviewFileName(item: PreviewSource | PreviewItem): string {
+  return isPreviewQueueItem(item) && item.fileName
+    ? item.fileName
+    : currentFileName || inferFileNameFromSource(getPreviewSource(item));
+}
+
+function inferFileNameFromSource(source: PreviewSource): string {
   if (source instanceof File) {
     return source.name;
   }
-  if (typeof source !== "string") {
+  if (source instanceof Blob || source instanceof ArrayBuffer || typeof source !== "string") {
     return "preview.bin";
   }
   try {
@@ -1611,6 +1628,74 @@ function inferFileNameFromSource(source: File | Blob | string): string {
     const name = source.split(/[?#]/, 1)[0]?.split("/").filter(Boolean).pop();
     return name || "remote-file";
   }
+}
+
+interface RemotePreviewSource {
+  url: string;
+  fileName: string;
+}
+
+async function resolveRemotePreviewSource(url: string): Promise<RemotePreviewSource> {
+  const fallback = { url, fileName: inferFileNameFromSource(url) };
+  const idocv = createIdocvDownloadSource(url);
+  if (!idocv) {
+    return fallback;
+  }
+
+  try {
+    const response = await fetch(idocv.metadataUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to resolve I Doc View source: ${response.status} ${response.statusText}`);
+    }
+    const data = (await response.json()) as { code?: number; uuid?: string; name?: string; desc?: string };
+    if (data.code !== 1 || !data.uuid) {
+      throw new Error(data.desc || "I Doc View did not return a downloadable source.");
+    }
+    const downloadUrl = new URL(`/doc/download/${encodeURIComponent(data.uuid)}`, idocv.origin);
+    for (const [key, value] of idocv.params) {
+      downloadUrl.searchParams.append(key, value);
+    }
+    return {
+      url: downloadUrl.href,
+      fileName: data.name || fallback.fileName
+    };
+  } catch (error) {
+    console.warn("Failed to resolve I Doc View preview URL, falling back to the original URL.", error);
+    return fallback;
+  }
+}
+
+function createIdocvDownloadSource(url: string): { metadataUrl: string; origin: string; params: URLSearchParams } | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url, window.location.href);
+  } catch {
+    return null;
+  }
+
+  if (!/(\.|^)idocv\.com$/i.test(parsed.hostname)) {
+    return null;
+  }
+
+  const parts = parsed.pathname.split("/").filter(Boolean);
+  if (parts[0] !== "view" || !parts[1]) {
+    return null;
+  }
+
+  const metadataUrl = new URL(`/view/${encodeURIComponent(parts[1])}.json`, parsed.origin);
+  metadataUrl.searchParams.set("start", "1");
+  metadataUrl.searchParams.set("size", parsed.searchParams.get("size") || "5");
+  for (const [key, value] of parsed.searchParams) {
+    if (key !== "start" && key !== "size") {
+      metadataUrl.searchParams.append(key, value);
+    }
+  }
+
+  return {
+    metadataUrl: metadataUrl.href,
+    origin: parsed.origin,
+    params: parsed.searchParams
+  };
 }
 
 function getResponsiveViewerHeight() {
@@ -1835,7 +1920,7 @@ function syncNavigationState(): void {
 }
 
 function updateFilePickerLabel(): void {
-  const files = currentFiles.filter((file): file is File => file instanceof File);
+  const files = currentFiles.map(getPreviewSource).filter((file): file is File => file instanceof File);
   if (!files.length) {
     filePickerName.textContent = currentFileName || translations[language]["playground.noFile"];
     return;
@@ -1917,17 +2002,23 @@ fileUrlInput.addEventListener("keydown", (event) => {
   }
 });
 
-function previewRemoteUrl() {
+async function previewRemoteUrl() {
   const url = fileUrlInput.value.trim();
   if (!url) {
     fileUrlInput.focus();
     return;
   }
-  currentFiles = [url];
-  currentFileName = inferFileNameFromSource(url);
-  fileInput.value = "";
-  updateFilePickerLabel();
-  renderViewer();
+  previewUrlButton.disabled = true;
+  try {
+    const source = await resolveRemotePreviewSource(url);
+    currentFiles = [{ file: source.url, fileName: source.fileName }];
+    currentFileName = source.fileName;
+    fileInput.value = "";
+    updateFilePickerLabel();
+    renderViewer();
+  } finally {
+    previewUrlButton.disabled = false;
+  }
 }
 
 heightInput.addEventListener("input", () => {

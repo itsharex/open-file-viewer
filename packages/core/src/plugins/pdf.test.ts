@@ -264,6 +264,36 @@ describe("pdfPlugin", () => {
 
     expect(container.textContent).toContain("PDF 预览失败");
     expect(container.querySelector<HTMLAnchorElement>(".ofv-fallback a")?.href).toBe("http://localhost:3000/missing.pdf");
+    expect(container.querySelector(".ofv-pdf-web-fallback-frame")).toBeNull();
+
+    viewer.destroy();
+  });
+
+  it("offers an HTML preview iframe when a remote PDF URL cannot be parsed", async () => {
+    const container = createSizedContainer();
+    const pdfjs = createPdfJsMock();
+    pdfjs.getDocument.mockImplementation(() => ({
+      promise: Promise.reject(new Error("Invalid PDF structure")),
+      destroy: vi.fn()
+    }));
+
+    const viewer = createViewer({
+      container,
+      file: "https://example.com/report.pdf",
+      fileName: "report.pdf",
+      mimeType: "application/pdf",
+      plugins: [pdfPlugin({ pdfjs })]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-pdf-web-fallback-frame")));
+
+    const iframe = container.querySelector<HTMLIFrameElement>(".ofv-pdf-web-fallback-frame");
+
+    expect(container.querySelector(".ofv-fallback")).toBeNull();
+    expect(container.textContent).not.toContain("PDF 预览失败");
+    expect(container.textContent).not.toContain("作为 HTML 预览");
+    expect(iframe?.src).toBe("https://example.com/report.pdf");
+    expect(iframe?.getAttribute("sandbox")).not.toContain("allow-scripts");
 
     viewer.destroy();
   });
