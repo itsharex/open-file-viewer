@@ -1184,7 +1184,7 @@ function smokeCases(): SmokeCase[] {
       fileName: "notes.txt",
       plugins: [textPlugin()],
       selector: ".ofv-code-container.is-wrapped",
-      text: "plain text"
+      text: "纯文本"
     },
     {
       name: "extensionless project file",

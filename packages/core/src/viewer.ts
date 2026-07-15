@@ -21,9 +21,10 @@ export function createViewer(options: PreviewOptions): FileViewer {
   const container = resolveContainer(options.container);
   applyBoxSize(container, options.width, options.height);
 
+  const customClassNames = parseClassNameTokens(options.className);
   container.classList.add("ofv-root");
-  if (options.className) {
-    container.classList.add(options.className);
+  if (customClassNames.length > 0) {
+    container.classList.add(...customClassNames);
   }
   const theme = applyTheme(container, options.theme || "light");
 
@@ -186,11 +187,15 @@ export function createViewer(options: PreviewOptions): FileViewer {
       theme.destroy();
       container.replaceChildren();
       container.classList.remove("ofv-root");
-      if (options.className) {
-        container.classList.remove(options.className);
+      if (customClassNames.length > 0) {
+        container.classList.remove(...customClassNames);
       }
     }
   };
+}
+
+function parseClassNameTokens(className: string | undefined): string[] {
+  return className?.trim().split(/\s+/).filter(Boolean) ?? [];
 }
 
 function destroyPreviewInstance(instance: PreviewInstance | undefined): void {
@@ -1036,6 +1041,9 @@ function collectSearchableTextNodes(root: HTMLElement): Text[] {
       if (["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "BUTTON"].includes(parent.tagName)) {
         return NodeFilter.FILTER_REJECT;
       }
+      if (hasHiddenSearchAncestor(parent, root)) {
+        return NodeFilter.FILTER_REJECT;
+      }
       return NodeFilter.FILTER_ACCEPT;
     }
   });
@@ -1046,6 +1054,25 @@ function collectSearchableTextNodes(root: HTMLElement): Text[] {
     current = walker.nextNode();
   }
   return nodes;
+}
+
+function hasHiddenSearchAncestor(element: HTMLElement, root: HTMLElement): boolean {
+  let current: HTMLElement | null = element;
+  while (current) {
+    if (
+      current.hidden ||
+      current.getAttribute("aria-hidden") === "true" ||
+      current.style.display === "none" ||
+      current.style.visibility === "hidden"
+    ) {
+      return true;
+    }
+    if (current === root) {
+      break;
+    }
+    current = current.parentElement;
+  }
+  return false;
 }
 
 function printPreview(viewport: HTMLElement): void {

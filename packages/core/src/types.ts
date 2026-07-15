@@ -134,6 +134,39 @@ export interface PreviewMessages {
   source: string;
   remoteUrl: string;
   localFile: string;
+  textPlainLanguage: string;
+  textLineCount: string;
+  textWrap: string;
+  textCopy: string;
+  textCopied: string;
+  textCopyFailed: string;
+  textDownload: string;
+  textDownloadReady: string;
+  textLargeFileNotice: string;
+  textHighlightSkipped: string;
+  textPreviewFailedTitle: string;
+  textPreviewFailedMessage: string;
+  textOpenOriginal: string;
+  officeLegacyConversionTitle: string;
+  officeLegacyBinaryNotice: string;
+  officeLegacyMetaFormatType: string;
+  officeLegacyMetaFileStructure: string;
+  officeLegacyOleDetected: string;
+  officeLegacyOleMissing: string;
+  officeLegacyMetaTextFragments: string;
+  officeLegacyTextFragmentCount: string;
+  officeLegacyMetaParseStatus: string;
+  officeLegacyReadableFragments: string;
+  officeLegacyNoText: string;
+  officeLegacyWordParseFailed: string;
+  officeSheetParseFailed: string;
+  officeUnsupportedTitle: string;
+  officeUnsupportedLegacyMessage: string;
+  officeUnsupportedGenericMessage: string;
+  officeUnsupportedIntro: string;
+  officeUnsupportedSupportedFormats: string;
+  officeErrorWithMessage: string;
+  officeErrorWithoutMessage: string;
 }
 
 export interface PreviewContext {

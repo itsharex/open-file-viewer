@@ -1,6 +1,7 @@
 /// <reference path="../shims-text.d.ts" />
 import { isTextLike } from "../detect";
-import type { PreviewCommand, PreviewContext, PreviewPlugin } from "../types";
+import { formatPreviewMessage } from "../messages";
+import type { PreviewCommand, PreviewContext, PreviewMessages, PreviewPlugin } from "../types";
 import { decodeTextBuffer, getInitialZoom } from "./utils";
 
 const langMap: Record<string, string> = {
@@ -174,7 +175,7 @@ export function textPlugin(): PreviewPlugin {
       const isMarkdown = lang === "markdown";
       const text = await readText(ctx.file.source).catch((error: unknown) => undefined);
       if (text === undefined) {
-        const fallback = createTextFallback(ctx.file.name, ctx.file.url);
+        const fallback = createTextFallback(ctx.file.name, ctx.options.messages, ctx.file.url);
         ctx.viewport.classList.add("ofv-center");
         ctx.viewport.append(fallback);
         return {
@@ -362,10 +363,11 @@ export function textPlugin(): PreviewPlugin {
       title.className = "ofv-code-title";
       const fileName = document.createElement("strong");
       fileName.textContent = ctx.file.name;
+      const messages = ctx.options.messages;
       const meta = document.createElement("span");
       meta.textContent = [
-        lang === "none" ? "plain text" : lang,
-        `${totalLines.toLocaleString()} lines`,
+        lang === "none" ? messages.textPlainLanguage : lang,
+        formatPreviewMessage(messages.textLineCount, { count: totalLines.toLocaleString() }),
         formatBytes(ctx.file.size ?? (ctx.file.source instanceof Blob ? ctx.file.source.size : text.length))
       ].join(" · ");
       title.append(fileName, meta);
@@ -380,7 +382,7 @@ export function textPlugin(): PreviewPlugin {
       const wrapButton = document.createElement("button");
       wrapButton.type = "button";
       wrapButton.className = "ofv-code-action";
-      wrapButton.textContent = "Wrap";
+      wrapButton.textContent = messages.textWrap;
       wrapButton.setAttribute("aria-pressed", String(defaultWrapped));
       wrapButton.addEventListener("click", () => {
         const wrapped = wrapper.classList.toggle("is-wrapped");
@@ -390,14 +392,14 @@ export function textPlugin(): PreviewPlugin {
       const copyButton = document.createElement("button");
       copyButton.type = "button";
       copyButton.className = "ofv-code-action";
-      copyButton.textContent = "Copy";
+      copyButton.textContent = messages.textCopy;
       copyButton.addEventListener("click", async () => {
         copyButton.disabled = true;
         try {
           await copyToClipboard(text);
-          status.textContent = "Copied";
+          status.textContent = messages.textCopied;
         } catch {
-          status.textContent = "Copy failed";
+          status.textContent = messages.textCopyFailed;
         } finally {
           copyButton.disabled = false;
         }
@@ -406,10 +408,10 @@ export function textPlugin(): PreviewPlugin {
       const downloadButton = document.createElement("button");
       downloadButton.type = "button";
       downloadButton.className = "ofv-code-action";
-      downloadButton.textContent = "Download";
+      downloadButton.textContent = messages.textDownload;
       downloadButton.addEventListener("click", () => {
         downloadText(ctx.file.name, text);
-        status.textContent = "Download ready";
+        status.textContent = messages.textDownloadReady;
       });
 
       actions.append(wrapButton, copyButton, downloadButton, status);
@@ -440,13 +442,13 @@ export function textPlugin(): PreviewPlugin {
       if (truncated) {
         const notice = document.createElement("div");
         notice.className = "ofv-code-notice";
-        notice.textContent = `文件较大，当前展示前 ${formatBytes(codeText.length)}，复制和下载仍会使用完整内容。`;
+        notice.textContent = formatPreviewMessage(messages.textLargeFileNotice, { size: formatBytes(codeText.length) });
         wrapper.append(notice);
       }
       if (!shouldHighlight) {
         const notice = document.createElement("div");
         notice.className = "ofv-code-notice";
-        notice.textContent = "内容较大，已跳过语法高亮以保持滚动流畅。";
+        notice.textContent = messages.textHighlightSkipped;
         wrapper.append(notice);
       }
       wrapper.appendChild(body);
@@ -529,22 +531,22 @@ function normalizeFileName(name: string): string {
   return baseName.toLowerCase();
 }
 
-function createTextFallback(fileName: string, url?: string): HTMLElement {
+function createTextFallback(fileName: string, messages: PreviewMessages, url?: string): HTMLElement {
   const fallback = document.createElement("div");
   fallback.className = "ofv-fallback";
 
   const title = document.createElement("strong");
-  title.textContent = "文本预览失败";
+  title.textContent = messages.textPreviewFailedTitle;
 
   const meta = document.createElement("span");
-  meta.textContent = "无法读取该文本内容，可能是远程文件不可访问或响应状态异常。";
+  meta.textContent = messages.textPreviewFailedMessage;
 
   fallback.append(title, meta);
   if (url) {
     const download = document.createElement("a");
     download.href = url;
     download.download = fileName;
-    download.textContent = "打开原文件";
+    download.textContent = messages.textOpenOriginal;
     fallback.append(download);
   }
   return fallback;

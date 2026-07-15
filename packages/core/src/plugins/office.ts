@@ -1,7 +1,8 @@
 import JSZip from "jszip";
 import DOMPurify from "dompurify";
 import type { WorkBook } from "xlsx";
-import type { PreviewCommand, PreviewContext, PreviewFit, PreviewInstance, PreviewPlugin } from "../types";
+import { formatPreviewMessage } from "../messages";
+import type { PreviewCommand, PreviewContext, PreviewFit, PreviewInstance, PreviewMessages, PreviewPlugin } from "../types";
 import { createPanel, createSection, decodeTextBuffer, getInitialZoom, readArrayBuffer, resolveFormat } from "./utils";
 import { renderPdfDocumentPreview, type PdfPluginOptions } from "./pdf";
 import { parseLegacyWordDocument, renderLegacyWordDocument } from "./msdoc";
@@ -169,7 +170,7 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
       } else if (packageFormat === "docx" && !fileIsDocx(extension)) {
         disposeDocxFit = await renderDocx(panel, arrayBuffer, ctx.options.fit);
       } else if (packageFormat === "xlsx" && !sheetExtensions.has(extension)) {
-        await renderSheet(panel, arrayBuffer, "xlsx");
+        await renderSheet(panel, arrayBuffer, "xlsx", ctx.options.messages);
       } else if (packageFormat === "pptx" && !["pptx", "pptm", "ppsx", "ppsm", "potx", "potm"].includes(extension)) {
         await renderPptx(panel, arrayBuffer);
       } else if (fileIsDocx(extension)) {
@@ -182,10 +183,13 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
         renderOpenDocumentXml(panel, "FODT 文档", await readTextFromBuffer(arrayBuffer));
       } else if (extension === "fods") {
         renderFlatOds(panel, await readTextFromBuffer(arrayBuffer));
-      } else if (packagedOfficeCandidates.has(extension) && (await renderPackagedOfficePreview(panel, arrayBuffer, extension, ctx.options.fit))) {
+      } else if (
+        packagedOfficeCandidates.has(extension) &&
+        (await renderPackagedOfficePreview(panel, arrayBuffer, extension, ctx.options.fit, ctx.options.messages))
+      ) {
         // Rendered by package sniffing.
       } else if (sheetExtensions.has(extension)) {
-        await renderSheet(panel, arrayBuffer, extension);
+        await renderSheet(panel, arrayBuffer, extension, ctx.options.messages);
       } else if (["pptx", "pptm", "ppsx", "ppsm", "potx", "potm"].includes(extension)) {
         await renderPptx(panel, arrayBuffer);
       } else if (extension === "odp") {
@@ -193,11 +197,11 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
       } else if (extension === "fodp") {
         renderOpenDocumentPresentationXml(panel, await readTextFromBuffer(arrayBuffer));
       } else if (extension === "doc" || extension === "dot") {
-        renderLegacyWordBinary(panel, extension, arrayBuffer);
+        renderLegacyWordBinary(panel, extension, arrayBuffer, ctx.options.messages);
       } else if (isLegacyOfficeBinary(extension)) {
-        renderLegacyOfficeBinary(panel, extension, arrayBuffer);
+        renderLegacyOfficeBinary(panel, extension, arrayBuffer, ctx.options.messages);
       } else {
-        renderUnsupportedOffice(panel, extension || ctx.file.extension || "office");
+        renderUnsupportedOffice(panel, extension || ctx.file.extension || "office", ctx.options.messages);
       }
 
       const controller = createOfficeZoomController(panel, ctx);
@@ -1837,7 +1841,8 @@ function renderPlainDocument(panel: HTMLElement, title: string, text: string): v
 async function renderSheet(
   panel: HTMLElement,
   arrayBuffer: ArrayBuffer,
-  extension: string
+  extension: string,
+  messages: PreviewMessages
 ): Promise<void> {
   const xlsx = await import("xlsx");
   let workbook: WorkBook;
@@ -1854,10 +1859,16 @@ async function renderSheet(
         : (xlsx.read(arrayBuffer, { type: "array", cellDates: true, cellNF: true, cellStyles: true }) as WorkBook);
   } catch (error) {
     if (isLegacyOfficeBinary(extension)) {
-      renderLegacyOfficeBinary(panel, extension, arrayBuffer, `表格解析失败：${normalizeOfficeError(error)}`);
+      renderLegacyOfficeBinary(
+        panel,
+        extension,
+        arrayBuffer,
+        messages,
+        formatPreviewMessage(messages.officeSheetParseFailed, { message: normalizeOfficeError(error, messages) })
+      );
       return;
     }
-    renderSheetFallback(panel, extension, normalizeOfficeError(error));
+    renderSheetFallback(panel, extension, normalizeOfficeError(error, messages));
     return;
   }
   const chartPreviews = await readWorkbookCharts(arrayBuffer).catch(() => []);
@@ -3509,7 +3520,8 @@ async function renderPackagedOfficePreview(
   panel: HTMLElement,
   arrayBuffer: ArrayBuffer,
   extension: string,
-  fit: PreviewFit
+  fit: PreviewFit,
+  messages: PreviewMessages
 ): Promise<boolean> {
   let zip: JSZip;
   try {
@@ -3528,7 +3540,7 @@ async function renderPackagedOfficePreview(
   }
 
   if (hasEntry("xl/workbook.xml")) {
-    await renderSheet(panel, arrayBuffer, extension);
+    await renderSheet(panel, arrayBuffer, extension, messages);
     return true;
   }
 
@@ -4022,36 +4034,56 @@ function legacyOfficeFormatLabel(extension: string): string {
   return "PowerPoint Binary File Format";
 }
 
-function renderLegacyWordBinary(panel: HTMLElement, extension: string, arrayBuffer: ArrayBuffer): void {
+function renderLegacyWordBinary(
+  panel: HTMLElement,
+  extension: string,
+  arrayBuffer: ArrayBuffer,
+  messages: PreviewMessages
+): void {
   try {
     renderLegacyWordDocument(panel, parseLegacyWordDocument(arrayBuffer));
   } catch (error) {
-    renderLegacyOfficeBinary(panel, extension, arrayBuffer, `Word 二进制解析失败：${normalizeOfficeError(error)}`);
+    renderLegacyOfficeBinary(
+      panel,
+      extension,
+      arrayBuffer,
+      messages,
+      formatPreviewMessage(messages.officeLegacyWordParseFailed, { message: normalizeOfficeError(error, messages) })
+    );
   }
 }
 
-function renderLegacyOfficeBinary(panel: HTMLElement, extension: string, arrayBuffer: ArrayBuffer, parseError?: string): void {
+function renderLegacyOfficeBinary(
+  panel: HTMLElement,
+  extension: string,
+  arrayBuffer: ArrayBuffer,
+  messages: PreviewMessages,
+  parseError?: string
+): void {
   const fragments = extractLegacyOfficeText(arrayBuffer);
   panel.replaceChildren();
-  const section = createSection("Office 转换提示");
+  const section = createSection(messages.officeLegacyConversionTitle);
   section.classList.add("ofv-office-conversion");
   const format = document.createElement("p");
   const strong = document.createElement("strong");
   strong.textContent = `.${extension}`;
-  format.append(
-    strong,
-    document.createTextNode(
-      " 属于旧版 Microsoft Office 二进制格式，浏览器内无法高保真解析；当前仅展示可信文本片段和结构指纹，完整排版建议接入 LibreOffice/OnlyOffice 服务端转换为 PDF/HTML。"
-    )
-  );
+  format.append(strong, document.createTextNode(" "), document.createTextNode(messages.officeLegacyBinaryNotice));
 
   const meta = document.createElement("dl");
   meta.className = "ofv-office-binary-meta";
-  appendOfficeBinaryMeta(meta, "格式类型", legacyOfficeFormatLabel(extension));
-  appendOfficeBinaryMeta(meta, "文件结构", hasOleSignature(arrayBuffer) ? "检测到 OLE Compound File 签名" : "未检测到标准 OLE 签名，按原始二进制尝试提取");
-  appendOfficeBinaryMeta(meta, "文本片段", `${fragments.length} 段`);
+  appendOfficeBinaryMeta(meta, messages.officeLegacyMetaFormatType, legacyOfficeFormatLabel(extension));
+  appendOfficeBinaryMeta(
+    meta,
+    messages.officeLegacyMetaFileStructure,
+    hasOleSignature(arrayBuffer) ? messages.officeLegacyOleDetected : messages.officeLegacyOleMissing
+  );
+  appendOfficeBinaryMeta(
+    meta,
+    messages.officeLegacyMetaTextFragments,
+    formatPreviewMessage(messages.officeLegacyTextFragmentCount, { count: fragments.length.toLocaleString() })
+  );
   if (parseError) {
-    appendOfficeBinaryMeta(meta, "解析状态", parseError);
+    appendOfficeBinaryMeta(meta, messages.officeLegacyMetaParseStatus, parseError);
   }
 
   section.append(format, meta);
@@ -4060,7 +4092,7 @@ function renderLegacyOfficeBinary(panel: HTMLElement, extension: string, arrayBu
     const article = document.createElement("article");
     article.className = "ofv-document ofv-office-binary-fragments";
     const heading = document.createElement("h4");
-    heading.textContent = "可读文本片段";
+    heading.textContent = messages.officeLegacyReadableFragments;
     article.append(heading);
     for (const fragment of fragments.slice(0, 80)) {
       const paragraph = document.createElement("p");
@@ -4071,7 +4103,7 @@ function renderLegacyOfficeBinary(panel: HTMLElement, extension: string, arrayBu
   } else {
     const empty = document.createElement("p");
     empty.className = "ofv-office-binary-empty";
-    empty.textContent = "未提取到稳定可读文本。该文件可能经过压缩、加密，或文本编码无法在浏览器端可靠识别；请使用服务端 LibreOffice/OnlyOffice 转换后预览。";
+    empty.textContent = messages.officeLegacyNoText;
     section.append(empty);
   }
 
@@ -4086,28 +4118,34 @@ function appendOfficeBinaryMeta(list: HTMLDListElement, label: string, value: st
   list.append(term, detail);
 }
 
-function renderUnsupportedOffice(panel: HTMLElement, extension: string): void {
+function renderUnsupportedOffice(panel: HTMLElement, extension: string, messages: PreviewMessages): void {
   const legacyBinary = new Set(["doc", "dot", "wps", "ppt", "pps", "key", "dps"]);
   const message = legacyBinary.has(extension)
-    ? "该格式属于老二进制或专有格式，浏览器内无法可靠解析；建议接入 LibreOffice/OnlyOffice 服务端转换为 PDF/HTML 后预览。"
-    : "该格式通常需要服务端转换或专用解析器才能高保真预览。";
+    ? messages.officeUnsupportedLegacyMessage
+    : messages.officeUnsupportedGenericMessage;
   panel.replaceChildren();
-  const section = createSection("Office 基础预览");
+  const section = createSection(messages.officeUnsupportedTitle);
   const format = document.createElement("p");
   const strong = document.createElement("strong");
   strong.textContent = `.${extension}`;
-  format.append(strong, document.createTextNode(` 已进入 Office 插件。${message}`));
+  format.append(
+    strong,
+    document.createTextNode(" "),
+    document.createTextNode(formatPreviewMessage(messages.officeUnsupportedIntro, { message }))
+  );
 
   const support = document.createElement("p");
-  support.textContent = "当前版本优先支持 docx、rtf、odt/fodt、xlsx/xls/csv/ods、pptx/ppsx、odp/fodp 的基础内容预览。";
+  support.textContent = messages.officeUnsupportedSupportedFormats;
 
   section.append(format, support);
   panel.append(section);
 }
 
-function normalizeOfficeError(error: unknown): string {
+function normalizeOfficeError(error: unknown, messages: PreviewMessages): string {
   const message = error instanceof Error ? error.message : String(error || "");
-  return message ? `解析器返回：${message}` : "解析器未返回具体错误信息。";
+  return message
+    ? formatPreviewMessage(messages.officeErrorWithMessage, { message })
+    : messages.officeErrorWithoutMessage;
 }
 
 function extractLegacyOfficeText(arrayBuffer: ArrayBuffer): string[] {
