@@ -375,6 +375,7 @@ function createToolbar(
   let previousButton: HTMLButtonElement | undefined;
   let nextButton: HTMLButtonElement | undefined;
   let zoomResetButton: HTMLButtonElement | undefined;
+  let fullscreenButton: HTMLButtonElement | undefined;
   let currentZoom: number | undefined;
   const commandButtons: Array<{ button: HTMLButtonElement; command: PreviewCommand }> = [];
   const customButtons: Array<{ button: HTMLButtonElement; action: PreviewToolbarCustomAction }> = [];
@@ -497,13 +498,14 @@ function createToolbar(
       return;
     }
     if (id === "fullscreen" && options.fullscreen !== false) {
-      addButton(
+      fullscreenButton = addButton(
         getToolbarLabel(options, id),
         getToolbarTitle(options, id),
         () => getContext().fullscreen(),
         undefined,
         options.icons?.fullscreen
       );
+      updateFullscreenButton();
       return;
     }
     if (id === "print" && options.print) {
@@ -618,6 +620,35 @@ function createToolbar(
     refreshCustomRender();
   }
 
+  function isFullscreenActive(): boolean {
+    return Boolean(
+      typeof document !== "undefined" && element.parentElement && document.fullscreenElement === element.parentElement
+    );
+  }
+
+  function updateFullscreenButton() {
+    if (!fullscreenButton) {
+      return;
+    }
+    const active = isFullscreenActive();
+    const id: PreviewToolbarBuiltInAction = active ? "exit-fullscreen" : "fullscreen";
+    const icon = active ? options.icons?.["exit-fullscreen"] ?? options.icons?.fullscreen : options.icons?.fullscreen;
+    setToolbarButtonContent(fullscreenButton, getToolbarLabel(options, id), icon);
+    const title = getToolbarTitle(options, id);
+    fullscreenButton.title = title;
+    fullscreenButton.setAttribute("aria-label", title);
+    fullscreenButton.setAttribute("aria-pressed", String(active));
+  }
+
+  const handleFullscreenChange = () => {
+    updateFullscreenButton();
+    refreshCustomRender();
+  };
+  if (typeof document !== "undefined") {
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    disposers.push(() => document.removeEventListener("fullscreenchange", handleFullscreenChange));
+  }
+
   const refreshCustomRender = () => {
     if (!options.render) {
       return;
@@ -709,6 +740,9 @@ function createToolbarContext({
     viewport,
     canPrevious: index > 0,
     canNext: index < length - 1,
+    isFullscreen: Boolean(
+      typeof document !== "undefined" && element.parentElement && document.fullscreenElement === element.parentElement
+    ),
     zoom,
     zoomLabel: zoom === undefined ? undefined : formatToolbarZoom(zoom),
     async previous() {
@@ -727,7 +761,15 @@ function createToolbarContext({
       }
     },
     fullscreen() {
-      void element.parentElement?.requestFullscreen?.();
+      const target = element.parentElement;
+      if (!target) {
+        return;
+      }
+      if (typeof document !== "undefined" && document.fullscreenElement === target) {
+        void document.exitFullscreen?.();
+      } else {
+        void target.requestFullscreen?.();
+      }
     },
     print() {
       printPreview(viewport);
@@ -747,6 +789,7 @@ const defaultToolbarLabels: Record<PreviewToolbarBuiltInAction, string> = {
   "rotate-right": "Rotate",
   download: "Download",
   fullscreen: "Fullscreen",
+  "exit-fullscreen": "Exit fullscreen",
   print: "Print",
   search: "Search"
 };
@@ -761,6 +804,7 @@ const defaultToolbarTitles: Record<PreviewToolbarBuiltInAction, string> = {
   "rotate-right": "Rotate right",
   download: "Download file",
   fullscreen: "Open preview fullscreen",
+  "exit-fullscreen": "Exit fullscreen",
   print: "Print preview",
   search: "Search preview text"
 };
