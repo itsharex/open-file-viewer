@@ -1142,6 +1142,209 @@ describe("createViewer", () => {
 
     viewer.destroy();
   });
+
+  it("toggles fullscreen from the toolbar and reflects the active state", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    let fullscreenElement: Element | null = null;
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreenElement
+    });
+    const exitFullscreen = vi.fn(() => {
+      fullscreenElement = null;
+      return Promise.resolve();
+    });
+    (document as unknown as { exitFullscreen: () => Promise<void> }).exitFullscreen = exitFullscreen;
+
+    try {
+      const viewer = createViewer({
+        container,
+        file: new Blob(["hello"], { type: "text/plain" }),
+        fileName: "hello.txt",
+        toolbar: true,
+        plugins: [
+          {
+            name: "fullscreen-text",
+            match: () => true,
+            render(ctx) {
+              ctx.viewport.textContent = ctx.file.name;
+              return { destroy: vi.fn() };
+            }
+          }
+        ]
+      });
+
+      await waitFor(() => container.textContent?.includes("hello.txt") === true);
+
+      const host = container.querySelector<HTMLElement>(".ofv-host")!;
+      const requestFullscreen = vi.fn(() => {
+        fullscreenElement = host;
+        return Promise.resolve();
+      });
+      host.requestFullscreen = requestFullscreen;
+
+      const button = container.querySelector<HTMLButtonElement>('button[aria-label="Open preview fullscreen"]');
+      expect(button).not.toBeNull();
+      expect(button?.textContent).toBe("Fullscreen");
+      expect(button?.getAttribute("aria-pressed")).toBe("false");
+
+      button?.click();
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+
+      document.dispatchEvent(new Event("fullscreenchange"));
+      await waitFor(() => button?.getAttribute("aria-label") === "Exit fullscreen");
+      expect(button?.textContent).toBe("Exit fullscreen");
+      expect(button?.getAttribute("aria-pressed")).toBe("true");
+
+      button?.click();
+      expect(exitFullscreen).toHaveBeenCalledTimes(1);
+
+      document.dispatchEvent(new Event("fullscreenchange"));
+      await waitFor(() => button?.getAttribute("aria-label") === "Open preview fullscreen");
+      expect(button?.textContent).toBe("Fullscreen");
+      expect(button?.getAttribute("aria-pressed")).toBe("false");
+
+      viewer.destroy();
+    } finally {
+      delete (document as unknown as { fullscreenElement?: unknown }).fullscreenElement;
+      delete (document as unknown as { exitFullscreen?: unknown }).exitFullscreen;
+    }
+  });
+
+  it("honors custom labels, titles, and icons for the exit-fullscreen state", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    let fullscreenElement: Element | null = null;
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreenElement
+    });
+
+    try {
+      const viewer = createViewer({
+        container,
+        file: new Blob(["hello"], { type: "text/plain" }),
+        fileName: "hello.txt",
+        toolbar: {
+          zoom: false,
+          rotate: false,
+          download: false,
+          print: false,
+          search: false,
+          labels: { fullscreen: "全屏", "exit-fullscreen": "退出全屏" },
+          titles: { fullscreen: "进入全屏", "exit-fullscreen": "退出全屏模式" }
+        },
+        plugins: [
+          {
+            name: "fullscreen-custom",
+            match: () => true,
+            render(ctx) {
+              ctx.viewport.textContent = ctx.file.name;
+              return { destroy: vi.fn() };
+            }
+          }
+        ]
+      });
+
+      await waitFor(() => container.textContent?.includes("hello.txt") === true);
+
+      const host = container.querySelector<HTMLElement>(".ofv-host")!;
+      const button = container.querySelector<HTMLButtonElement>('button[aria-label="进入全屏"]');
+      expect(button?.textContent).toBe("全屏");
+
+      fullscreenElement = host;
+      document.dispatchEvent(new Event("fullscreenchange"));
+
+      await waitFor(() => button?.getAttribute("aria-label") === "退出全屏模式");
+      expect(button?.textContent).toBe("退出全屏");
+
+      viewer.destroy();
+    } finally {
+      delete (document as unknown as { fullscreenElement?: unknown }).fullscreenElement;
+    }
+  });
+
+  it("exposes fullscreen state to custom toolbar renderers", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    let fullscreenElement: Element | null = null;
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreenElement
+    });
+
+    try {
+      const viewer = createViewer({
+        container,
+        file: new Blob(["hello"], { type: "text/plain" }),
+        fileName: "hello.txt",
+        toolbar: {
+          render(ctx) {
+            const shell = document.createElement("div");
+            shell.className = "business-toolbar";
+            shell.textContent = ctx.isFullscreen ? "fs:on" : "fs:off";
+            return shell;
+          }
+        },
+        plugins: [
+          {
+            name: "fullscreen-render",
+            match: () => true,
+            render(ctx) {
+              ctx.viewport.textContent = ctx.file.name;
+              return { destroy: vi.fn() };
+            }
+          }
+        ]
+      });
+
+      await waitFor(() => container.querySelector(".business-toolbar")?.textContent === "fs:off");
+
+      const host = container.querySelector<HTMLElement>(".ofv-host")!;
+      fullscreenElement = host;
+      document.dispatchEvent(new Event("fullscreenchange"));
+
+      await waitFor(() => container.querySelector(".business-toolbar")?.textContent === "fs:on");
+
+      viewer.destroy();
+    } finally {
+      delete (document as unknown as { fullscreenElement?: unknown }).fullscreenElement;
+    }
+  });
+
+  it("removes the fullscreenchange listener on destroy", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const addEventListener = vi.spyOn(document, "addEventListener");
+    const removeEventListener = vi.spyOn(document, "removeEventListener");
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["hello"], { type: "text/plain" }),
+      fileName: "hello.txt",
+      toolbar: true,
+      plugins: [
+        {
+          name: "fullscreen-listener",
+          match: () => true,
+          render(ctx) {
+            ctx.viewport.textContent = "ok";
+            return { destroy: vi.fn() };
+          }
+        }
+      ]
+    });
+
+    expect(addEventListener).toHaveBeenCalledWith("fullscreenchange", expect.any(Function));
+
+    viewer.destroy();
+
+    expect(removeEventListener).toHaveBeenCalledWith("fullscreenchange", expect.any(Function));
+  });
 });
 
 async function waitFor(predicate: () => boolean, timeout = 1000): Promise<void> {

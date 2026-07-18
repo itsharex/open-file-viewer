@@ -21,6 +21,7 @@ export type PreviewToolbarBuiltInAction =
   | "rotate-right"
   | "download"
   | "fullscreen"
+  | "exit-fullscreen"
   | "print"
   | "search";
 export type PreviewToolbarActionId = PreviewToolbarBuiltInAction | (string & {});
@@ -80,6 +81,7 @@ export interface PreviewToolbarRenderContext {
   viewport: HTMLElement;
   canPrevious: boolean;
   canNext: boolean;
+  isFullscreen: boolean;
   zoom?: number;
   zoomLabel?: string;
   previous: () => Promise<void>;
