@@ -295,6 +295,75 @@ describe("createViewer", () => {
     expect(container.textContent).not.toContain("Preview is not available for this file");
   });
 
+  it("localizes the built-in toolbar with the viewer locale", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["hello"], { type: "text/plain" }),
+      fileName: "hello.txt",
+      locale: "zh-CN",
+      toolbar: true,
+      plugins: [
+        {
+          name: "localized-toolbar",
+          match: () => true,
+          render(ctx) {
+            ctx.viewport.textContent = ctx.file.name;
+            return { command: vi.fn(), destroy: vi.fn() };
+          }
+        }
+      ]
+    });
+
+    await waitFor(() => container.textContent?.includes("hello.txt") === true);
+
+    expect(container.querySelector('[role="toolbar"]')?.getAttribute("aria-label")).toBe("文件预览工具栏");
+    expect(container.querySelector<HTMLInputElement>('.ofv-toolbar-search input')?.placeholder).toBe("搜索");
+    expect(container.querySelector('button[aria-label="向右旋转"]')?.textContent).toBe("旋转");
+    expect(container.querySelector('button[aria-label="下载文件"]')?.textContent).toBe("下载");
+    expect(container.querySelector('button[aria-label="全屏查看预览"]')?.textContent).toBe("全屏");
+    expect(container.querySelector('button[aria-label="打印预览"]')?.textContent).toBe("打印");
+    expect(container.textContent).not.toContain("Download");
+
+    viewer.destroy();
+  });
+
+  it("keeps toolbar label overrides ahead of localized defaults", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["hello"], { type: "text/plain" }),
+      fileName: "hello.txt",
+      locale: "zh-CN",
+      toolbar: {
+        download: true,
+        fullscreen: false,
+        search: false,
+        labels: { download: "保存副本" }
+      },
+      plugins: [
+        {
+          name: "localized-toolbar-override",
+          match: () => true,
+          render(ctx) {
+            ctx.viewport.textContent = ctx.file.name;
+            return { destroy: vi.fn() };
+          }
+        }
+      ]
+    });
+
+    await waitFor(() => container.textContent?.includes("hello.txt") === true);
+
+    expect(container.querySelector('button[aria-label="保存副本"]')?.textContent).toBe("保存副本");
+
+    viewer.destroy();
+  });
+
   it("allows fallback messages to be customized", async () => {
     const container = document.createElement("div");
     document.body.append(container);

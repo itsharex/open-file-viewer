@@ -410,7 +410,7 @@ createViewer(options: PreviewOptions): FileViewer;
 | `fit` | `contain \| cover \| width \| height \| actual \| scale-down` | `contain` | 内容适配方式 |
 | `plugins` | `PreviewPlugin[]` | `[]` | 插件列表，按顺序匹配 |
 | `fallback` | `inline \| download \| custom` | `inline` | 不支持时的兜底策略 |
-| `locale` | `zh-CN \| en-US` | `en-US` | 内置状态和 fallback 文案语言 |
+| `locale` | `zh-CN \| en-US` | `en-US` | 内置状态、fallback 和工具栏文案语言 |
 | `messages` | `Partial<PreviewMessages>` | - | 覆盖 loading、unsupported、download fallback 等基础文案 |
 | `renderFallback` | `(ctx) => PreviewInstance` | - | 自定义 fallback 渲染器 |
 | `toolbar` | `boolean \| PreviewToolbarOptions` | `false` | 工具栏配置 |
@@ -422,7 +422,7 @@ createViewer(options: PreviewOptions): FileViewer;
 
 ### 多语言和 fallback 文案
 
-默认 fallback 文案为英文。中文产品可以设置 `locale: "zh-CN"`，也可以用 `messages` 覆盖单条文案：
+内置状态、fallback 和默认工具栏文案均为英文。中文产品可以设置 `locale: "zh-CN"`；`messages` 可覆盖状态和 fallback 单条文案，工具栏仍可通过 `toolbar.labels` / `toolbar.titles` 进一步定制：
 
 ```ts
 createViewer({
@@ -439,7 +439,7 @@ createViewer({
 
 ## 工具栏自定义
 
-`toolbar: true` 会启用默认工具栏。需要业务化时可以逐步扩展，不必重写整套预览器。
+`toolbar: true` 会启用默认工具栏，其文案自动跟随顶层 `locale`。需要业务化时可以逐步扩展，不必重写整套预览器。
 
 ### 自定义文案、顺序和图标
 

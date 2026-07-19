@@ -8,6 +8,7 @@ import type {
   PreviewCommand,
   PreviewInstance,
   PreviewItem,
+  PreviewLocale,
   PreviewOptions,
   PreviewPlugin,
   PreviewSource,
@@ -50,12 +51,17 @@ export function createViewer(options: PreviewOptions): FileViewer {
     await renderQueueItem(currentIndex);
   };
 
-  const toolbar = createToolbar(options.toolbar, viewport, {
-    getLength: () => queue.length,
-    next: () => goTo(currentIndex + 1),
-    previous: () => goTo(currentIndex - 1),
-    command: (command) => currentInstance?.command?.(command)
-  });
+  const toolbar = createToolbar(
+    options.toolbar,
+    viewport,
+    {
+      getLength: () => queue.length,
+      next: () => goTo(currentIndex + 1),
+      previous: () => goTo(currentIndex - 1),
+      command: (command) => currentInstance?.command?.(command)
+    },
+    options.locale || "en-US"
+  );
   if (toolbar) {
     host.append(toolbar.element);
   }
@@ -343,7 +349,8 @@ function createToolbar(
     next: () => void | Promise<void>;
     previous: () => void | Promise<void>;
     command: (command: PreviewCommand) => void | boolean | undefined;
-  }
+  },
+  locale: PreviewLocale
 ):
   | {
       element: HTMLElement;
@@ -366,7 +373,7 @@ function createToolbar(
   const element = document.createElement("div");
   element.className = "ofv-toolbar";
   element.setAttribute("role", "toolbar");
-  element.setAttribute("aria-label", "File preview toolbar");
+  element.setAttribute("aria-label", defaultToolbarText[locale].ariaLabel);
 
   let file: PreviewFile | undefined;
   let currentIndex = 0;
@@ -445,8 +452,8 @@ function createToolbar(
 
     if (id === "previous" && queue.getLength() > 1) {
       previousButton = addButton(
-        getToolbarLabel(options, "previous"),
-        getToolbarTitle(options, "previous"),
+        getToolbarLabel(options, locale, "previous"),
+        getToolbarTitle(options, locale, "previous"),
         () => void queue.previous(),
         undefined,
         options.icons?.previous
@@ -455,8 +462,8 @@ function createToolbar(
     }
     if (id === "next" && queue.getLength() > 1) {
       nextButton = addButton(
-        getToolbarLabel(options, "next"),
-        getToolbarTitle(options, "next"),
+        getToolbarLabel(options, locale, "next"),
+        getToolbarTitle(options, locale, "next"),
         () => void queue.next(),
         undefined,
         options.icons?.next
@@ -470,27 +477,27 @@ function createToolbar(
       return;
     }
     if (id === "zoom-out" && options.zoom) {
-      addCommandButton(id, getToolbarLabel(options, id), getToolbarTitle(options, id), "zoom-out");
+      addCommandButton(id, getToolbarLabel(options, locale, id), getToolbarTitle(options, locale, id), "zoom-out");
       return;
     }
     if (id === "zoom-in" && options.zoom) {
-      addCommandButton(id, getToolbarLabel(options, id), getToolbarTitle(options, id), "zoom-in");
+      addCommandButton(id, getToolbarLabel(options, locale, id), getToolbarTitle(options, locale, id), "zoom-in");
       return;
     }
     if (id === "zoom-reset" && options.zoom) {
-      addCommandButton(id, getToolbarLabel(options, id), getToolbarTitle(options, id), "zoom-reset");
+      addCommandButton(id, getToolbarLabel(options, locale, id), getToolbarTitle(options, locale, id), "zoom-reset");
       zoomResetButton = commandButtons[commandButtons.length - 1]?.button;
       updateZoomLabel();
       return;
     }
     if (id === "rotate-right" && options.rotate) {
-      addCommandButton(id, getToolbarLabel(options, id), getToolbarTitle(options, id), "rotate-right");
+      addCommandButton(id, getToolbarLabel(options, locale, id), getToolbarTitle(options, locale, id), "rotate-right");
       return;
     }
     if (id === "download" && options.download !== false) {
       addButton(
-        getToolbarLabel(options, id),
-        getToolbarTitle(options, id),
+        getToolbarLabel(options, locale, id),
+        getToolbarTitle(options, locale, id),
         () => getContext().download(),
         undefined,
         options.icons?.download
@@ -499,8 +506,8 @@ function createToolbar(
     }
     if (id === "fullscreen" && options.fullscreen !== false) {
       fullscreenButton = addButton(
-        getToolbarLabel(options, id),
-        getToolbarTitle(options, id),
+        getToolbarLabel(options, locale, id),
+        getToolbarTitle(options, locale, id),
         () => getContext().fullscreen(),
         undefined,
         options.icons?.fullscreen
@@ -510,8 +517,8 @@ function createToolbar(
     }
     if (id === "print" && options.print) {
       addButton(
-        getToolbarLabel(options, id),
-        getToolbarTitle(options, id),
+        getToolbarLabel(options, locale, id),
+        getToolbarTitle(options, locale, id),
         () => getContext().print(),
         undefined,
         options.icons?.print
@@ -540,11 +547,11 @@ function createToolbar(
   const renderSearchControl = () => {
     const searchGroup = document.createElement("div");
     searchGroup.className = "ofv-toolbar-search";
-    searchGroup.title = getToolbarTitle(options, "search");
+    searchGroup.title = getToolbarTitle(options, locale, "search");
     const nextSearchInput = document.createElement("input");
     nextSearchInput.type = "search";
-    nextSearchInput.placeholder = getToolbarLabel(options, "search");
-    nextSearchInput.setAttribute("aria-label", getToolbarTitle(options, "search"));
+    nextSearchInput.placeholder = getToolbarLabel(options, locale, "search");
+    nextSearchInput.setAttribute("aria-label", getToolbarTitle(options, locale, "search"));
     const nextSearchCount = document.createElement("span");
     nextSearchCount.className = "ofv-toolbar-search-count";
     searchInput = nextSearchInput;
@@ -607,7 +614,7 @@ function createToolbar(
     }
     setToolbarButtonContent(
       zoomResetButton,
-      currentZoom === undefined ? getToolbarLabel(options, "zoom-reset") : formatToolbarZoom(currentZoom),
+      currentZoom === undefined ? getToolbarLabel(options, locale, "zoom-reset") : formatToolbarZoom(currentZoom),
       options.icons?.["zoom-reset"]
     );
   }
@@ -633,8 +640,8 @@ function createToolbar(
     const active = isFullscreenActive();
     const id: PreviewToolbarBuiltInAction = active ? "exit-fullscreen" : "fullscreen";
     const icon = active ? options.icons?.["exit-fullscreen"] ?? options.icons?.fullscreen : options.icons?.fullscreen;
-    setToolbarButtonContent(fullscreenButton, getToolbarLabel(options, id), icon);
-    const title = getToolbarTitle(options, id);
+    setToolbarButtonContent(fullscreenButton, getToolbarLabel(options, locale, id), icon);
+    const title = getToolbarTitle(options, locale, id);
     fullscreenButton.title = title;
     fullscreenButton.setAttribute("aria-label", title);
     fullscreenButton.setAttribute("aria-pressed", String(active));
@@ -779,42 +786,92 @@ function createToolbarContext({
   };
 }
 
-const defaultToolbarLabels: Record<PreviewToolbarBuiltInAction, string> = {
-  previous: "Prev",
-  next: "Next",
-  queue: "",
-  "zoom-out": "-",
-  "zoom-in": "+",
-  "zoom-reset": "100%",
-  "rotate-right": "Rotate",
-  download: "Download",
-  fullscreen: "Fullscreen",
-  "exit-fullscreen": "Exit fullscreen",
-  print: "Print",
-  search: "Search"
+const defaultToolbarText: Record<
+  PreviewLocale,
+  {
+    ariaLabel: string;
+    labels: Record<PreviewToolbarBuiltInAction, string>;
+    titles: Record<PreviewToolbarBuiltInAction, string>;
+  }
+> = {
+  "zh-CN": {
+    ariaLabel: "文件预览工具栏",
+    labels: {
+      previous: "上一个",
+      next: "下一个",
+      queue: "",
+      "zoom-out": "-",
+      "zoom-in": "+",
+      "zoom-reset": "100%",
+      "rotate-right": "旋转",
+      download: "下载",
+      fullscreen: "全屏",
+      "exit-fullscreen": "退出全屏",
+      print: "打印",
+      search: "搜索"
+    },
+    titles: {
+      previous: "上一个文件",
+      next: "下一个文件",
+      queue: "当前文件位置",
+      "zoom-out": "缩小",
+      "zoom-in": "放大",
+      "zoom-reset": "重置缩放",
+      "rotate-right": "向右旋转",
+      download: "下载文件",
+      fullscreen: "全屏查看预览",
+      "exit-fullscreen": "退出全屏",
+      print: "打印预览",
+      search: "搜索预览文本"
+    }
+  },
+  "en-US": {
+    ariaLabel: "File preview toolbar",
+    labels: {
+      previous: "Prev",
+      next: "Next",
+      queue: "",
+      "zoom-out": "-",
+      "zoom-in": "+",
+      "zoom-reset": "100%",
+      "rotate-right": "Rotate",
+      download: "Download",
+      fullscreen: "Fullscreen",
+      "exit-fullscreen": "Exit fullscreen",
+      print: "Print",
+      search: "Search"
+    },
+    titles: {
+      previous: "Previous file",
+      next: "Next file",
+      queue: "Current file position",
+      "zoom-out": "Zoom out",
+      "zoom-in": "Zoom in",
+      "zoom-reset": "Reset zoom",
+      "rotate-right": "Rotate right",
+      download: "Download file",
+      fullscreen: "Open preview fullscreen",
+      "exit-fullscreen": "Exit fullscreen",
+      print: "Print preview",
+      search: "Search preview text"
+    }
+  }
 };
 
-const defaultToolbarTitles: Record<PreviewToolbarBuiltInAction, string> = {
-  previous: "Previous file",
-  next: "Next file",
-  queue: "Current file position",
-  "zoom-out": "Zoom out",
-  "zoom-in": "Zoom in",
-  "zoom-reset": "Reset zoom",
-  "rotate-right": "Rotate right",
-  download: "Download file",
-  fullscreen: "Open preview fullscreen",
-  "exit-fullscreen": "Exit fullscreen",
-  print: "Print preview",
-  search: "Search preview text"
-};
-
-function getToolbarLabel(options: PreviewToolbarOptions, id: PreviewToolbarBuiltInAction): string {
-  return options.labels?.[id] ?? defaultToolbarLabels[id];
+function getToolbarLabel(
+  options: PreviewToolbarOptions,
+  locale: PreviewLocale,
+  id: PreviewToolbarBuiltInAction
+): string {
+  return options.labels?.[id] ?? defaultToolbarText[locale].labels[id];
 }
 
-function getToolbarTitle(options: PreviewToolbarOptions, id: PreviewToolbarBuiltInAction): string {
-  return options.titles?.[id] ?? options.labels?.[id] ?? defaultToolbarTitles[id];
+function getToolbarTitle(
+  options: PreviewToolbarOptions,
+  locale: PreviewLocale,
+  id: PreviewToolbarBuiltInAction
+): string {
+  return options.titles?.[id] ?? options.labels?.[id] ?? defaultToolbarText[locale].titles[id];
 }
 
 function formatToolbarZoom(zoom: number): string {
@@ -992,7 +1049,7 @@ function isSafeToolbarIconAttribute(name: string, value: string): boolean {
 }
 
 function isBuiltInToolbarAction(id: PreviewToolbarActionId): id is PreviewToolbarBuiltInAction {
-  return id in defaultToolbarLabels;
+  return id in defaultToolbarText["en-US"].labels;
 }
 
 function createSearchController(root: HTMLElement): {
