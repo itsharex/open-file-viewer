@@ -2435,6 +2435,9 @@ function renderChartCard(chart: ChartPreview): HTMLElement {
 function renderChartSvg(chart: ChartPreview): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 640 380");
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svg.setAttribute("text-rendering", "geometricPrecision");
+  svg.setAttribute("shape-rendering", "geometricPrecision");
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", chart.title);
   svg.classList.add("ofv-chart-svg");
@@ -2486,16 +2489,7 @@ function renderChartSvg(chart: ChartPreview): SVGSVGElement {
     const barWidth = Math.max(5, Math.min(28, clusterWidth / Math.max(1, chart.series.length)));
     const zeroY = plot.y + plot.height - ((0 - axisMin) / (axisMax - axisMin || 1)) * plot.height;
 
-    categories.slice(0, categoryCount).forEach((category, index) => {
-      const x = plot.x + groupWidth * (index + 0.5);
-      const label = appendSvg(svg, "text", {
-        x: Number(x.toFixed(1)),
-        y: plot.y + plot.height + 22,
-        class: "ofv-chart-label",
-        "text-anchor": "middle"
-      });
-      label.textContent = truncateChartLabel(category);
-    });
+    appendChartCategoryLabels(svg, categories, plot, (index) => plot.x + groupWidth * (index + 0.5));
 
     chart.series.forEach((series, seriesIndex) => {
       const color = series.color || colors[seriesIndex % colors.length];
@@ -2514,6 +2508,9 @@ function renderChartSvg(chart: ChartPreview): SVGSVGElement {
       });
     });
   } else {
+    const categoryStep = categories.length > 1 ? plot.width / (categories.length - 1) : plot.width;
+    appendChartCategoryLabels(svg, categories, plot, (index) => plot.x + index * categoryStep);
+
     chart.series.forEach((series, seriesIndex) => {
       const color = series.color || colors[seriesIndex % colors.length];
       const step = series.values.length > 1 ? plot.width / (series.values.length - 1) : plot.width;
@@ -2539,6 +2536,28 @@ function renderChartSvg(chart: ChartPreview): SVGSVGElement {
 
   appendChartLegend(svg, chart, colors, 348);
   return svg;
+}
+
+function appendChartCategoryLabels(
+  svg: SVGSVGElement,
+  categories: string[],
+  plot: { x: number; y: number; width: number; height: number },
+  getX: (index: number) => number
+): void {
+  const interval = Math.max(1, Math.ceil(categories.length / 14));
+  categories.forEach((category, index) => {
+    if (index % interval !== 0 && index !== categories.length - 1) {
+      return;
+    }
+    const label = appendSvg(svg, "text", {
+      x: Number(getX(index).toFixed(1)),
+      y: plot.y + plot.height + 22,
+      class: "ofv-chart-label ofv-chart-category-label",
+      "data-axis": "category",
+      "text-anchor": "middle"
+    });
+    label.textContent = truncateChartLabel(category);
+  });
 }
 
 function appendChartLegend(svg: SVGSVGElement, chart: ChartPreview, colors: string[], y: number): void {

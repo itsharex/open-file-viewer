@@ -2059,6 +2059,21 @@
   height: auto;
   min-height: 180px;
   padding: 8px 10px;
+  fill: none;
+  shape-rendering: geometricPrecision;
+  stroke: none;
+  stroke-linecap: initial;
+  stroke-linejoin: initial;
+  stroke-width: 0;
+  text-rendering: geometricPrecision;
+}
+
+.ofv-chart-svg text {
+  font-synthesis: none;
+  stroke: none;
+  stroke-width: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
 }
 
 .ofv-chart-axis {
@@ -2073,12 +2088,12 @@
 
 .ofv-chart-title {
   fill: #595959;
-  font: 20px/1 Calibri, Arial, sans-serif;
+  font: 400 20px/1.2 Calibri, Arial, "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
 }
 
 .ofv-chart-label {
   fill: #595959;
-  font: 12px/1 Calibri, Arial, sans-serif;
+  font: 400 12px/1.2 Calibri, Arial, "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
 }
 
 .ofv-chart-data {

@@ -552,6 +552,7 @@ describe("officePlugin", () => {
     expect(container.querySelector(".ofv-chart-card header span")?.textContent).toContain("bar");
     expect(container.querySelector(".ofv-chart-card header span")?.textContent).toContain("1 个系列");
     expect(container.querySelector(".ofv-chart-svg")?.getAttribute("role")).toBe("img");
+    expect(container.querySelector(".ofv-chart-svg")?.getAttribute("text-rendering")).toBe("geometricPrecision");
     expect(container.querySelectorAll(".ofv-chart-svg rect[data-index]")).toHaveLength(3);
     expect(container.querySelector(".ofv-chart-title")?.textContent).toBe("Quarterly Revenue");
     expect(Array.from(container.querySelectorAll(".ofv-chart-label")).some((label) => label.textContent === "Q1")).toBe(true);
@@ -560,6 +561,24 @@ describe("officePlugin", () => {
     expect(container.querySelector<HTMLElement>(".ofv-chart-data")?.hidden).toBe(true);
     expect(visibleText(container)).not.toContain("数据摘要");
     expect(visibleText(container)).not.toContain("Revenue: 12, 18, 30");
+  });
+
+  it("renders category labels on the horizontal axis of line charts", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: await createWorkbookWithChart("line"),
+      fileName: "line-chart.xlsx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-chart-card")));
+
+    const labels = Array.from(container.querySelectorAll('[data-axis="category"]')).map((label) => label.textContent);
+    expect(labels).toEqual(["Q1", "Q2", "Q3"]);
+    expect(container.querySelectorAll(".ofv-chart-svg polyline")).toHaveLength(1);
   });
 
   it("renders DOCX embedded chart placeholders from OOXML chart parts", async () => {
@@ -2104,7 +2123,7 @@ async function createStyledWorkbook(): Promise<Blob> {
   });
 }
 
-async function createWorkbookWithChart(): Promise<Blob> {
+async function createWorkbookWithChart(type: "bar" | "line" = "bar"): Promise<Blob> {
   const zip = new JSZip();
   zip.file(
     "[Content_Types].xml",
@@ -2158,7 +2177,7 @@ async function createWorkbookWithChart(): Promise<Blob> {
         <c:chart>
           <c:title><c:tx><c:rich><a:p><a:r><a:t>Quarterly Revenue</a:t></a:r></a:p></c:rich></c:tx></c:title>
           <c:plotArea>
-            <c:barChart>
+            <c:${type}Chart>
               <c:ser>
                 <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Revenue</c:v></c:pt></c:strCache></c:strRef></c:tx>
                 <c:cat><c:strRef><c:strCache>
@@ -2172,7 +2191,7 @@ async function createWorkbookWithChart(): Promise<Blob> {
                   <c:pt idx="2"><c:v>30</c:v></c:pt>
                 </c:numCache></c:numRef></c:val>
               </c:ser>
-            </c:barChart>
+            </c:${type}Chart>
           </c:plotArea>
         </c:chart>
       </c:chartSpace>`
