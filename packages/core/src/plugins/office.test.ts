@@ -73,7 +73,18 @@ const openPptx = vi.hoisted(() =>
     const body = document.createElement("div");
     body.textContent = "Mirrored body";
     mirroredTextGroup.append(title, body);
-    page.append(mirroredTextGroup);
+    const inheritedPlaceholder = document.createElement("div");
+    inheritedPlaceholder.className = "pptx-inherited-placeholder";
+    inheritedPlaceholder.style.position = "absolute";
+    inheritedPlaceholder.style.left = "98.1368px";
+    inheritedPlaceholder.style.top = "454.223px";
+    inheritedPlaceholder.style.width = "453.207px";
+    inheritedPlaceholder.style.height = "132.222px";
+    const inheritedText = document.createElement("span");
+    inheritedText.style.fontSize = "37.35pt";
+    inheritedText.textContent = "2027.11.30";
+    inheritedPlaceholder.append(inheritedText);
+    page.append(mirroredTextGroup, inheritedPlaceholder);
     viewport.append(page);
     wrapper.append(viewport);
     container.append(wrapper);
@@ -1293,6 +1304,24 @@ describe("officePlugin", () => {
     expect(slide?.style.transform).toBe("");
   });
 
+  it("matches inherited placeholder font sizes by layout placeholder index", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: await createPptxPlaceholderInheritanceFixture(),
+      fileName: "placeholder-font.pptx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector('[data-ofv-pptx-placeholder-font="24"]')));
+
+    const placeholder = container.querySelector<HTMLElement>(".pptx-inherited-placeholder");
+    expect(placeholder?.dataset.ofvPptxPlaceholderFont).toBe("24");
+    expect(placeholder?.querySelector<HTMLElement>("span")?.style.fontSize).toBe("24pt");
+  });
+
   it("falls back to extracted slide text when PPTX rendering times out", async () => {
     pptxRenderMode.value = "hang";
     (globalThis as { __OFV_PPTX_RENDER_TIMEOUT_MS__?: number }).__OFV_PPTX_RENDER_TIMEOUT_MS__ = 80;
@@ -2432,6 +2461,53 @@ async function createMinimalPptx(): Promise<Blob> {
       </p:notes>`
   );
   zip.file("ppt/media/image1.png", "png");
+  return zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+  });
+}
+
+async function createPptxPlaceholderInheritanceFixture(): Promise<Blob> {
+  const zip = new JSZip();
+  zip.file(
+    "ppt/presentation.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+        <p:sldSz cx="12192000" cy="6858000"/>
+      </p:presentation>`
+  );
+  zip.file(
+    "ppt/slides/slide1.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:cSld><p:spTree><p:sp>
+          <p:nvSpPr><p:cNvPr id="1" name="Body"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="11"/></p:nvPr></p:nvSpPr>
+          <p:spPr><a:xfrm><a:off x="934753" y="4326473"/><a:ext cx="4316798" cy="1259417"/></a:xfrm></p:spPr>
+          <p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr b="1"/><a:t>2027.11.30</a:t></a:r></a:p></p:txBody>
+        </p:sp></p:spTree></p:cSld>
+      </p:sld>`
+  );
+  zip.file(
+    "ppt/slides/_rels/slide1.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rIdLayout" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
+      </Relationships>`
+  );
+  zip.file(
+    "ppt/slideLayouts/slideLayout1.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:cSld><p:spTree>
+          <p:sp><p:nvSpPr><p:cNvPr id="10" name="Wrong sibling"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="10"/></p:nvPr></p:nvSpPr>
+            <p:txBody><a:bodyPr/><a:lstStyle><a:lvl1pPr><a:defRPr sz="3735"/></a:lvl1pPr></a:lstStyle><a:p/></p:txBody></p:sp>
+          <p:sp><p:nvSpPr><p:cNvPr id="11" name="Correct placeholder"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="11"/></p:nvPr></p:nvSpPr>
+            <p:txBody><a:bodyPr/><a:lstStyle><a:lvl1pPr><a:defRPr sz="2400"/></a:lvl1pPr></a:lstStyle><a:p/></p:txBody></p:sp>
+        </p:spTree></p:cSld>
+      </p:sldLayout>`
+  );
   return zip.generateAsync({
     type: "blob",
     mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"

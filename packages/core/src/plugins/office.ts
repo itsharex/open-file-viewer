@@ -3348,6 +3348,7 @@ async function renderPptx(panel: HTMLElement, arrayBuffer: ArrayBuffer): Promise
   container.className = "ofv-pptx-viewer";
   let insight: PresentationInsight | undefined;
   let zip: JSZip | undefined;
+  let placeholderFontCorrections: PptxPlaceholderFontCorrection[] = [];
 
   try {
     zip = await JSZip.loadAsync(arrayBuffer);
@@ -3356,12 +3357,19 @@ async function renderPptx(panel: HTMLElement, arrayBuffer: ArrayBuffer): Promise
   } catch (error) {
     console.warn("PPTX structure insight extraction failed:", error);
   }
+  if (zip) {
+    try {
+      placeholderFontCorrections = await inspectPptxPlaceholderFontCorrections(zip);
+    } catch (error) {
+      console.warn("PPTX placeholder font extraction failed:", error);
+    }
+  }
 
   panel.append(container);
   try {
     const { PptxViewer } = await import("@aiden0z/pptx-renderer");
     await withTimeout(PptxViewer.open(arrayBuffer, container), pptxRenderTimeoutMs());
-    normalizePptxLayout(container);
+    normalizePptxLayout(container, placeholderFontCorrections);
   } catch (error) {
     container.replaceChildren();
     if (insight) {
@@ -3420,14 +3428,200 @@ function pptxRenderTimeoutMs(): number {
   return typeof override === "number" && override > 0 ? override : DEFAULT_PPTX_RENDER_TIMEOUT_MS;
 }
 
-function normalizePptxLayout(container: HTMLElement): void {
+type PptxPlaceholderFontCorrection = {
+  slideIndex: number;
+  leftRatio: number;
+  topRatio: number;
+  widthRatio: number;
+  heightRatio: number;
+  fontSizePt: number;
+};
+
+function normalizePptxLayout(container: HTMLElement, placeholderFontCorrections: PptxPlaceholderFontCorrection[]): void {
   const slideCanvases = findPptxSlideCanvases(container);
   for (const slide of slideCanvases) {
     if (!hasInlineBackground(slide)) {
       slide.style.backgroundColor = "#FFFFFF";
     }
   }
+  normalizePptxPlaceholderFonts(container, placeholderFontCorrections);
   normalizePptxMirroredText(container);
+}
+
+async function inspectPptxPlaceholderFontCorrections(zip: JSZip): Promise<PptxPlaceholderFontCorrection[]> {
+  const presentationXml = await zip.file("ppt/presentation.xml")?.async("text");
+  const presentation = presentationXml ? parseOfficeXml(presentationXml) : undefined;
+  const slideSize = presentation
+    ? Array.from(presentation.getElementsByTagName("*")).find((element) => element.localName === "sldSz")
+    : undefined;
+  const slideWidth = Number(slideSize?.getAttribute("cx"));
+  const slideHeight = Number(slideSize?.getAttribute("cy"));
+  if (!(slideWidth > 0) || !(slideHeight > 0)) {
+    return [];
+  }
+
+  const slideEntries = Object.values(zip.files)
+    .filter((entry) => !entry.dir && /^ppt\/slides\/slide\d+\.xml$/i.test(entry.name))
+    .sort((a, b) => slideNumberFromPath(a.name) - slideNumberFromPath(b.name));
+  const corrections: PptxPlaceholderFontCorrection[] = [];
+
+  for (const [slideIndex, entry] of slideEntries.entries()) {
+    const slideXml = await entry.async("text");
+    const slide = parseOfficeXml(slideXml);
+    if (!slide) {
+      continue;
+    }
+    const relationships = await readPptxRelationships(zip, entry.name);
+    const layoutTarget = resolvePptxRelationshipTarget(
+      entry.name,
+      relationships.find((relationship) => /\/slideLayout$/i.test(relationship.type))?.target
+    );
+    const layoutXml = layoutTarget ? await zip.file(layoutTarget)?.async("text") : undefined;
+    const layout = layoutXml ? parseOfficeXml(layoutXml) : undefined;
+    if (!layout) {
+      continue;
+    }
+
+    const layoutFontSizes = readPptxLayoutPlaceholderFontSizes(layout);
+    const shapes = Array.from(slide.getElementsByTagName("*")).filter((element) => element.localName === "sp");
+    for (const shape of shapes) {
+      const placeholder = findPptxDescendant(shape, "ph");
+      const placeholderIndex = placeholder?.getAttribute("idx");
+      const fontSizePt = placeholderIndex ? layoutFontSizes.get(placeholderIndex) : undefined;
+      const textBody = findPptxDescendant(shape, "txBody");
+      if (!textBody?.textContent?.trim() || !fontSizePt || hasExplicitPptxTextSize(textBody)) {
+        continue;
+      }
+      const transform = findPptxDescendant(shape, "xfrm");
+      const offset = transform ? findPptxChild(transform, "off") : undefined;
+      const extent = transform ? findPptxChild(transform, "ext") : undefined;
+      const left = Number(offset?.getAttribute("x"));
+      const top = Number(offset?.getAttribute("y"));
+      const width = Number(extent?.getAttribute("cx"));
+      const height = Number(extent?.getAttribute("cy"));
+      if (![left, top, width, height].every((value) => Number.isFinite(value)) || width <= 0 || height <= 0) {
+        continue;
+      }
+      corrections.push({
+        slideIndex,
+        leftRatio: left / slideWidth,
+        topRatio: top / slideHeight,
+        widthRatio: width / slideWidth,
+        heightRatio: height / slideHeight,
+        fontSizePt
+      });
+    }
+  }
+  return corrections;
+}
+
+function readPptxLayoutPlaceholderFontSizes(layout: Document): Map<string, number> {
+  const result = new Map<string, number>();
+  const shapes = Array.from(layout.getElementsByTagName("*")).filter((element) => element.localName === "sp");
+  for (const shape of shapes) {
+    const placeholderIndex = findPptxDescendant(shape, "ph")?.getAttribute("idx");
+    if (!placeholderIndex) {
+      continue;
+    }
+    const textBody = findPptxDescendant(shape, "txBody");
+    const defaultRunProperties = textBody
+      ? Array.from(textBody.getElementsByTagName("*")).find(
+          (element) => element.localName === "defRPr" && Number(element.getAttribute("sz")) > 0
+        )
+      : undefined;
+    const size = Number(defaultRunProperties?.getAttribute("sz"));
+    if (size > 0) {
+      result.set(placeholderIndex, size / 100);
+    }
+  }
+  return result;
+}
+
+function hasExplicitPptxTextSize(textBody: Element): boolean {
+  return Array.from(textBody.getElementsByTagName("*")).some(
+    (element) =>
+      (element.localName === "rPr" || element.localName === "defRPr" || element.localName === "endParaRPr") &&
+      Number(element.getAttribute("sz")) > 0
+  );
+}
+
+function findPptxDescendant(element: Element, localName: string): Element | undefined {
+  return Array.from(element.getElementsByTagName("*")).find((child) => child.localName === localName);
+}
+
+function findPptxChild(element: Element, localName: string): Element | undefined {
+  return Array.from(element.children).find((child) => child.localName === localName);
+}
+
+function normalizePptxPlaceholderFonts(
+  container: HTMLElement,
+  corrections: PptxPlaceholderFontCorrection[]
+): void {
+  for (const correction of corrections) {
+    const wrapper = container.querySelector<HTMLElement>(`div[data-slide-index="${correction.slideIndex}"]`);
+    if (!wrapper) {
+      continue;
+    }
+    const match = findPptxPlaceholderElement(wrapper, correction);
+    if (!match) {
+      continue;
+    }
+    const styledText = Array.from(match.querySelectorAll<HTMLElement>("[style]")).filter(
+      (element) => parseFloat(element.style.fontSize) > 0
+    );
+    for (const element of styledText) {
+      element.style.fontSize = `${correction.fontSizePt}pt`;
+    }
+    if (styledText.length > 0) {
+      match.dataset.ofvPptxPlaceholderFont = String(correction.fontSizePt);
+    }
+  }
+}
+
+function findPptxPlaceholderElement(
+  wrapper: HTMLElement,
+  correction: PptxPlaceholderFontCorrection
+): HTMLElement | undefined {
+  let best: { element: HTMLElement; score: number } | undefined;
+  for (const canvas of findPptxSlideCanvases(wrapper)) {
+    const canvasWidth = parseCssPixelValue(canvas.style.width);
+    const canvasHeight = parseCssPixelValue(canvas.style.height);
+    if (!(canvasWidth > 0) || !(canvasHeight > 0)) {
+      continue;
+    }
+    const expected = {
+      left: correction.leftRatio * canvasWidth,
+      top: correction.topRatio * canvasHeight,
+      width: correction.widthRatio * canvasWidth,
+      height: correction.heightRatio * canvasHeight
+    };
+    const candidates = Array.from(canvas.querySelectorAll<HTMLElement>("div")).filter(
+      (element) => element.style.position === "absolute" && Boolean(element.textContent?.trim())
+    );
+    for (const element of candidates) {
+      const actual = {
+        left: parseCssPixelValue(element.style.left),
+        top: parseCssPixelValue(element.style.top),
+        width: parseCssPixelValue(element.style.width),
+        height: parseCssPixelValue(element.style.height)
+      };
+      const deltas = [
+        Math.abs(actual.left - expected.left),
+        Math.abs(actual.top - expected.top),
+        Math.abs(actual.width - expected.width),
+        Math.abs(actual.height - expected.height)
+      ];
+      const tolerance = Math.max(2, Math.min(canvasWidth, canvasHeight) * 0.005);
+      if (deltas.some((delta) => delta > tolerance)) {
+        continue;
+      }
+      const score = deltas.reduce((sum, delta) => sum + delta, 0);
+      if (!best || score < best.score) {
+        best = { element, score };
+      }
+    }
+  }
+  return best?.element;
 }
 
 function hasInlineBackground(element: HTMLElement): boolean {
