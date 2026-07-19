@@ -45,6 +45,10 @@ export const OpenFileViewer = defineComponent({
       type: String as () => PreviewOptions["fit"],
       default: "contain"
     },
+    zoom: {
+      type: Number as PropType<PreviewOptions["zoom"]>,
+      default: 1
+    },
     plugins: {
       type: Array as () => PreviewPlugin[],
       default: () => []
@@ -101,6 +105,7 @@ export const OpenFileViewer = defineComponent({
         width: props.width,
         height: props.height,
         fit: props.fit,
+        zoom: props.zoom,
         plugins: props.plugins,
         toolbar: slots.toolbar
           ? {
@@ -154,6 +159,7 @@ export const OpenFileViewer = defineComponent({
         props.width,
         props.height,
         props.fit,
+        props.zoom,
         props.plugins,
         props.fallback,
         props.locale,

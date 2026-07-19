@@ -64,7 +64,7 @@ The component accepts the same preview options as `createViewer`, including:
 - `initialIndex`
 - `fileName`
 - `width` / `height`
-- `fit`
+- `fit` / `zoom`
 - `toolbar`
 - `theme`
 - `plugins`

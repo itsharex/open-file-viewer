@@ -15,6 +15,7 @@
   export let width: PreviewOptions["width"] = "100%";
   export let height: PreviewOptions["height"] = "600px";
   export let fit: PreviewOptions["fit"] = "contain";
+  export let zoom: PreviewOptions["zoom"] = 1;
   export let plugins: PreviewOptions["plugins"] = [];
   export let toolbar: PreviewOptions["toolbar"] = false;
   export let theme: PreviewOptions["theme"] = "light";
@@ -74,6 +75,7 @@
       width,
       height,
       fit,
+      zoom,
       plugins,
       toolbar,
       theme,
@@ -118,6 +120,7 @@
       width,
       height,
       fit,
+      zoom,
       plugins,
       toolbar: buildToolbar(),
       theme,

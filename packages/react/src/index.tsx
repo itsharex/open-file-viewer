@@ -96,6 +96,7 @@ export function FileViewer({
     options.fileName,
     options.mimeType,
     options.fit,
+    options.zoom,
     options.plugins,
     options.fallback,
     options.locale,

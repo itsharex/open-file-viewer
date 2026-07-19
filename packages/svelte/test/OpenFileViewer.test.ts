@@ -83,6 +83,24 @@ describe("OpenFileViewer Svelte adapter", () => {
     view.unmount();
   });
 
+  it("passes zoom through and recreates the viewer when only zoom changes", async () => {
+    const file = new Blob(["demo"], { type: "text/plain" });
+    const destroy = vi.fn();
+    const plugins = [createZoomPlugin(destroy)];
+    const view = render(OpenFileViewer, {
+      props: { file, fileName: "zoom.txt", zoom: 1.5, plugins }
+    });
+
+    expect(await screen.findByText("zoom:1.5")).toBeTruthy();
+
+    await view.rerender({ file, fileName: "zoom.txt", zoom: 2, plugins });
+
+    await waitFor(() => expect(destroy).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("zoom:2")).toBeTruthy();
+
+    view.unmount();
+  });
+
   it("passes locale and messages through to the core viewer", async () => {
     render(OpenFileViewer, {
       props: {
@@ -150,6 +168,19 @@ function createPlugin(name: string, destroy: () => void): PreviewPlugin {
     render(ctx) {
       const element = document.createElement("div");
       element.textContent = `${name}:${ctx.file.name}`;
+      ctx.viewport.append(element);
+      return { destroy };
+    }
+  };
+}
+
+function createZoomPlugin(destroy: () => void): PreviewPlugin {
+  return {
+    name: "zoom",
+    match: () => true,
+    render(ctx) {
+      const element = document.createElement("div");
+      element.textContent = `zoom:${ctx.options.zoom}`;
       ctx.viewport.append(element);
       return { destroy };
     }
