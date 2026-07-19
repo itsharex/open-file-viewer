@@ -122,6 +122,7 @@ export interface PreviewOptions {
 }
 
 export interface PreviewMessages {
+  [key: string]: string | undefined;
   loading: string;
   unsupportedTitle: string;
   downloadTitle: string;
@@ -169,6 +170,35 @@ export interface PreviewMessages {
   officeUnsupportedSupportedFormats: string;
   officeErrorWithMessage: string;
   officeErrorWithoutMessage: string;
+  officeConvertedTitle: string;
+  officeConvertedPdfFailed: string;
+  pdfEncryptedTitle: string;
+  pdfEncryptedMessage: string;
+  pdfPreviewFailedTitle: string;
+  pdfCorruptedMessage: string;
+  pdfCannotLoadMessage: string;
+  pdfDownload: string;
+  pdfPageLoading: string;
+  pdfPageEmpty: string;
+  pdfPageRenderFailed: string;
+  pdfPreviousPage: string;
+  pdfNextPage: string;
+  pdfPageInput: string;
+  pdfPagePosition: string;
+  pdfPageLabel: string;
+  pdfSummaryPages: string;
+  pdfSummaryPageSizes: string;
+  pdfSummaryFit: string;
+  pdfSummaryActualSize: string;
+  pdfSummaryFitWidth: string;
+  pdfSummaryZoom: string;
+  imagePreviewFailedTitle: string;
+  imagePreviewFailedMessage: string;
+  imageDownload: string;
+  imageZoomOut: string;
+  imageZoomIn: string;
+  imageRotate: string;
+  imageReset: string;
 }
 
 export interface PreviewContext {

@@ -281,8 +281,9 @@ async function renderConvertedOfficePreview(
     fit: ctx.options.fit,
     zoom: ctx.options.zoom,
     toolbar: ctx.toolbar,
-    title: "Office 高保真转换预览",
-    fallbackTitle: "Office 转换后的 PDF 无法预览",
+    messages: ctx.options.messages,
+    title: ctx.options.messages.officeConvertedTitle,
+    fallbackTitle: ctx.options.messages.officeConvertedPdfFailed,
     revokeUrlOnDestroy: converted.revokeUrlOnDestroy
   });
 }

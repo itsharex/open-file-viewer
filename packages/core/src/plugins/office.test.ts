@@ -1028,7 +1028,7 @@ describe("officePlugin", () => {
         file: expect.objectContaining({ name: "anchored-resume.docx" })
       })
     );
-    expect(container.querySelector(".ofv-pdf-viewer-title")?.textContent).toBe("Office 高保真转换预览");
+    expect(container.querySelector(".ofv-pdf-viewer-title")?.textContent).toBe("High-fidelity Office conversion preview");
     expect(container.querySelector(".ofv-docx-textbox-page")).toBeNull();
     expect(pdfjs.getDocument).toHaveBeenCalled();
   });
@@ -1353,11 +1353,11 @@ describe("officePlugin", () => {
     await waitFor(() => Boolean(container.querySelector(".ofv-office")));
 
     expect(container.textContent).toContain(".doc");
-    expect(container.textContent).toContain("Office 转换提示");
+    expect(container.textContent).toContain("Office conversion guidance");
     expect(container.textContent).toContain("Word Binary File Format");
     expect(container.textContent).toContain("OLE Compound File");
     expect(container.querySelector(".ofv-office-conversion")).not.toBeNull();
-    expect(container.textContent).toContain("可读文本片段");
+    expect(container.textContent).toContain("Readable text fragments");
     expect(container.textContent).toContain("Quarterly roadmap");
     expect(container.textContent).toContain("Budget 2026");
   });
@@ -1645,9 +1645,9 @@ describe("officePlugin", () => {
     await waitFor(() => Boolean(container.querySelector(".ofv-office-conversion")));
 
     expect(container.textContent).toContain(".ppt");
-    expect(container.textContent).toContain("Office 转换提示");
+    expect(container.textContent).toContain("Office conversion guidance");
     expect(container.textContent).toContain("PowerPoint Binary File Format");
-    expect(container.textContent).toContain("未提取到稳定可读文本");
+    expect(container.textContent).toContain("No stable readable text was extracted");
     expect(container.querySelector(".ofv-office-binary-fragments")).toBeNull();
   });
 
@@ -1665,9 +1665,9 @@ describe("officePlugin", () => {
     await waitFor(() => Boolean(container.querySelector(".ofv-office-binary-meta")));
 
     expect(container.textContent).toContain(".xls");
-    expect(container.textContent).toContain("Office 转换提示");
+    expect(container.textContent).toContain("Office conversion guidance");
     expect(container.textContent).toContain("Excel Binary File Format");
-    expect(container.textContent).toContain("表格解析失败");
+    expect(container.textContent).toContain("Spreadsheet parse failed");
     expect(container.textContent).toContain("Revenue forecast");
     expect(container.textContent).toContain("Gross margin");
   });
@@ -1686,9 +1686,9 @@ describe("officePlugin", () => {
     await waitFor(() => Boolean(container.querySelector(".ofv-office-binary-meta")));
 
     expect(container.textContent).toContain(".xlsb");
-    expect(container.textContent).toContain("Office 转换提示");
+    expect(container.textContent).toContain("Office conversion guidance");
     expect(container.textContent).toContain("Excel Binary File Format");
-    expect(container.textContent).toContain("表格解析失败");
+    expect(container.textContent).toContain("Spreadsheet parse failed");
     expect(container.textContent).toContain("Binary workbook");
   });
 

@@ -1,5 +1,6 @@
 import { createObjectUrl, revokeObjectUrl } from "../dom";
-import type { PreviewPlugin, PreviewSize } from "../types";
+import { defaultMessages, formatPreviewMessage } from "../messages";
+import type { PreviewMessages, PreviewPlugin, PreviewSize } from "../types";
 import { createEncryptedFallback, isEncryptedError } from "./encrypted";
 import { getInitialZoom } from "./utils";
 
@@ -14,6 +15,7 @@ type PdfDocumentProxyLike = {
 export interface PdfPluginOptions {
   pdfjs?: PdfJsModule;
   workerSrc?: string;
+  compatibilityMode?: "auto" | "modern" | "legacy";
   cMapUrl?: string;
   cMapPacked?: boolean;
   standardFontDataUrl?: string;
@@ -39,6 +41,7 @@ export interface PdfDocumentPreviewOptions {
   };
   pdfjs?: PdfJsModule;
   workerSrc?: string;
+  compatibilityMode?: "auto" | "modern" | "legacy";
   cMapUrl?: string;
   cMapPacked?: boolean;
   standardFontDataUrl?: string;
@@ -53,6 +56,7 @@ export interface PdfDocumentPreviewOptions {
   encryptedTitle?: string;
   encryptedMessage?: string;
   encryptedAction?: string;
+  messages?: Partial<PreviewMessages>;
   revokeUrlOnDestroy?: boolean;
 }
 
@@ -89,9 +93,7 @@ export function pdfPlugin(options: PdfJsModule | PdfPluginOptions = {}): Preview
         fit: ctx.options.fit,
         zoom: ctx.options.zoom,
         toolbar: ctx.toolbar,
-        encryptedTitle: "PDF 已加密，无法在线预览",
-        encryptedMessage: "请下载后使用密码打开，或上传解密后的 PDF 文件。",
-        encryptedAction: "下载 PDF",
+        messages: ctx.options.messages,
         revokeUrlOnDestroy: true
       });
     }
@@ -104,8 +106,13 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
   resize(size: PreviewSize): void;
   destroy(): void;
 }> {
+  const useLegacyCompatibility = shouldUseLegacyPdfCompatibility(options.compatibilityMode);
+  if (useLegacyCompatibility) {
+    installPromiseWithResolversPolyfill();
+  }
   const pdf = options.pdfjs || (await import("pdfjs-dist"));
-  configurePdfWorker(pdf, options.workerSrc);
+  const messages: PreviewMessages = { ...defaultMessages["en-US"], ...options.messages };
+  configurePdfWorker(pdf, options.workerSrc, useLegacyCompatibility);
 
   const viewer = document.createElement("div");
   viewer.className = "ofv-pdf-viewer";
@@ -137,11 +144,11 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
     };
     const fallback = isEncryptedError(error)
       ? createEncryptedFallback(fileLike, options.fileUrl, {
-          title: options.encryptedTitle || "PDF 已加密，无法在线预览",
-          message: options.encryptedMessage || "请下载后使用密码打开，或上传解密后的 PDF 文件。",
-          action: options.encryptedAction || "下载 PDF"
+          title: options.encryptedTitle || messages.pdfEncryptedTitle,
+          message: options.encryptedMessage || messages.pdfEncryptedMessage,
+          action: options.encryptedAction || messages.pdfDownload
         })
-      : createPdfFallback(options.fileName, options.fileUrl, normalizePdfError(error), options.fallbackTitle);
+      : createPdfFallback(options.fileName, options.fileUrl, normalizePdfError(error, messages), messages, options.fallbackTitle);
     if (!fallback.classList.contains("ofv-pdf-web-fallback")) {
       options.viewport.classList.add("ofv-center");
     }
@@ -217,9 +224,47 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
   let currentSize = options.size;
   let zoomFactor = getInitialZoom({ options: { zoom: options.zoom ?? 1 } }, 0.25, 4);
   let rotation = 0;
+  let currentPage = 1;
+
+  const goToPage = (page: number, scroll = true) => {
+    currentPage = Math.min(pdfDocument.numPages, Math.max(1, Math.round(page) || 1));
+    pageNavigator.setCurrent(currentPage);
+    const wrapper = pageStates[currentPage - 1]?.wrapper;
+    if (!scroll || !wrapper) {
+      return;
+    }
+    const top = Math.max(0, wrapper.offsetTop - 16);
+    if (typeof scroller.scrollTo === "function") {
+      scroller.scrollTo({ top, behavior: "smooth" });
+    } else {
+      scroller.scrollTop = top;
+    }
+  };
+
+  const pageNavigator = createPdfPageNavigator(pdfDocument.numPages, messages, (page) => goToPage(page));
+  viewer.insertBefore(pageNavigator.element, summary);
+
+  const handleScrollerScroll = () => {
+    const scrollerRect = scroller.getBoundingClientRect();
+    const targetY = scrollerRect.top + Math.min(Math.max(scroller.clientHeight * 0.25, 40), 180);
+    let nearestPage = currentPage;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    pageStates.forEach((state, index) => {
+      const distance = Math.abs(state.wrapper.getBoundingClientRect().top - targetY);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestPage = index + 1;
+      }
+    });
+    if (nearestPage !== currentPage) {
+      currentPage = nearestPage;
+      pageNavigator.setCurrent(currentPage);
+    }
+  };
+  scroller.addEventListener("scroll", handleScrollerScroll, { passive: true });
 
   const updateSummary = () => {
-    renderPdfSummary(summary, pdfDocument.numPages, pagesMeta, options.fit, zoomFactor);
+    renderPdfSummary(summary, pdfDocument.numPages, pagesMeta, options.fit, zoomFactor, messages);
     options.toolbar?.setZoom(zoomFactor);
   };
 
@@ -239,7 +284,9 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
     state.canvas = null;
     state.rendered = false;
     state.wrapper.replaceChildren();
-    state.wrapper.append(createPageStatus("ofv-pdf-skeleton", `页面 ${pageIdx + 1} 加载中...`));
+    state.wrapper.append(
+      createPageStatus("ofv-pdf-skeleton", formatPreviewMessage(messages.pdfPageLoading, { page: pageIdx + 1 }))
+    );
   };
 
   const renderPage = async (pageIdx: number, size: PreviewSize) => {
@@ -324,7 +371,7 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
         state.wrapper.appendChild(
           createPageStatus(
             "ofv-pdf-empty",
-            "该页没有检测到可显示的 PDF 兼容内容。若这是 Illustrator/AI 文件，可能只包含私有编辑数据，建议导出为 PDF/SVG/PNG 后预览。"
+            messages.pdfPageEmpty
           )
         );
       }
@@ -332,7 +379,7 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
       console.error(`Failed to render PDF page ${pageIdx + 1}:`, err);
       state.rendered = false;
       state.wrapper.replaceChildren(
-        createPageStatus("ofv-pdf-error", "无法渲染该页面。该页可能包含浏览器 PDF 引擎暂不支持的图形、字体或压缩特性。")
+        createPageStatus("ofv-pdf-error", messages.pdfPageRenderFailed)
       );
     }
   };
@@ -382,9 +429,10 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
       const wrapper = document.createElement("div");
       wrapper.className = "ofv-pdf-page-wrapper";
       wrapper.setAttribute("data-page-index", String(i));
+      wrapper.setAttribute("aria-label", formatPreviewMessage(messages.pdfPageLabel, { page: i + 1 }));
       wrapper.style.width = `${w}px`;
       wrapper.style.height = `${h}px`;
-      wrapper.append(createPageStatus("ofv-pdf-skeleton", `页面 ${i + 1} 加载中...`));
+      wrapper.append(createPageStatus("ofv-pdf-skeleton", formatPreviewMessage(messages.pdfPageLoading, { page: i + 1 })));
 
       scroller.appendChild(wrapper);
 
@@ -410,6 +458,7 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
         }
       }, 0);
     }
+    goToPage(currentPage, false);
   };
 
   renderLayout(options.size);
@@ -458,6 +507,8 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
     },
     destroy() {
       options.toolbar?.setZoom(undefined);
+      pageNavigator.destroy();
+      scroller.removeEventListener("scroll", handleScrollerScroll);
       window.clearTimeout(resizeTimer);
       observer?.disconnect();
 
@@ -515,16 +566,17 @@ function renderPdfSummary(
   pages: number,
   pagesMeta: Array<{ width: number; height: number }>,
   fit: string,
-  zoomFactor: number
+  zoomFactor: number,
+  messages: PreviewMessages
 ): void {
   summary.replaceChildren();
-  appendPdfSummary(summary, "页数", String(pages));
+  appendPdfSummary(summary, messages.pdfSummaryPages, String(pages));
   const pageSizes = formatPdfPageSizes(pagesMeta);
   if (pageSizes) {
-    appendPdfSummary(summary, "页面尺寸", pageSizes);
+    appendPdfSummary(summary, messages.pdfSummaryPageSizes, pageSizes);
   }
-  appendPdfSummary(summary, "适配", fit === "actual" ? "原始大小" : "适合宽度");
-  appendPdfSummary(summary, "缩放", `${Math.round(zoomFactor * 100)}%`);
+  appendPdfSummary(summary, messages.pdfSummaryFit, fit === "actual" ? messages.pdfSummaryActualSize : messages.pdfSummaryFitWidth);
+  appendPdfSummary(summary, messages.pdfSummaryZoom, `${Math.round(zoomFactor * 100)}%`);
 }
 
 function appendPdfSummary(parent: HTMLElement, label: string, value: string): void {
@@ -631,7 +683,13 @@ function createPageStatus(className: string, text: string): HTMLDivElement {
   return status;
 }
 
-function createPdfFallback(fileName: string, url: string, message: string, titleText = "PDF 预览失败"): HTMLElement {
+function createPdfFallback(
+  fileName: string,
+  url: string,
+  message: string,
+  messages: PreviewMessages,
+  titleText = messages.pdfPreviewFailedTitle
+): HTMLElement {
   if (isEmbeddableRemoteUrl(url)) {
     return createPdfWebFallback(fileName, url);
   }
@@ -648,7 +706,7 @@ function createPdfFallback(fileName: string, url: string, message: string, title
   const download = document.createElement("a");
   download.href = url;
   download.download = fileName;
-  download.textContent = "下载 PDF";
+  download.textContent = messages.pdfDownload;
 
   fallback.append(title, meta, download);
   return fallback;
@@ -673,23 +731,131 @@ function isEmbeddableRemoteUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
 }
 
-function normalizePdfError(error: unknown): string {
+function normalizePdfError(error: unknown, messages: PreviewMessages): string {
   const message = error instanceof Error ? error.message : String(error || "");
   const name = typeof error === "object" && error !== null && "name" in error ? String((error as { name?: unknown }).name) : "";
   const lower = `${name} ${message}`.toLowerCase();
   if (lower.includes("invalid") || lower.includes("missing") || lower.includes("corrupt")) {
-    return "该 PDF 文件可能已损坏或格式无效。";
+    return messages.pdfCorruptedMessage;
   }
-  return "当前浏览器无法加载该 PDF。";
+  return messages.pdfCannotLoadMessage;
 }
 
-function configurePdfWorker(pdf: PdfJsModule, workerSrc?: string): void {
+function createPdfPageNavigator(
+  total: number,
+  messages: PreviewMessages,
+  onChange: (page: number) => void
+): { element: HTMLElement; setCurrent(page: number): void; destroy(): void } {
+  const element = document.createElement("div");
+  element.className = "ofv-pdf-page-navigator";
+
+  const previous = document.createElement("button");
+  previous.type = "button";
+  previous.textContent = "‹";
+  previous.title = messages.pdfPreviousPage;
+  previous.setAttribute("aria-label", messages.pdfPreviousPage);
+
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "1";
+  input.max = String(total);
+  input.value = "1";
+  input.inputMode = "numeric";
+  input.setAttribute("aria-label", messages.pdfPageInput);
+
+  const position = document.createElement("span");
+  position.textContent = formatPreviewMessage(messages.pdfPagePosition, { total });
+
+  const next = document.createElement("button");
+  next.type = "button";
+  next.textContent = "›";
+  next.title = messages.pdfNextPage;
+  next.setAttribute("aria-label", messages.pdfNextPage);
+
+  const commit = () => onChange(Number(input.value));
+  const handleKeydown = (event: KeyboardEvent) => {
+    if (event.key === "Enter") {
+      commit();
+    }
+  };
+  const handlePrevious = () => onChange(Number(input.value) - 1);
+  const handleNext = () => onChange(Number(input.value) + 1);
+  input.addEventListener("change", commit);
+  input.addEventListener("keydown", handleKeydown);
+  previous.addEventListener("click", handlePrevious);
+  next.addEventListener("click", handleNext);
+  element.append(previous, input, position, next);
+
+  return {
+    element,
+    setCurrent(page) {
+      input.value = String(page);
+      previous.disabled = page <= 1;
+      next.disabled = page >= total;
+    },
+    destroy() {
+      input.removeEventListener("change", commit);
+      input.removeEventListener("keydown", handleKeydown);
+      previous.removeEventListener("click", handlePrevious);
+      next.removeEventListener("click", handleNext);
+    }
+  };
+}
+
+function configurePdfWorker(pdf: PdfJsModule, workerSrc?: string, legacy = false): void {
   if (workerSrc) {
     pdf.GlobalWorkerOptions.workerSrc = workerSrc;
     return;
   }
 
   if (!pdf.GlobalWorkerOptions.workerSrc && typeof window !== "undefined") {
-    pdf.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdf.version}/build/pdf.worker.mjs`;
+    const build = legacy ? "legacy/build" : "build";
+    pdf.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdf.version}/${build}/pdf.worker.mjs`;
   }
+}
+
+function shouldUseLegacyPdfCompatibility(mode: PdfPluginOptions["compatibilityMode"] = "auto"): boolean {
+  if (mode === "legacy") {
+    return true;
+  }
+  if (mode === "modern") {
+    return false;
+  }
+
+  const promise = Promise as PromiseConstructor & { withResolvers?: unknown };
+  if (typeof promise.withResolvers !== "function") {
+    return true;
+  }
+
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /(?:QIHU|360SE|360EE)/i.test(navigator.userAgent);
+}
+
+function installPromiseWithResolversPolyfill(): void {
+  const promise = Promise as PromiseConstructor & {
+    withResolvers?: <T>() => {
+      promise: Promise<T>;
+      resolve: (value: T | PromiseLike<T>) => void;
+      reject: (reason?: unknown) => void;
+    };
+  };
+  if (typeof promise.withResolvers === "function") {
+    return;
+  }
+
+  Object.defineProperty(promise, "withResolvers", {
+    configurable: true,
+    writable: true,
+    value: <T>() => {
+      let resolve!: (value: T | PromiseLike<T>) => void;
+      let reject!: (reason?: unknown) => void;
+      const pending = new Promise<T>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+      });
+      return { promise: pending, resolve, reject };
+    }
+  });
 }

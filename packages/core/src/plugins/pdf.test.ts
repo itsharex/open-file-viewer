@@ -88,10 +88,18 @@ describe("pdfPlugin", () => {
 
     const summary = container.querySelector(".ofv-pdf-summary");
     expect((summary as HTMLElement | null)?.hidden).toBe(true);
-    expect(summary?.textContent).toContain("页数2");
-    expect(summary?.textContent).toContain("页面尺寸400 x 600 (2)");
-    expect(summary?.textContent).toContain("适配适合宽度");
-    expect(summary?.textContent).toContain("缩放100%");
+    expect(summary?.textContent).toContain("Pages2");
+    expect(summary?.textContent).toContain("Page sizes400 x 600 (2)");
+    expect(summary?.textContent).toContain("FitFit width");
+    expect(summary?.textContent).toContain("Zoom100%");
+    const pageInput = container.querySelector<HTMLInputElement>('.ofv-pdf-page-navigator input');
+    const nextPage = container.querySelector<HTMLButtonElement>('button[aria-label="Next page"]');
+    expect(pageInput?.value).toBe("1");
+    expect(pageInput?.max).toBe("2");
+    expect(container.querySelector(".ofv-pdf-page-navigator")?.textContent).toContain("/ 2");
+    nextPage?.click();
+    expect(pageInput?.value).toBe("2");
+    expect(nextPage?.disabled).toBe(true);
     const firstWrapper = container.querySelector<HTMLElement>(".ofv-pdf-page-wrapper");
     const zoomIn = container.querySelector<HTMLButtonElement>('button[aria-label="Zoom in"]');
     const zoomReset = container.querySelector<HTMLButtonElement>('button[aria-label="Reset zoom"]');
@@ -105,7 +113,7 @@ describe("pdfPlugin", () => {
 
     await waitFor(() => container.querySelector<HTMLElement>(".ofv-pdf-page-wrapper") !== firstWrapper);
 
-    expect(container.querySelector(".ofv-pdf-summary")?.textContent).toContain("缩放115%");
+    expect(container.querySelector(".ofv-pdf-summary")?.textContent).toContain("Zoom115%");
     expect(zoomReset?.textContent).toBe("115%");
     expect(container.querySelectorAll(".ofv-pdf-page-wrapper")).toHaveLength(2);
     const zoomedWrapper = container.querySelector<HTMLElement>(".ofv-pdf-page-wrapper");
@@ -170,6 +178,74 @@ describe("pdfPlugin", () => {
       })
     );
 
+    viewer.destroy();
+  });
+
+  it("uses the legacy worker and polyfills Promise.withResolvers in older Chromium browsers", async () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    const promiseConstructor = Promise as PromiseConstructor & { withResolvers?: unknown };
+    const originalDescriptor = Object.getOwnPropertyDescriptor(Promise, "withResolvers");
+    Reflect.deleteProperty(promiseConstructor, "withResolvers");
+
+    try {
+      const container = createSizedContainer();
+      const pdfjs = createPdfJsMock();
+      const viewer = createViewer({
+        container,
+        file: new Blob(["pdf"], { type: "application/pdf" }),
+        fileName: "360-browser.pdf",
+        plugins: [pdfPlugin({ pdfjs })]
+      });
+
+      await waitFor(() => container.querySelectorAll("canvas.ofv-pdf-page").length === 2);
+
+      expect(typeof promiseConstructor.withResolvers).toBe("function");
+      expect(pdfjs.GlobalWorkerOptions.workerSrc).toContain("/legacy/build/pdf.worker.mjs");
+      viewer.destroy();
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(Promise, "withResolvers", originalDescriptor);
+      } else {
+        Reflect.deleteProperty(promiseConstructor, "withResolvers");
+      }
+    }
+  });
+
+  it("allows forcing the modern PDF worker", async () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    const container = createSizedContainer();
+    const pdfjs = createPdfJsMock();
+    const viewer = createViewer({
+      container,
+      file: new Blob(["pdf"], { type: "application/pdf" }),
+      fileName: "modern.pdf",
+      plugins: [pdfPlugin({ pdfjs, compatibilityMode: "modern" })]
+    });
+
+    await waitFor(() => container.querySelectorAll("canvas.ofv-pdf-page").length === 2);
+
+    expect(pdfjs.GlobalWorkerOptions.workerSrc).toContain("/build/pdf.worker.mjs");
+    expect(pdfjs.GlobalWorkerOptions.workerSrc).not.toContain("/legacy/build/");
+    viewer.destroy();
+  });
+
+  it("selects the legacy worker for 360 browser user agents", async () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36 360SE"
+    );
+    const container = createSizedContainer();
+    const pdfjs = createPdfJsMock();
+    const viewer = createViewer({
+      container,
+      file: new Blob(["pdf"], { type: "application/pdf" }),
+      fileName: "360-user-agent.pdf",
+      plugins: [pdfPlugin({ pdfjs })]
+    });
+
+    await waitFor(() => container.querySelectorAll("canvas.ofv-pdf-page").length === 2);
+
+    expect(pdfjs.GlobalWorkerOptions.workerSrc).toContain("/legacy/build/pdf.worker.mjs");
     viewer.destroy();
   });
 
@@ -262,9 +338,38 @@ describe("pdfPlugin", () => {
 
     await waitFor(() => Boolean(container.querySelector(".ofv-fallback")));
 
-    expect(container.textContent).toContain("PDF 预览失败");
+    expect(container.textContent).toContain("PDF preview failed");
     expect(container.querySelector<HTMLAnchorElement>(".ofv-fallback a")?.href).toBe("http://localhost:3000/missing.pdf");
     expect(container.querySelector(".ofv-pdf-web-fallback-frame")).toBeNull();
+
+    viewer.destroy();
+  });
+
+  it("uses localized and custom PDF messages", async () => {
+    const container = createSizedContainer();
+    const pdfjs = createPdfJsMock();
+    pdfjs.getDocument.mockImplementation(() => ({
+      promise: Promise.reject(new Error("Invalid PDF structure")),
+      destroy: vi.fn()
+    }));
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["broken"], { type: "application/pdf" }),
+      fileName: "broken.pdf",
+      locale: "zh-CN",
+      messages: {
+        pdfPreviewFailedTitle: "无法打开报表",
+        pdfDownload: "保存报表"
+      },
+      plugins: [pdfPlugin({ pdfjs })]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-fallback")));
+
+    expect(container.textContent).toContain("无法打开报表");
+    expect(container.textContent).toContain("该 PDF 文件可能已损坏或格式无效");
+    expect(container.querySelector<HTMLAnchorElement>(".ofv-fallback a")?.textContent).toBe("保存报表");
 
     viewer.destroy();
   });
@@ -422,7 +527,7 @@ describe("pdfPlugin", () => {
 
     await waitFor(() => Boolean(container.querySelector(".ofv-pdf-empty")));
 
-    expect(container.querySelector(".ofv-pdf-empty")?.textContent).toContain("没有检测到可显示的 PDF 兼容内容");
+    expect(container.querySelector(".ofv-pdf-empty")?.textContent).toContain("No displayable PDF-compatible content");
     expect(container.querySelector(".ofv-pdf-empty")?.textContent).toContain("Illustrator/AI");
 
     viewer.destroy();
@@ -458,8 +563,8 @@ describe("pdfPlugin", () => {
     await waitFor(() => Boolean(container.querySelector(".ofv-fallback")));
 
     expect(container.querySelector(".ofv-encrypted")).not.toBeNull();
-    expect(container.textContent).toContain("PDF 已加密，无法在线预览");
-    expect(container.textContent).toContain("上传解密后的 PDF 文件");
+    expect(container.textContent).toContain("This PDF is encrypted and cannot be previewed online");
+    expect(container.textContent).toContain("upload a decrypted PDF file");
     expect(container.querySelector<HTMLAnchorElement>(".ofv-fallback a")?.href).toBe(objectUrl);
     expect(onError).not.toHaveBeenCalled();
 
@@ -497,8 +602,8 @@ describe("pdfPlugin", () => {
     await waitFor(() => Boolean(container.querySelector(".ofv-pdf-error")));
 
     expect(container.querySelectorAll(".ofv-pdf-page-wrapper")).toHaveLength(2);
-    expect(container.querySelector(".ofv-pdf-error")?.textContent).toContain("无法渲染该页面");
-    expect(container.querySelector(".ofv-pdf-error")?.textContent).toContain("图形、字体或压缩特性");
+    expect(container.querySelector(".ofv-pdf-error")?.textContent).toContain("This page could not be rendered");
+    expect(container.querySelector(".ofv-pdf-error")?.textContent).toContain("graphics, fonts, or compression features");
     expect(container.querySelector(".ofv-pdf-error")?.textContent).not.toContain("Illustrator/PostScript");
 
     viewer.destroy();

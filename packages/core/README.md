@@ -123,6 +123,14 @@ pdfPlugin({
 This keeps compatibility at the cost of holding one extra copy of the PDF in memory, so use it only
 for affected environments.
 
+For 360 Secure Browser, 360 Extreme Browser, and older Chromium kernels, `pdfPlugin()` defaults to
+`compatibilityMode: "auto"`. It installs the `Promise.withResolvers` compatibility shim when needed
+and selects the matching PDF.js legacy worker. If an enterprise browser hides its 360 user-agent
+marker, force the compatibility path with `pdfPlugin({ compatibilityMode: "legacy" })`. When
+self-hosting that worker, point `workerSrc` to the same-version
+`pdfjs-dist/legacy/build/pdf.worker.min.mjs`. Use `compatibilityMode: "modern"` only when targeting
+modern Chrome or Edge exclusively.
+
 ## High-Fidelity Office Conversion
 
 Browser-side Office renderers cannot perfectly reproduce Word/WPS layout for files with anchored
@@ -251,7 +259,7 @@ Use `toolbar.render(ctx)` when you need to replace the toolbar completely. The c
 
 ## Locale and Fallback Text
 
-Fallback text defaults to English. Set `locale: "zh-CN"` for Simplified Chinese built-in loading and unsupported-file messages, or override individual strings with `messages`:
+Built-in states, fallback panels, toolbar labels, and plugin messages default to English. Set `locale: "zh-CN"` for Simplified Chinese, or override individual PDF, image, text, Office, and custom-plugin strings with `messages`:
 
 ```ts
 createViewer({
@@ -260,11 +268,15 @@ createViewer({
   locale: "zh-CN",
   messages: {
     unsupportedTitle: "No inline preview available",
-    downloadFile: "Download original file"
+    downloadFile: "Download original file",
+    pdfPreviewFailedTitle: "Unable to open report",
+    imageDownload: "Save original image"
   },
   plugins
 });
 ```
+
+The PDF viewer includes a synchronized page navigator with previous/next buttons and a numeric page input. Enter a page number and press Enter to jump directly to it.
 
 ## License
 

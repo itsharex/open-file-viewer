@@ -459,6 +459,49 @@
   overflow-wrap: anywhere;
 }
 
+.ofv-pdf-page-navigator {
+  display: flex;
+  z-index: 3;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ofv-border);
+  background: var(--ofv-surface);
+  color: var(--ofv-text);
+  font-size: 13px;
+}
+
+.ofv-pdf-page-navigator button,
+.ofv-pdf-page-navigator input {
+  box-sizing: border-box;
+  height: 28px;
+  border: 1px solid var(--ofv-border);
+  border-radius: 5px;
+  background: var(--ofv-surface);
+  color: var(--ofv-text);
+  font: inherit;
+}
+
+.ofv-pdf-page-navigator button {
+  min-width: 30px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.ofv-pdf-page-navigator button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.ofv-pdf-page-navigator input {
+  width: 58px;
+  padding: 0 6px;
+  text-align: center;
+}
+
 .ofv-pdf {
   flex: 1 1 auto;
   width: 100%;

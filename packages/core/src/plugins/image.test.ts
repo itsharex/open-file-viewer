@@ -501,7 +501,7 @@ describe("imagePlugin", () => {
 
     await waitFor(() => Boolean(container.querySelector(".ofv-fallback")));
 
-    expect(container.textContent).toContain("图片预览失败");
+    expect(container.textContent).toContain("Image preview failed");
     expect(container.querySelector<HTMLElement>(".ofv-image-info")?.hidden).toBe(false);
     expect(container.querySelector<HTMLAnchorElement>(".ofv-fallback a")?.href).toBe("blob:raw-tiff");
 
@@ -651,7 +651,7 @@ describe("imagePlugin", () => {
 
     await waitFor(() => Boolean(container.querySelector(".ofv-fallback")));
 
-    expect(container.textContent).toContain("图片预览失败");
+    expect(container.textContent).toContain("Image preview failed");
     expect(container.querySelector<HTMLAnchorElement>(".ofv-fallback a")?.href).toBe(objectUrl);
     expect(container.querySelector<HTMLButtonElement>('button[aria-label="Zoom in"]')?.disabled).toBe(true);
     expect(container.querySelector<HTMLButtonElement>('button[aria-label="Zoom out"]')?.disabled).toBe(true);
@@ -659,6 +659,35 @@ describe("imagePlugin", () => {
 
     viewer.destroy();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith(objectUrl);
+  });
+
+  it("uses localized and custom image fallback messages", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:localized-image"),
+      revokeObjectURL: vi.fn()
+    });
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["bad"], { type: "image/avif" }),
+      fileName: "broken.avif",
+      locale: "zh-CN",
+      messages: { imageDownload: "保存原图" },
+      plugins: [imagePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-image-content")));
+    container.querySelector<HTMLImageElement>(".ofv-image-content")?.dispatchEvent(new Event("error"));
+    await waitFor(() => Boolean(container.querySelector(".ofv-fallback")));
+
+    expect(container.textContent).toContain("图片预览失败");
+    expect(container.textContent).toContain("当前浏览器无法直接显示该图片");
+    expect(container.querySelector<HTMLAnchorElement>(".ofv-fallback a")?.textContent).toBe("保存原图");
+
+    viewer.destroy();
   });
 
   it("shows a download fallback when HEIC conversion and native display both fail", async () => {
@@ -684,7 +713,7 @@ describe("imagePlugin", () => {
 
     await waitFor(() => Boolean(container.querySelector(".ofv-fallback")));
 
-    expect(container.textContent).toContain("图片预览失败");
+    expect(container.textContent).toContain("Image preview failed");
     expect(container.querySelector<HTMLAnchorElement>(".ofv-fallback a")?.href).toBe("blob:raw-heic");
 
     viewer.destroy();

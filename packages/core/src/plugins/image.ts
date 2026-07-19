@@ -1,6 +1,6 @@
 /// <reference path="../shims-heic.d.ts" />
 import { createObjectUrl, revokeObjectUrl } from "../dom";
-import type { PreviewPlugin, PreviewSize } from "../types";
+import type { PreviewContext, PreviewPlugin, PreviewSize } from "../types";
 import { getInitialZoom } from "./utils";
 
 const imageExtensions = new Set([
@@ -174,7 +174,7 @@ export function imagePlugin(): PreviewPlugin {
         infoBar.hidden = false;
         infoBar.removeAttribute("aria-hidden");
         infoBar.style.removeProperty("display");
-        stage.replaceChildren(createImageFallback(ctx.file.name, url));
+        stage.replaceChildren(createImageFallback(ctx.file.name, url, ctx.options.messages));
         ctx.toolbar?.refreshCommandSupport();
       };
 
@@ -204,13 +204,13 @@ export function imagePlugin(): PreviewPlugin {
 
       const disposers = showInlineControls
         ? [
-            addButton("-", "Zoom out", () => setScale(scale - 0.25)),
-            addButton("+", "Zoom in", () => setScale(scale + 0.25)),
-            addButton("Rotate", "Rotate image", () => {
+            addButton("-", ctx.options.messages.imageZoomOut, () => setScale(scale - 0.25)),
+            addButton("+", ctx.options.messages.imageZoomIn, () => setScale(scale + 0.25)),
+            addButton(ctx.options.messages.imageRotate, ctx.options.messages.imageRotate, () => {
               rotation += 90;
               updateTransform();
             }),
-            addButton("Reset", "Reset image view", reset)
+            addButton(ctx.options.messages.imageReset, ctx.options.messages.imageReset, reset)
           ]
         : [];
       if (showInlineControls) {
@@ -463,20 +463,20 @@ function getTiffDimensions(ifd: Record<string, unknown>): { width: number; heigh
   };
 }
 
-function createImageFallback(fileName: string, url: string): HTMLElement {
+function createImageFallback(fileName: string, url: string, messages: PreviewContext["options"]["messages"]): HTMLElement {
   const fallback = document.createElement("div");
   fallback.className = "ofv-fallback";
 
   const title = document.createElement("strong");
-  title.textContent = "图片预览失败";
+  title.textContent = messages.imagePreviewFailedTitle;
 
   const meta = document.createElement("span");
-  meta.textContent = "当前浏览器无法直接显示该图片，文件可能已损坏或编码暂不受支持。";
+  meta.textContent = messages.imagePreviewFailedMessage;
 
   const download = document.createElement("a");
   download.href = url;
   download.download = fileName;
-  download.textContent = "下载图片";
+  download.textContent = messages.imageDownload;
 
   fallback.append(title, meta, download);
   return fallback;

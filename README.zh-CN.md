@@ -157,6 +157,22 @@ pdfPlugin({
 
 这个选项会多占用一份 PDF 文件内存，建议只在遇到上述兼容问题时开启。
 
+### 360 浏览器 PDF 兼容
+
+`pdfPlugin()` 默认使用 `compatibilityMode: "auto"`。当检测到 360 浏览器标识，或当前 Chromium
+缺少 PDF.js 4 依赖的 `Promise.withResolvers` 时，会自动补齐兼容实现并切换到 PDF.js legacy worker。
+如果企业环境修改了浏览器 UA，无法被自动识别，可以显式开启：
+
+```ts
+pdfPlugin({
+  compatibilityMode: "legacy"
+});
+```
+
+需要自行托管 worker 时，请让 `workerSrc` 指向同版本的
+`pdfjs-dist/legacy/build/pdf.worker.min.mjs`。确认只面向现代 Chrome、Edge 时，也可以设置
+`compatibilityMode: "modern"`。
+
 ### React
 
 ```tsx
@@ -410,8 +426,8 @@ createViewer(options: PreviewOptions): FileViewer;
 | `fit` | `contain \| cover \| width \| height \| actual \| scale-down` | `contain` | 内容适配方式 |
 | `plugins` | `PreviewPlugin[]` | `[]` | 插件列表，按顺序匹配 |
 | `fallback` | `inline \| download \| custom` | `inline` | 不支持时的兜底策略 |
-| `locale` | `zh-CN \| en-US` | `en-US` | 内置状态、fallback 和工具栏文案语言 |
-| `messages` | `Partial<PreviewMessages>` | - | 覆盖 loading、unsupported、download fallback 等基础文案 |
+| `locale` | `zh-CN \| en-US` | `en-US` | 内置状态、fallback、工具栏及插件文案语言 |
+| `messages` | `Partial<PreviewMessages>` | - | 覆盖基础文案及 PDF、图片、文本、Office 等插件文案，也允许自定义 key |
 | `renderFallback` | `(ctx) => PreviewInstance` | - | 自定义 fallback 渲染器 |
 | `toolbar` | `boolean \| PreviewToolbarOptions` | `false` | 工具栏配置 |
 | `theme` | `light \| dark \| auto` | `light` | 预览器主题 |
@@ -422,7 +438,7 @@ createViewer(options: PreviewOptions): FileViewer;
 
 ### 多语言和 fallback 文案
 
-内置状态、fallback 和默认工具栏文案均为英文。中文产品可以设置 `locale: "zh-CN"`；`messages` 可覆盖状态和 fallback 单条文案，工具栏仍可通过 `toolbar.labels` / `toolbar.titles` 进一步定制：
+内置状态、fallback、默认工具栏和插件提示文案均为英文。中文产品可以设置 `locale: "zh-CN"`；`messages` 可覆盖 PDF、图片、文本、Office 等插件的单条文案，也允许为自定义插件增加任意字符串 key。工具栏仍可通过 `toolbar.labels` / `toolbar.titles` 进一步定制：
 
 ```ts
 createViewer({
@@ -431,11 +447,15 @@ createViewer({
   locale: "zh-CN",
   messages: {
     unsupportedTitle: "No inline preview available",
-    downloadFile: "Download original file"
+    downloadFile: "Download original file",
+    pdfPreviewFailedTitle: "Unable to open report",
+    imageDownload: "Save original image"
   },
   plugins
 });
 ```
+
+PDF 预览会显示当前页码、总页数以及上一页/下一页按钮。可以直接在页码输入框中输入目标页并按 Enter 跳转，滚动文档时页码也会自动同步。
 
 ## 工具栏自定义
 
