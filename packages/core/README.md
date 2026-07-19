@@ -24,6 +24,15 @@ PDF preview requires `pdfjs-dist`:
 npm install pdfjs-dist
 ```
 
+### Vite / Rollup dependency chunks
+
+Text grammars, Markdown, and email parsers load asynchronously when their plugins are first used.
+Prism language chunks are loaded in dependency order, so applications do not need to preload parent
+grammars such as Java before Scala. In monorepos, `resolve.dedupe: ["prismjs"]` prevents duplicate
+Prism runtimes. Keep `/prismjs/components/` out of catch-all vendor `manualChunks` rules so the
+side-effectful language modules remain separate on-demand chunks and execute in dependency order.
+`postal-mime` and `@kenjiuno/msgreader` may optionally share an `ofv-email` chunk.
+
 DWG geometry preview uses optional LibreDWG WASM. The package can be installed by applications that want the default built-in DWG linework path:
 
 ```bash

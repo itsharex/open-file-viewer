@@ -138,7 +138,7 @@ describe("textPlugin", () => {
 
     await waitFor(() => Boolean(container.querySelector(".ofv-fallback")));
 
-    expect(container.textContent).toContain("文本预览失败");
+    expect(container.textContent).toContain("Text preview failed");
     expect(container.querySelector<HTMLAnchorElement>(".ofv-fallback a")?.href).toBe("https://example.com/missing.txt");
     expect(onError).not.toHaveBeenCalled();
   });
@@ -223,6 +223,53 @@ describe("textPlugin", () => {
     expect(container.querySelector(".token.comment")?.textContent).toBe("// comment");
     expect(document.querySelector("link[id^='ofv-prism-css']")).toBeNull();
     expect(hostPre.className).toBe("");
+  });
+
+  it("loads Prism language dependencies in order for concurrent Scala previews", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const first = document.createElement("div");
+    const second = document.createElement("div");
+    document.body.append(first, second);
+
+    createViewer({
+      container: first,
+      file: new Blob(["object First extends App"], { type: "text/plain" }),
+      fileName: "First.scala",
+      plugins: [textPlugin()]
+    });
+    createViewer({
+      container: second,
+      file: new Blob(["class Second extends App"], { type: "text/plain" }),
+      fileName: "Second.scala",
+      plugins: [textPlugin()]
+    });
+
+    await waitFor(() => first.querySelector(".token.keyword")?.textContent === "object");
+    await waitFor(() => second.querySelector(".token.keyword")?.textContent === "class");
+
+    expect(warning).not.toHaveBeenCalled();
+  });
+
+  it("loads complete TSX and JSON5 grammars instead of only their parent languages", async () => {
+    const tsxContainer = document.createElement("div");
+    const json5Container = document.createElement("div");
+    document.body.append(tsxContainer, json5Container);
+
+    createViewer({
+      container: tsxContainer,
+      file: new Blob(["const view = <section>{value}</section>;"], { type: "text/plain" }),
+      fileName: "View.tsx",
+      plugins: [textPlugin()]
+    });
+    createViewer({
+      container: json5Container,
+      file: new Blob(["{ unquoted: 'value' }"], { type: "text/plain" }),
+      fileName: "config.json5",
+      plugins: [textPlugin()]
+    });
+
+    await waitFor(() => Boolean(tsxContainer.querySelector(".token.tag")));
+    await waitFor(() => Boolean(json5Container.querySelector(".token.property")));
   });
 
   it("renders extensionless application code MIME blobs as text", async () => {
@@ -651,11 +698,11 @@ describe("textPlugin", () => {
 
     await waitFor(() => Boolean(container.querySelector(".ofv-code-container.is-truncated")));
 
-    expect(container.querySelector(".ofv-code-notice")?.textContent).toContain("文件较大");
+    expect(container.querySelector(".ofv-code-notice")?.textContent).toContain("Large file");
     expect(container.querySelector(".ofv-code-container code")?.textContent).not.toContain("TAIL");
 
     const copy = Array.from(container.querySelectorAll<HTMLButtonElement>(".ofv-code-action")).find(
-      (button) => button.textContent === "复制"
+      (button) => button.textContent === "Copy"
     );
     copy?.click();
     await waitFor(() => writeText.mock.calls.length > 0);

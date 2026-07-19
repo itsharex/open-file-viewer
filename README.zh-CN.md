@@ -80,6 +80,36 @@ PDF 预览需要安装 `pdfjs-dist`：
 pnpm add pdfjs-dist
 ```
 
+### Vite / Rollup 依赖分包
+
+文本语法、Markdown 和邮件解析依赖会在对应插件首次使用时异步加载。Prism 语言组件会按照依赖关系
+顺序加载（例如 `java` 完成后才执行 `scala`），不需要在业务入口手工预加载全部语言。
+
+如果 monorepo 或组件库中存在多份 Prism，可以在 Vite 中启用依赖去重。不要把全部 Prism 语言
+组件手工合并到同一个 vendor chunk；保留默认拆分才能让依赖按照异步调用顺序执行。邮件解析器可以
+按需单独分包：
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  resolve: {
+    dedupe: ["prismjs"]
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("/postal-mime/") || id.includes("/@kenjiuno/msgreader/")) return "ofv-email";
+        }
+      }
+    }
+  }
+});
+```
+
+`manualChunks` 不是必需配置。如果项目已有统一的 vendor 分包函数，请让 `/prismjs/components/`
+返回 `undefined`，避免把所有带副作用的语言组件折叠到同一个 chunk。
+
 也可以使用 npm 或 yarn：
 
 ```bash

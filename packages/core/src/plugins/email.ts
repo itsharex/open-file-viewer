@@ -1,10 +1,11 @@
-import DOMPurify from "dompurify";
 import type { PreviewCommand, PreviewContext, PreviewPlugin } from "../types";
 import { appendMeta, createPanel, createSection, readArrayBuffer, readTextFile, resolveFormat } from "./utils";
 import { createObjectUrl, revokeObjectUrl } from "../dom";
 
 const emailExtensions = new Set(["eml", "msg", "mbox"]);
 const emailMimeTypes = new Set(["message/rfc822", "application/vnd.ms-outlook", "application/mbox"]);
+let domPurifyLoader: Promise<typeof import("dompurify")> | undefined;
+type DOMPurifySanitizer = (typeof import("dompurify"))["default"];
 const emailMimeFormatMap: Record<string, string> = {
   "message/rfc822": "eml",
   "application/vnd.ms-outlook": "msg",
@@ -42,6 +43,8 @@ export function emailPlugin(): PreviewPlugin {
       return emailExtensions.has(file.extension) || emailMimeTypes.has(file.mimeType);
     },
     async render(ctx) {
+      const DOMPurifyModule = await (domPurifyLoader ||= import("dompurify"));
+      const DOMPurify = DOMPurifyModule.default;
       const panel = createPanel("ofv-email");
       ctx.viewport.append(panel);
 
@@ -215,7 +218,7 @@ export function emailPlugin(): PreviewPlugin {
             }
           });
           html = nextHtml;
-          const sanitizedHtml = sanitizeEmailHtml(html);
+          const sanitizedHtml = sanitizeEmailHtml(html, DOMPurify);
 
           // Render in a sandboxed iframe to prevent styles leaking
           const iframe = document.createElement("iframe");
@@ -547,8 +550,8 @@ function getMimeType(name: string): string {
   return ext ? map[ext] || "application/octet-stream" : "application/octet-stream";
 }
 
-function sanitizeEmailHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
+function sanitizeEmailHtml(html: string, purifier: DOMPurifySanitizer): string {
+  return purifier.sanitize(html, {
     USE_PROFILES: { html: true },
     ADD_ATTR: ["target"],
     ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|blob|cid):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i

@@ -161,6 +161,7 @@ const mimeLangMap: Record<string, string> = {
 
 const MAX_HIGHLIGHT_CHARS = 180_000;
 const MAX_RENDER_CHARS = 600_000;
+const prismLanguageLoads = new Map<string, Promise<void>>();
 
 export function textPlugin(): PreviewPlugin {
   return {
@@ -212,6 +213,14 @@ export function textPlugin(): PreviewPlugin {
         try {
           const codeBlocks = container.querySelectorAll("pre code");
           if (codeBlocks.length > 0) {
+            const languages = new Set<string>();
+            codeBlocks.forEach((block) => {
+              const language = getPrismLanguageFromElement(block) || getPrismLanguageFromElement(block.parentElement);
+              if (language) {
+                languages.add(language);
+              }
+            });
+            await Promise.all([...languages].map((language) => loadPrismLanguage(language)));
             codeBlocks.forEach((block) => {
               const parent = block.parentElement;
               if (parent && !parent.className.includes("language-")) {
@@ -246,97 +255,7 @@ export function textPlugin(): PreviewPlugin {
       // Load specific language component dynamically if needed
       if (lang !== "none") {
         try {
-          if (lang === "typescript" || lang === "tsx") {
-            await import("prismjs/components/prism-typescript");
-          } else if (lang === "python") {
-            await import("prismjs/components/prism-python");
-          } else if (lang === "json") {
-            await import("prismjs/components/prism-json");
-          } else if (lang === "json5") {
-            await import("prismjs/components/prism-json5");
-          } else if (lang === "yaml") {
-            await import("prismjs/components/prism-yaml");
-          } else if (lang === "toml") {
-            await import("prismjs/components/prism-toml");
-          } else if (lang === "ini") {
-            await import("prismjs/components/prism-ini");
-          } else if (lang === "properties") {
-            await import("prismjs/components/prism-properties");
-          } else if (lang === "editorconfig") {
-            await import("prismjs/components/prism-editorconfig");
-          } else if (lang === "ignore") {
-            await import("prismjs/components/prism-ignore");
-          } else if (lang === "protobuf") {
-            await import("prismjs/components/prism-protobuf");
-          } else if (lang === "hcl") {
-            await import("prismjs/components/prism-hcl");
-          } else if (lang === "latex") {
-            await import("prismjs/components/prism-latex");
-          } else if (lang === "dot") {
-            await import("prismjs/components/prism-dot");
-          } else if (lang === "http") {
-            await import("prismjs/components/prism-http");
-          } else if (lang === "bash") {
-            await import("prismjs/components/prism-bash");
-          } else if (lang === "powershell") {
-            await import("prismjs/components/prism-powershell");
-          } else if (lang === "batch") {
-            await import("prismjs/components/prism-batch");
-          } else if (lang === "docker") {
-            await import("prismjs/components/prism-docker");
-          } else if (lang === "makefile") {
-            await import("prismjs/components/prism-makefile");
-          } else if (lang === "ruby") {
-            await import("prismjs/components/prism-ruby");
-          } else if (lang === "nginx") {
-            await import("prismjs/components/prism-nginx");
-          } else if (lang === "groovy") {
-            await import("prismjs/components/prism-groovy");
-          } else if (lang === "graphql") {
-            await import("prismjs/components/prism-graphql");
-          } else if (lang === "csharp") {
-            await import("prismjs/components/prism-csharp");
-          } else if (lang === "rust") {
-            await import("prismjs/components/prism-rust");
-          } else if (lang === "go") {
-            await import("prismjs/components/prism-go");
-          } else if (lang === "ruby") {
-            await import("prismjs/components/prism-ruby");
-          } else if (lang === "swift") {
-            await import("prismjs/components/prism-swift");
-          } else if (lang === "kotlin") {
-            await import("prismjs/components/prism-kotlin");
-          } else if (lang === "scala") {
-            await import("prismjs/components/prism-scala");
-          } else if (lang === "lua") {
-            await import("prismjs/components/prism-lua");
-          } else if (lang === "r") {
-            await import("prismjs/components/prism-r");
-          } else if (lang === "dart") {
-            await import("prismjs/components/prism-dart");
-          } else if (lang === "elm") {
-            await import("prismjs/components/prism-elm");
-          } else if (lang === "elixir") {
-            await import("prismjs/components/prism-elixir");
-          } else if (lang === "clojure") {
-            await import("prismjs/components/prism-clojure");
-          } else if (lang === "erlang") {
-            await import("prismjs/components/prism-erlang");
-          } else if (lang === "fsharp") {
-            await import("prismjs/components/prism-fsharp");
-          } else if (lang === "haskell") {
-            await import("prismjs/components/prism-haskell");
-          } else if (lang === "sql") {
-            await import("prismjs/components/prism-sql");
-          } else if (lang === "cpp") {
-            await import("prismjs/components/prism-c");
-            await import("prismjs/components/prism-cpp");
-          } else if (lang === "java") {
-            await import("prismjs/components/prism-java");
-          } else if (lang === "php") {
-            await import("prismjs/components/prism-markup-templating");
-            await import("prismjs/components/prism-php");
-          }
+          await loadPrismLanguage(lang);
         } catch (e) {
           console.warn(`Prism failed to load language component for: ${lang}`, e);
         }
@@ -477,6 +396,100 @@ export function textPlugin(): PreviewPlugin {
       };
     }
   };
+}
+
+function getPrismLanguageFromElement(element: Element | null): string | undefined {
+  if (!element) {
+    return undefined;
+  }
+  for (const className of element.classList) {
+    if (className.startsWith("language-") && className.length > 9) {
+      return className.slice(9).toLowerCase();
+    }
+  }
+  return undefined;
+}
+
+async function loadPrismLanguage(language: string): Promise<void> {
+  if (["none", "plain", "plaintext", "text", "markup", "css", "clike", "javascript"].includes(language)) {
+    return;
+  }
+
+  const existing = prismLanguageLoads.get(language);
+  if (existing) {
+    return existing;
+  }
+
+  const loading = loadPrismLanguageComponent(language).catch((error) => {
+    prismLanguageLoads.delete(language);
+    throw error;
+  });
+  prismLanguageLoads.set(language, loading);
+  return loading;
+}
+
+async function loadPrismLanguageComponent(language: string): Promise<void> {
+  switch (language) {
+    case "typescript": await import("prismjs/components/prism-typescript"); break;
+    case "jsx": await import("prismjs/components/prism-jsx"); break;
+    case "tsx":
+      await import("./prism-languages/tsx");
+      break;
+    case "python": await import("prismjs/components/prism-python"); break;
+    case "json": await import("prismjs/components/prism-json"); break;
+    case "json5":
+      await import("./prism-languages/json5");
+      break;
+    case "yaml": await import("prismjs/components/prism-yaml"); break;
+    case "toml": await import("prismjs/components/prism-toml"); break;
+    case "ini": await import("prismjs/components/prism-ini"); break;
+    case "properties": await import("prismjs/components/prism-properties"); break;
+    case "editorconfig": await import("prismjs/components/prism-editorconfig"); break;
+    case "ignore": await import("prismjs/components/prism-ignore"); break;
+    case "protobuf": await import("prismjs/components/prism-protobuf"); break;
+    case "hcl": await import("prismjs/components/prism-hcl"); break;
+    case "latex": await import("prismjs/components/prism-latex"); break;
+    case "dot": await import("prismjs/components/prism-dot"); break;
+    case "http": await import("prismjs/components/prism-http"); break;
+    case "bash": await import("prismjs/components/prism-bash"); break;
+    case "powershell": await import("prismjs/components/prism-powershell"); break;
+    case "batch": await import("prismjs/components/prism-batch"); break;
+    case "docker": await import("prismjs/components/prism-docker"); break;
+    case "makefile": await import("prismjs/components/prism-makefile"); break;
+    case "ruby": await import("prismjs/components/prism-ruby"); break;
+    case "nginx": await import("prismjs/components/prism-nginx"); break;
+    case "groovy": await import("prismjs/components/prism-groovy"); break;
+    case "graphql": await import("prismjs/components/prism-graphql"); break;
+    case "csharp": await import("prismjs/components/prism-csharp"); break;
+    case "rust": await import("prismjs/components/prism-rust"); break;
+    case "go": await import("prismjs/components/prism-go"); break;
+    case "swift": await import("prismjs/components/prism-swift"); break;
+    case "kotlin": await import("prismjs/components/prism-kotlin"); break;
+    case "java": await import("prismjs/components/prism-java"); break;
+    case "scala":
+      await import("./prism-languages/scala");
+      break;
+    case "lua": await import("prismjs/components/prism-lua"); break;
+    case "r": await import("prismjs/components/prism-r"); break;
+    case "dart": await import("prismjs/components/prism-dart"); break;
+    case "elm": await import("prismjs/components/prism-elm"); break;
+    case "elixir": await import("prismjs/components/prism-elixir"); break;
+    case "clojure": await import("prismjs/components/prism-clojure"); break;
+    case "erlang": await import("prismjs/components/prism-erlang"); break;
+    case "fsharp": await import("prismjs/components/prism-fsharp"); break;
+    case "haskell": await import("prismjs/components/prism-haskell"); break;
+    case "sql": await import("prismjs/components/prism-sql"); break;
+    case "c": await import("prismjs/components/prism-c"); break;
+    case "cpp":
+      await import("./prism-languages/cpp");
+      break;
+    case "scss": await import("prismjs/components/prism-scss"); break;
+    case "less": await import("prismjs/components/prism-less"); break;
+    case "markup-templating": await import("prismjs/components/prism-markup-templating"); break;
+    case "php":
+      await import("./prism-languages/php");
+      break;
+  }
 }
 
 function createTextZoomController(target: HTMLElement, cssVariable: string, ctx: PreviewContext) {
