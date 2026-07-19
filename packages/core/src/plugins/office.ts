@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import DOMPurify from "dompurify";
+import * as docxPreview from "docx-preview";
 import type { WorkBook } from "xlsx";
 import { formatPreviewMessage } from "../messages";
 import type { PreviewCommand, PreviewContext, PreviewFit, PreviewInstance, PreviewMessages, PreviewPlugin } from "../types";
@@ -13,6 +14,7 @@ const presentationExtensions = new Set(["pptx", "pptm", "ppt", "pps", "ppsx", "p
 const packagedOfficeCandidates = new Set(["wps", "et", "dps", "numbers", "key"]);
 const SHEET_WINDOW_ROWS = 200;
 const SHEET_WINDOW_COLUMNS = 80;
+const DEFAULT_DOCX_RENDER_TIMEOUT_MS = 15000;
 const DEFAULT_PPTX_RENDER_TIMEOUT_MS = 12000;
 const PPTX_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships";
 const officeMimeTypes = new Set([
@@ -436,23 +438,28 @@ async function renderDocx(panel: HTMLElement, arrayBuffer: ArrayBuffer, fit: Pre
   let disposeFit: (() => void) | undefined;
 
   try {
-    const docxPreview = await import("docx-preview");
-    await docxPreview.renderAsync(arrayBuffer, content, styleContainer, {
-      className: "ofv-docx",
-      inWrapper: true,
-      breakPages: true,
-      ignoreWidth: false,
-      ignoreHeight: false,
-      ignoreFonts: false,
-      renderHeaders: true,
-      renderFooters: true,
-      renderFootnotes: true,
-      renderEndnotes: true,
-      renderComments: true,
-      renderAltChunks: true,
-      experimental: true,
-      useBase64URL: true
-    });
+    await withTimeout(
+      (async () => {
+        await docxPreview.renderAsync(arrayBuffer, content, styleContainer, {
+          className: "ofv-docx",
+          inWrapper: true,
+          breakPages: true,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          ignoreFonts: false,
+          renderHeaders: true,
+          renderFooters: true,
+          renderFootnotes: true,
+          renderEndnotes: true,
+          renderComments: true,
+          renderAltChunks: true,
+          experimental: true,
+          useBase64URL: true
+        });
+      })(),
+      docxRenderTimeoutMs(),
+      "DOCX rendering"
+    );
     await normalizeDocxLayout(content, arrayBuffer);
     const shouldUseTextboxFallback =
       (await docxPreviewLooksBlank(content, arrayBuffer)) ||
@@ -478,12 +485,18 @@ async function renderDocx(panel: HTMLElement, arrayBuffer: ArrayBuffer, fit: Pre
   } catch (error) {
     disposeFit?.();
     styleContainer.remove();
-    content.replaceChildren();
-    await renderDocxContentFallback(content, arrayBuffer);
-    panel.append(content);
+    const fallbackContent = document.createElement("div");
+    fallbackContent.className = "ofv-docx-document";
+    await renderDocxContentFallback(fallbackContent, arrayBuffer);
+    panel.append(fallbackContent);
     console.warn("DOCX layout preview failed, fell back to Mammoth:", error);
   }
   return () => undefined;
+}
+
+function docxRenderTimeoutMs(): number {
+  const override = (globalThis as { __OFV_DOCX_RENDER_TIMEOUT_MS__?: unknown }).__OFV_DOCX_RENDER_TIMEOUT_MS__;
+  return typeof override === "number" && override > 0 ? override : DEFAULT_DOCX_RENDER_TIMEOUT_MS;
 }
 
 async function docxPreviewLooksBlank(container: HTMLElement, arrayBuffer: ArrayBuffer): Promise<boolean> {
@@ -601,12 +614,13 @@ async function renderDocxContentFallback(
     return;
   }
   try {
-    await renderDocxWithMammoth(container, arrayBuffer);
-    const renderedText = normalizePreviewText(container.querySelector(".ofv-document")?.textContent || "");
+    const mammothContent = document.createElement("div");
+    await withTimeout(renderDocxWithMammoth(mammothContent, arrayBuffer), docxRenderTimeoutMs(), "DOCX fallback rendering");
+    const renderedText = normalizePreviewText(mammothContent.querySelector(".ofv-document")?.textContent || "");
     if (renderedText.length >= 24) {
+      container.append(...Array.from(mammothContent.childNodes));
       return;
     }
-    container.querySelector(".ofv-document")?.remove();
     await renderDocxTextFallback(container, arrayBuffer);
   } catch (fallbackError) {
     await renderDocxTextFallback(container, arrayBuffer);
@@ -3407,13 +3421,13 @@ function renderPptxTextFallback(container: HTMLElement, insight: PresentationIns
   }
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label = "PPTX rendering"): Promise<T> {
   let timeoutId: number | undefined;
   try {
     return await Promise.race([
       promise,
       new Promise<T>((_resolve, reject) => {
-        timeoutId = window.setTimeout(() => reject(new Error(`PPTX rendering timed out after ${timeoutMs}ms.`)), timeoutMs);
+        timeoutId = window.setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms.`)), timeoutMs);
       })
     ]);
   } finally {

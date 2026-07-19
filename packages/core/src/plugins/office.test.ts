@@ -6,10 +6,15 @@ import { renderLegacyWordDocument, type LegacyWordDocument } from "./msdoc";
 import { officePlugin } from "./office";
 
 const shouldFailDocxPreview = vi.hoisted(() => ({ value: false }));
+const shouldHangDocxPreview = vi.hoisted(() => ({ value: false }));
 const shouldFailMammoth = vi.hoisted(() => ({ value: false }));
+const shouldHangMammoth = vi.hoisted(() => ({ value: false }));
 const shouldRenderBlankDocxPreview = vi.hoisted(() => ({ value: false }));
 const renderDocxAsync = vi.hoisted(() =>
   vi.fn(async (_data: unknown, bodyContainer: HTMLElement, _styleContainer?: HTMLElement, _options?: unknown) => {
+    if (shouldHangDocxPreview.value) {
+      return new Promise<void>(() => undefined);
+    }
     if (shouldFailDocxPreview.value) {
       throw new Error("docx-preview failed");
     }
@@ -99,6 +104,9 @@ vi.mock("docx-preview", () => ({
 vi.mock("mammoth", () => ({
   default: {
     convertToHtml: vi.fn(async () => {
+      if (shouldHangMammoth.value) {
+        return new Promise(() => undefined);
+      }
       if (shouldFailMammoth.value) {
         throw new Error("mammoth failed");
       }
@@ -109,6 +117,9 @@ vi.mock("mammoth", () => ({
     }
   },
   convertToHtml: vi.fn(async () => {
+    if (shouldHangMammoth.value) {
+      return new Promise(() => undefined);
+    }
     if (shouldFailMammoth.value) {
       throw new Error("mammoth failed");
     }
@@ -136,9 +147,12 @@ describe("officePlugin", () => {
     document.head.querySelectorAll(".ofv-docx-style-container").forEach((element) => element.remove());
     vi.restoreAllMocks();
     shouldFailDocxPreview.value = false;
+    shouldHangDocxPreview.value = false;
     shouldFailMammoth.value = false;
+    shouldHangMammoth.value = false;
     shouldRenderBlankDocxPreview.value = false;
     pptxRenderMode.value = "normal";
+    delete (globalThis as { __OFV_DOCX_RENDER_TIMEOUT_MS__?: number }).__OFV_DOCX_RENDER_TIMEOUT_MS__;
     delete (globalThis as { __OFV_PPTX_RENDER_TIMEOUT_MS__?: number }).__OFV_PPTX_RENDER_TIMEOUT_MS__;
   });
 
@@ -928,6 +942,27 @@ describe("officePlugin", () => {
     expect(fallbackNote?.textContent).toContain("基础内容预览");
     expect(fallbackNote?.getAttribute("aria-hidden")).toBe("true");
     expect(container.textContent).toContain("Raw paragraph");
+  });
+
+  it("stops loading and falls back when the DOCX renderer hangs", async () => {
+    const container = document.createElement("div");
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    shouldHangDocxPreview.value = true;
+    shouldHangMammoth.value = true;
+    (globalThis as { __OFV_DOCX_RENDER_TIMEOUT_MS__?: number }).__OFV_DOCX_RENDER_TIMEOUT_MS__ = 50;
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: await createMinimalDocx("Qiankun fallback paragraph with enough readable text"),
+      fileName: "qiankun.docx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => container.textContent?.includes("Qiankun fallback paragraph") || false, 1000);
+
+    expect(container.querySelector(".ofv-docx-document")?.textContent).toContain("Qiankun fallback paragraph");
+    expect(container.textContent).not.toContain("Loading preview");
   });
 
   it("falls back to OpenXML text when DOCX layout renderer succeeds with blank textbox content", async () => {
