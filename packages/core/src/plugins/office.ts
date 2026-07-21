@@ -2018,7 +2018,10 @@ function renderSheetFallback(panel: HTMLElement, extension: string, detail: stri
 async function readWorkbookSheetImages(arrayBuffer: ArrayBuffer): Promise<Map<string, WorkbookSheetImage[]>> {
   const zip = await JSZip.loadAsync(arrayBuffer);
   const fileNames = Object.keys(zip.files);
-  if (!fileNames.some((name) => /^xl\/drawings\/.+\.xml$/i.test(name))) {
+  const hasWorkbookImages = fileNames.some(
+    (name) => /^xl\/drawings\/.+\.xml$/i.test(name) || /^xl\/cellimages\.xml$/i.test(name) || /^xl\/richData\//i.test(name)
+  );
+  if (!hasWorkbookImages) {
     return new Map();
   }
   const workbookXml = await zip.file("xl/workbook.xml")?.async("text");
@@ -2031,6 +2034,7 @@ async function readWorkbookSheetImages(arrayBuffer: ArrayBuffer): Promise<Map<st
   }
 
   const workbookRels = await readOfficeRelationships(zip, "xl/workbook.xml");
+  const cellImageContext: WorkbookCellImageContext = {};
   const result = new Map<string, WorkbookSheetImage[]>();
   const sheetElements = Array.from(workbookDoc.getElementsByTagName("*")).filter((element) => element.localName === "sheet");
   for (const sheetElement of sheetElements) {
@@ -2041,7 +2045,7 @@ async function readWorkbookSheetImages(arrayBuffer: ArrayBuffer): Promise<Map<st
     if (!sheetName || !sheetPath) {
       continue;
     }
-    const images = await readWorksheetImages(zip, sheetPath);
+    const images = await readWorksheetImages(zip, sheetPath, cellImageContext);
     if (images.length > 0) {
       result.set(sheetName, images);
     }
@@ -2049,7 +2053,7 @@ async function readWorkbookSheetImages(arrayBuffer: ArrayBuffer): Promise<Map<st
   return result;
 }
 
-async function readWorksheetImages(zip: JSZip, sheetPath: string): Promise<WorkbookSheetImage[]> {
+async function readWorksheetImages(zip: JSZip, sheetPath: string, cellImageContext?: WorkbookCellImageContext): Promise<WorkbookSheetImage[]> {
   const sheetXml = await zip.file(sheetPath)?.async("text");
   const sheetDoc = sheetXml ? parseOfficeXml(sheetXml) : undefined;
   if (!sheetDoc) {
@@ -2068,6 +2072,9 @@ async function readWorksheetImages(zip: JSZip, sheetPath: string): Promise<Workb
     if (drawingPath) {
       images.push(...(await readWorksheetDrawingImages(zip, drawingPath)));
     }
+  }
+  if (cellImageContext) {
+    images.push(...(await readWorksheetEmbeddedCellImages(zip, sheetDoc, cellImageContext)));
   }
   return images;
 }
@@ -2127,6 +2134,199 @@ function readDrawingMarkerIndex(marker: Element, localName: "row" | "col"): numb
   const element = Array.from(marker.children).find((child) => child.localName === localName);
   const value = Number.parseInt(element?.textContent || "0", 10);
   return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+type WpsCellImageEntry = {
+  mediaPath: string;
+  title?: string;
+};
+
+type WorkbookCellImageContext = {
+  wpsCellImages?: Promise<Map<string, WpsCellImageEntry>>;
+  richValueImages?: Promise<Map<number, string>>;
+};
+
+async function readWorksheetEmbeddedCellImages(
+  zip: JSZip,
+  sheetDoc: Document,
+  context: WorkbookCellImageContext
+): Promise<WorkbookSheetImage[]> {
+  const cellElements = Array.from(sheetDoc.getElementsByTagName("*")).filter((element) => element.localName === "c");
+  const wpsRefs: Array<{ row: number; column: number; imageId: string }> = [];
+  const richValueRefs: Array<{ row: number; column: number; vm: number }> = [];
+  for (const cellElement of cellElements) {
+    const reference = cellElement.getAttribute("r");
+    const position = reference ? decodeSheetCellReference(reference) : undefined;
+    if (!position) {
+      continue;
+    }
+    const formula = Array.from(cellElement.children).find((child) => child.localName === "f")?.textContent || "";
+    const dispimgId = matchDispimgImageId(formula);
+    if (dispimgId) {
+      wpsRefs.push({ ...position, imageId: dispimgId });
+      continue;
+    }
+    const vm = Number.parseInt(cellElement.getAttribute("vm") || "", 10);
+    if (Number.isFinite(vm) && vm > 0) {
+      richValueRefs.push({ ...position, vm });
+    }
+  }
+
+  const images: WorkbookSheetImage[] = [];
+  if (wpsRefs.length > 0) {
+    context.wpsCellImages ??= readWpsCellImageIndex(zip);
+    const index = await context.wpsCellImages;
+    for (const ref of wpsRefs) {
+      const entry = index.get(ref.imageId);
+      const mediaFile = entry ? zip.file(entry.mediaPath) : undefined;
+      if (!entry || !mediaFile) {
+        continue;
+      }
+      const mimeType = mimeTypeFromImagePath(entry.mediaPath);
+      images.push({
+        row: ref.row,
+        column: ref.column,
+        fileName: entry.mediaPath.split("/").pop() || "image",
+        mimeType,
+        dataUrl: `data:${mimeType};base64,${await mediaFile.async("base64")}`,
+        title: entry.title
+      });
+    }
+  }
+  if (richValueRefs.length > 0) {
+    context.richValueImages ??= readRichValueImageIndex(zip);
+    const index = await context.richValueImages;
+    for (const ref of richValueRefs) {
+      const mediaPath = index.get(ref.vm);
+      const mediaFile = mediaPath ? zip.file(mediaPath) : undefined;
+      if (!mediaPath || !mediaFile) {
+        continue;
+      }
+      const mimeType = mimeTypeFromImagePath(mediaPath);
+      images.push({
+        row: ref.row,
+        column: ref.column,
+        fileName: mediaPath.split("/").pop() || "image",
+        mimeType,
+        dataUrl: `data:${mimeType};base64,${await mediaFile.async("base64")}`
+      });
+    }
+  }
+  return images;
+}
+
+function matchDispimgImageId(formula: string): string | undefined {
+  const match = /(?:_xlfn\.)?DISPIMG\(\s*"([^"]+)"/i.exec(formula);
+  return match?.[1];
+}
+
+function decodeSheetCellReference(reference: string): { row: number; column: number } | undefined {
+  const match = /^\$?([A-Za-z]{1,3})\$?(\d{1,7})$/.exec(reference.trim());
+  if (!match) {
+    return undefined;
+  }
+  let column = 0;
+  for (const char of match[1].toUpperCase()) {
+    column = column * 26 + (char.charCodeAt(0) - 64);
+  }
+  const row = Number.parseInt(match[2], 10);
+  if (!Number.isFinite(row) || row < 1) {
+    return undefined;
+  }
+  return { row: row - 1, column: column - 1 };
+}
+
+async function readWpsCellImageIndex(zip: JSZip): Promise<Map<string, WpsCellImageEntry>> {
+  const result = new Map<string, WpsCellImageEntry>();
+  const cellImagesXml = await zip.file("xl/cellimages.xml")?.async("text");
+  const cellImagesDoc = cellImagesXml ? parseOfficeXml(cellImagesXml) : undefined;
+  if (!cellImagesDoc) {
+    return result;
+  }
+  const cellImageRels = await readOfficeRelationships(zip, "xl/cellimages.xml");
+  const pics = Array.from(cellImagesDoc.getElementsByTagName("*")).filter((element) => element.localName === "pic");
+  for (const pic of pics) {
+    const nonVisualProperties = Array.from(pic.getElementsByTagName("*")).find((element) => element.localName === "cNvPr");
+    const imageId = nonVisualProperties?.getAttribute("name");
+    const embedId = findDrawingImageRelationshipId(pic);
+    const mediaRel = cellImageRels.find((rel) => rel.id === embedId && /\/image$/i.test(rel.type));
+    const mediaPath = resolveOfficeRelationshipTarget("xl/cellimages.xml", mediaRel?.target);
+    if (!imageId || !mediaPath) {
+      continue;
+    }
+    result.set(imageId, { mediaPath, title: nonVisualProperties?.getAttribute("descr") || undefined });
+  }
+  return result;
+}
+
+async function readRichValueImageIndex(zip: JSZip): Promise<Map<number, string>> {
+  const result = new Map<number, string>();
+  const metadataXml = await zip.file("xl/metadata.xml")?.async("text");
+  const metadataDoc = metadataXml ? parseOfficeXml(metadataXml) : undefined;
+  if (!metadataDoc) {
+    return result;
+  }
+
+  const metadataTypeElements = Array.from(metadataDoc.getElementsByTagName("*")).filter(
+    (element) => element.localName === "metadataType"
+  );
+  const richTypeIndexes = new Set<number>();
+  metadataTypeElements.forEach((element, index) => {
+    if ((element.getAttribute("name") || "").toUpperCase() === "XLRICHVALUE") {
+      richTypeIndexes.add(index + 1);
+    }
+  });
+  if (richTypeIndexes.size === 0) {
+    return result;
+  }
+
+  const valueMetadata = Array.from(metadataDoc.getElementsByTagName("*")).find((element) => element.localName === "valueMetadata");
+  const valueBlocks = valueMetadata ? Array.from(valueMetadata.children).filter((element) => element.localName === "bk") : [];
+  const vmToRichValue = new Map<number, number>();
+  valueBlocks.forEach((block, index) => {
+    const richRecord = Array.from(block.getElementsByTagName("*")).find((element) => {
+      if (element.localName !== "rc") {
+        return false;
+      }
+      const typeIndex = Number.parseInt(element.getAttribute("t") || "", 10);
+      return richTypeIndexes.has(typeIndex);
+    });
+    const richValueIndex = richRecord ? Number.parseInt(richRecord.getAttribute("v") || "", 10) : Number.NaN;
+    if (Number.isFinite(richValueIndex) && richValueIndex >= 0) {
+      vmToRichValue.set(index + 1, richValueIndex);
+    }
+  });
+  if (vmToRichValue.size === 0) {
+    return result;
+  }
+
+  const richValueXml = await zip.file("xl/richData/rdrichvalue.xml")?.async("text");
+  const richValueDoc = richValueXml ? parseOfficeXml(richValueXml) : undefined;
+  const richValueRelXml = await zip.file("xl/richData/richValueRel.xml")?.async("text");
+  const richValueRelDoc = richValueRelXml ? parseOfficeXml(richValueRelXml) : undefined;
+  if (!richValueDoc || !richValueRelDoc) {
+    return result;
+  }
+  const richValues = Array.from(richValueDoc.getElementsByTagName("*")).filter((element) => element.localName === "rv");
+  const relIndexes = richValues.map((richValue) => {
+    const binding = Array.from(richValue.getElementsByTagName("*")).find((element) => element.localName === "vb");
+    return Number.parseInt(binding?.getAttribute("i") || "", 10);
+  });
+  const relIds = Array.from(richValueRelDoc.getElementsByTagName("*"))
+    .filter((element) => element.localName === "rel")
+    .map((element) => getXmlAttribute(element, "id") || "");
+  const richValueRels = await readOfficeRelationships(zip, "xl/richData/richValueRel.xml");
+
+  for (const [vm, richValueIndex] of vmToRichValue) {
+    const relIndex = relIndexes[richValueIndex];
+    const relId = Number.isFinite(relIndex) ? relIds[relIndex] : undefined;
+    const mediaRel = richValueRels.find((rel) => rel.id === relId && /\/image$/i.test(rel.type));
+    const mediaPath = resolveOfficeRelationshipTarget("xl/richData/richValueRel.xml", mediaRel?.target);
+    if (mediaPath) {
+      result.set(vm, mediaPath);
+    }
+  }
+  return result;
 }
 
 type OfficeRelationship = {

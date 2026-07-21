@@ -277,6 +277,47 @@ describe("officePlugin", () => {
     expect(image?.alt).toBe("Drawing folder logo");
   });
 
+  it("renders WPS cell-embedded images referenced by DISPIMG formulas", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: await createWorkbookWithWpsCellImage(),
+      fileName: "wps-cell-image.xlsx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-workbook-image img")));
+
+    const imageCell = container.querySelector<HTMLTableCellElement>('[data-cell="B2"]');
+    const image = imageCell?.querySelector<HTMLImageElement>("img");
+    expect(imageCell?.classList.contains("ofv-cell-image")).toBe(true);
+    expect(imageCell?.textContent).not.toContain("#VALUE!");
+    expect(image?.src).toContain("data:image/png;base64,");
+    expect(image?.alt).toBe("WPS cell image");
+  });
+
+  it("renders rich-value in-cell images stored under xl/richData", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: await createWorkbookWithRichValueCellImage(),
+      fileName: "rich-value-cell-image.xlsx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-workbook-image img")));
+
+    const imageCell = container.querySelector<HTMLTableCellElement>('[data-cell="C3"]');
+    const image = imageCell?.querySelector<HTMLImageElement>("img");
+    expect(imageCell?.classList.contains("ofv-cell-image")).toBe(true);
+    expect(imageCell?.textContent).not.toContain("#VALUE!");
+    expect(image?.src).toContain("data:image/png;base64,");
+  });
+
   it("responds to shared toolbar zoom for workbook previews", async () => {
     const xlsx = await import("xlsx");
     const sheet = xlsx.utils.aoa_to_sheet([
@@ -2446,6 +2487,173 @@ async function createWorkbookWithImage(
       </Relationships>`
   );
   zip.file(mediaFilePath, Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  return zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+}
+
+async function createWorkbookWithWpsCellImage(): Promise<Blob> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+        <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+        <Default Extension="xml" ContentType="application/xml"/>
+        <Default Extension="png" ContentType="image/png"/>
+        <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+        <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+      </Types>`
+  );
+  zip.file(
+    "_rels/.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+      </Relationships>`
+  );
+  zip.file(
+    "xl/_rels/workbook.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+      </Relationships>`
+  );
+  zip.file(
+    "xl/workbook.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <sheets><sheet name="CellImages" sheetId="1" r:id="rId1"/></sheets>
+      </workbook>`
+  );
+  zip.file(
+    "xl/worksheets/sheet1.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <sheetData>
+          <row r="1"><c r="A1" t="inlineStr"><is><t>Name</t></is></c><c r="B1" t="inlineStr"><is><t>Photo</t></is></c></row>
+          <row r="2" ht="72" customHeight="1">
+            <c r="A2" t="inlineStr"><is><t>Apple</t></is></c>
+            <c r="B2" t="e"><f>DISPIMG(&quot;ID_TEST_WPS_1&quot;,1)</f><v>#VALUE!</v></c>
+          </row>
+        </sheetData>
+      </worksheet>`
+  );
+  zip.file(
+    "xl/cellimages.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <etc:cellImages xmlns:etc="http://www.wps.cn/officeDocument/2017/etCustomData"
+        xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <xdr:pic>
+          <xdr:nvPicPr><xdr:cNvPr id="2" name="ID_TEST_WPS_1" descr="WPS cell image"/><xdr:cNvPicPr/></xdr:nvPicPr>
+          <xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>
+          <xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>
+        </xdr:pic>
+      </etc:cellImages>`
+  );
+  zip.file(
+    "xl/_rels/cellimages.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+      </Relationships>`
+  );
+  zip.file("xl/media/image1.png", Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  return zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+}
+
+async function createWorkbookWithRichValueCellImage(): Promise<Blob> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+        <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+        <Default Extension="xml" ContentType="application/xml"/>
+        <Default Extension="png" ContentType="image/png"/>
+        <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+        <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+      </Types>`
+  );
+  zip.file(
+    "_rels/.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+      </Relationships>`
+  );
+  zip.file(
+    "xl/_rels/workbook.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+      </Relationships>`
+  );
+  zip.file(
+    "xl/workbook.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <sheets><sheet name="RichImages" sheetId="1" r:id="rId1"/></sheets>
+      </workbook>`
+  );
+  zip.file(
+    "xl/worksheets/sheet1.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <sheetData>
+          <row r="1"><c r="A1" t="inlineStr"><is><t>Name</t></is></c></row>
+          <row r="3" ht="72" customHeight="1">
+            <c r="C3" t="e" vm="1"><v>#VALUE!</v></c>
+          </row>
+        </sheetData>
+      </worksheet>`
+  );
+  zip.file(
+    "xl/metadata.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <metadataTypes count="1">
+          <metadataType name="XLRICHVALUE" minSupportedVersion="120000" copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" rowColShift="1" clearFormats="1" clearComments="1" assign="1" coerce="1" cellMeta="1"/>
+        </metadataTypes>
+        <futureMetadata name="XLRICHVALUE" count="1">
+          <bk><rc t="1" v="0"/></bk>
+        </futureMetadata>
+        <valueMetadata count="1">
+          <bk><rc t="1" v="0"/></bk>
+        </valueMetadata>
+      </metadata>`
+  );
+  zip.file(
+    "xl/richData/rdrichvalue.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <rvData xmlns="http://schemas.microsoft.com/office/spreadsheetml/2017/richdata" count="1">
+        <rv i="0"><v>0</v><vb i="0"/></rv>
+      </rvData>`
+  );
+  zip.file(
+    "xl/richData/richValueRel.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <richValueRels xmlns="http://schemas.microsoft.com/office/spreadsheetml/2022/richvaluerel"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" count="1">
+        <rel r:id="rId1"/>
+      </richValueRels>`
+  );
+  zip.file(
+    "xl/richData/_rels/richValueRel.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>
+      </Relationships>`
+  );
+  zip.file("xl/media/image1.png", Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]));
   return zip.generateAsync({
     type: "blob",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
