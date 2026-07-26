@@ -145,20 +145,48 @@ export function imagePlugin(): PreviewPlugin {
       const zoomLabel = document.createElement("span");
       zoomLabel.className = "ofv-image-zoom";
 
+      // The scrollbox width/height is derived from the visual's layout size, but a
+      // sized scrollbox feeds back into the layout of visuals without an intrinsic
+      // size (e.g. SVG without width/height). Measure once with the inline sizes
+      // cleared, then pin the visual's layout so later box changes cannot feed back;
+      // invalidate only when the available space changes.
+      let measuredBase: { width: number; height: number } | null = null;
+
+      const invalidateBaseSize = () => {
+        measuredBase = null;
+        visual.style.removeProperty("width");
+        visual.style.removeProperty("height");
+        visualBox.style.removeProperty("width");
+        visualBox.style.removeProperty("height");
+      };
+
       const updateScrollBox = () => {
         if (visual.classList.contains("ofv-tiff-pages")) {
           visualBox.style.removeProperty("width");
           visualBox.style.removeProperty("height");
           return;
         }
-        const baseWidth = visual.offsetWidth || visual.getBoundingClientRect().width || (visual as HTMLImageElement).naturalWidth || 0;
-        const baseHeight = visual.offsetHeight || visual.getBoundingClientRect().height || (visual as HTMLImageElement).naturalHeight || 0;
-        if (baseWidth > 0) {
-          visualBox.style.width = `${Math.ceil(baseWidth * scale)}px`;
+        if (!measuredBase) {
+          visual.style.removeProperty("width");
+          visual.style.removeProperty("height");
+          visualBox.style.removeProperty("width");
+          visualBox.style.removeProperty("height");
+          const width = visual.offsetWidth || visual.getBoundingClientRect().width || (visual as HTMLImageElement).naturalWidth || 0;
+          const height = visual.offsetHeight || visual.getBoundingClientRect().height || (visual as HTMLImageElement).naturalHeight || 0;
+          if (width <= 0 || height <= 0) {
+            return;
+          }
+          measuredBase = { width, height };
+          visual.style.width = `${width}px`;
+          visual.style.height = `${height}px`;
         }
-        if (baseHeight > 0) {
-          visualBox.style.height = `${Math.ceil(baseHeight * scale)}px`;
-        }
+        // Rotation happens around the visual center, so a sideways rotation swaps
+        // the footprint the scrollbox has to reserve.
+        const sideways = Math.abs(rotation % 180) === 90;
+        const boxWidth = sideways ? measuredBase.height : measuredBase.width;
+        const boxHeight = sideways ? measuredBase.width : measuredBase.height;
+        visualBox.style.width = `${Math.ceil(boxWidth * scale)}px`;
+        visualBox.style.height = `${Math.ceil(boxHeight * scale)}px`;
       };
 
       const updateTransform = () => {
@@ -300,9 +328,14 @@ export function imagePlugin(): PreviewPlugin {
       stage.addEventListener("lostpointercapture", onLostPointerCapture);
       stage.addEventListener("pointerleave", onPointerLeave);
       stage.addEventListener("wheel", onWheel, { passive: false });
+      const onImageLoad = () => {
+        invalidateBaseSize();
+        updateScrollBox();
+      };
+
       if (!tiffSource) {
         image.addEventListener("error", showImageFallback);
-        image.addEventListener("load", updateScrollBox);
+        image.addEventListener("load", onImageLoad);
       }
       window.addEventListener("blur", onWindowBlur);
 
@@ -358,6 +391,7 @@ export function imagePlugin(): PreviewPlugin {
           } else {
             visual.style.maxHeight = `${Math.max(0, size.height - controls.offsetHeight)}px`;
           }
+          invalidateBaseSize();
           updateScrollBox();
         },
         destroy() {
@@ -373,7 +407,7 @@ export function imagePlugin(): PreviewPlugin {
           stage.removeEventListener("pointerleave", onPointerLeave);
           stage.removeEventListener("wheel", onWheel);
           image.removeEventListener("error", showImageFallback);
-          image.removeEventListener("load", updateScrollBox);
+          image.removeEventListener("load", onImageLoad);
           window.removeEventListener("blur", onWindowBlur);
           finishDrag();
           wrapper.remove();

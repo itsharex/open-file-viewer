@@ -52,6 +52,7 @@ const cadExtensions = new Set([
   "sldprt",
   "sldasm",
   "gds",
+  "gdsii",
   "oas",
   "oasis"
 ]);
@@ -73,6 +74,7 @@ const cadMimeTypes = new Set([
   "application/sldworks",
   "application/vnd.gds",
   "application/x-gdsii",
+  "application/gdsii",
   "application/vnd.oasis.layout",
   "application/x-oasis-layout"
 ]);
@@ -94,6 +96,7 @@ const cadMimeFormatMap: Record<string, string> = {
   "application/sldworks": "sldprt",
   "application/vnd.gds": "gds",
   "application/x-gdsii": "gds",
+  "application/gdsii": "gds",
   "application/vnd.oasis.layout": "oas",
   "application/x-oasis-layout": "oas"
 };
@@ -190,7 +193,7 @@ export function cadPlugin(options: CadPluginOptions = {}): PreviewPlugin {
         renderBinaryCad(panel, bytes, extension, ctx.file.name);
         return { destroy: () => panel.remove() };
       }
-      if (extension === "gds") {
+      if (extension === "gds" || extension === "gdsii") {
         const viewer = renderLayoutPreview(panel, parseGdsLayout(new Uint8Array(await readArrayBuffer(ctx.file)), ctx.file.name), ctx);
         return {
           canCommand(command) {
@@ -589,16 +592,16 @@ type LayoutBounds = {
 };
 
 const layoutPalette = [
-  "#2563eb",
-  "#dc2626",
-  "#059669",
-  "#7c3aed",
-  "#d97706",
-  "#0891b2",
-  "#be123c",
-  "#4f46e5",
-  "#15803d",
-  "#a16207"
+  "#60a5fa",
+  "#f87171",
+  "#34d399",
+  "#c084fc",
+  "#fbbf24",
+  "#22d3ee",
+  "#fb7185",
+  "#818cf8",
+  "#4ade80",
+  "#facc15"
 ];
 
 const gdsRecordNames: Record<number, string> = {
@@ -750,7 +753,7 @@ function renderLayoutPreview(
     const polygon = document.createElementNS(svg.namespaceURI, "polygon");
     polygon.setAttribute("points", shape.points.map(([x, y]) => `${x},${-y}`).join(" "));
     polygon.setAttribute("fill", color);
-    polygon.setAttribute("fill-opacity", "0.18");
+    polygon.setAttribute("fill-opacity", "0.3");
     polygon.setAttribute("stroke", color);
     polygon.setAttribute("stroke-width", String(bounds.stroke));
     polygon.setAttribute("vector-effect", "non-scaling-stroke");

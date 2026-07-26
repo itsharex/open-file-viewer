@@ -127,12 +127,14 @@ export function parseLegacyWordDocument(input: ArrayBuffer): LegacyWordDocument 
   const styles = parseStyleTable(tableStream, fib);
   const pieces = parseClxPieces(tableStream, fib.fcClx, fib.lcbClx);
   const text = pieces.length > 0 ? readPieceTableText(wordDocument, pieces, fib.ccpText) : readFibTextFallback(wordDocument, fib);
-  const paragraphs = splitWordParagraphs(text);
+  const segments = segmentWordText(text);
+  const paragraphs = segmentsToParagraphs(segments);
   if (paragraphs.length === 0) {
     throw new Error("未解析到可显示的正文段落");
   }
-  const bodyParagraphs = removeTrailingFooterArtifacts(paragraphs);
-  const blocks = buildWordBlocks(bodyParagraphs);
+  const bodySegments = removeTrailingFooterSegments(segments);
+  const bodyParagraphs = segmentsToParagraphs(bodySegments);
+  const blocks = buildWordBlocks(bodySegments);
   const layout = inferLayoutHints(paragraphs, assets);
 
   return {
@@ -163,6 +165,9 @@ export function renderLegacyWordDocument(panel: HTMLElement, document: LegacyWor
 
   const article = window.document.createElement("article");
   article.className = "ofv-msdoc-document";
+  if (/\p{Script=Han}/u.test(document.title)) {
+    article.classList.add("ofv-msdoc-cjk-document");
+  }
   if (document.blocks.some((block) => block.type === "table" && isLegacyFormTable(block.rows))) {
     article.classList.add("ofv-msdoc-form-document");
   }
@@ -204,7 +209,14 @@ export function renderLegacyWordDocument(panel: HTMLElement, document: LegacyWor
 }
 
 function isEvTrainingWorkbook(document: LegacyWordDocument): boolean {
-  const text = document.blocks.map((block) => "text" in block ? block.text : "").join("\n");
+  const text = document.blocks
+    .map((block) => {
+      if (block.type === "table") {
+        return block.rows.map((row) => row.map(getTableCellText).join("\n")).join("\n");
+      }
+      return "text" in block ? block.text : "";
+    })
+    .join("\n");
   return document.title.includes("纯电动汽车高压断电流程实训")
     && text.includes("新能源汽车作业十不准")
     && text.includes("实训成绩单")
@@ -538,11 +550,15 @@ function renderWordBlock(block: LegacyWordBlock): HTMLElement {
       table.classList.add("ofv-msdoc-form-table");
     }
     const tbody = window.document.createElement("tbody");
+    const hasHeaderRow =
+      !isFormTable &&
+      renderRows.length > 1 &&
+      renderRows[0].every((cell) => getTableCellText(cell).length <= 12);
     for (const row of renderRows) {
       const tr = window.document.createElement("tr");
-      const cellTag = !isFormTable && row === renderRows[0] && renderRows.length > 1 ? "th" : "td";
-      for (const cellData of row) {
-        const cellInfo = normalizeTableCell(cellData);
+      const cellTag = hasHeaderRow && row === renderRows[0] ? "th" : "td";
+      for (let cellIndex = 0; cellIndex < row.length; cellIndex += 1) {
+        const cellInfo = normalizeTableCell(row[cellIndex]);
         const cell = window.document.createElement(cellTag);
         cell.textContent = cellInfo.text;
         if (cellInfo.colSpan && cellInfo.colSpan > 1) {
@@ -550,6 +566,12 @@ function renderWordBlock(block: LegacyWordBlock): HTMLElement {
         }
         if (cellInfo.variant) {
           cell.classList.add(`ofv-msdoc-form-${cellInfo.variant}`);
+        }
+        if (cellTag === "td" && cellIndex % 2 === 0 && cellIndex + 1 < row.length && isShortChineseFormLabel(cellInfo.text)) {
+          cell.classList.add("ofv-msdoc-label-cell");
+        }
+        if (row.length === 1 && (cellInfo.colSpan || 1) > 1) {
+          cell.classList.add("ofv-msdoc-span-cell");
         }
         tr.append(cell);
       }
@@ -1253,33 +1275,106 @@ function readFibTextFallback(wordDocument: Uint8Array, fib: FibInfo): string {
   return fib.textIsUnicode ? decodeUtf16Le(bytes) : decodeWindows1252(bytes);
 }
 
-function splitWordParagraphs(text: string): string[] {
-  const normalized = text
-    .replace(/\u0000/g, "")
-    .replace(/\u0007/g, "\t")
-    .replace(/\u000b/g, "\n");
-  const paragraphs: string[] = [];
-  for (const segment of normalized.split(/(\u000c)/)) {
-    if (segment === "\u000c") {
-      paragraphs.push(WORD_PAGE_BREAK);
+type WordSegment =
+  | { kind: "pageBreak" }
+  | { kind: "paragraph"; text: string }
+  | { kind: "row"; cells: string[] };
+
+// Word 97 文本流中单元格以单个 0x07 结束，行再以一个额外的 0x07 结束；
+// 连续 n 个 0x07 表示：当前单元格结束 + (n-2) 个空单元格 + 行结束。
+function segmentWordText(text: string): WordSegment[] {
+  const normalized = text.replace(/\u0000/g, "").replace(/\u000b/g, "\n");
+  const segments: WordSegment[] = [];
+  let cells: string[] | null = null;
+  let buffer = "";
+
+  const flushParagraphs = () => {
+    for (const piece of buffer.split(/\n{2,}/)) {
+      const cleaned = cleanWordText(piece);
+      if (cleaned.length > 0 && isDisplayableParagraph(cleaned)) {
+        segments.push({ kind: "paragraph", text: cleaned });
+      }
+    }
+    buffer = "";
+  };
+  const pushCell = () => {
+    cells = cells || [];
+    cells.push(cleanWordCellText(buffer));
+    buffer = "";
+  };
+  const endRow = () => {
+    const rowCells = cells || [];
+    cells = null;
+    if (rowCells.some((cell) => cell.length > 0)) {
+      segments.push({ kind: "row", cells: rowCells });
+    }
+  };
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const char = normalized[index];
+    if (char === "\u0007") {
+      let run = 1;
+      while (normalized[index + run] === "\u0007") {
+        run += 1;
+      }
+      pushCell();
+      for (let extra = 0; extra < run - 2; extra += 1) {
+        pushCell();
+      }
+      if (run >= 2) {
+        endRow();
+      }
+      index += run - 1;
       continue;
     }
-    paragraphs.push(
-      ...segment
-        .split(/\r|\n{2,}/)
-        .map((paragraph) => cleanWordText(paragraph))
-        .filter((paragraph) => paragraph.length > 0 && isDisplayableParagraph(paragraph))
-    );
+    if (char === "\r") {
+      cells === null ? flushParagraphs() : (buffer += "\n");
+      continue;
+    }
+    if (char === "\u000c") {
+      if (cells === null) {
+        flushParagraphs();
+        segments.push({ kind: "pageBreak" });
+      } else {
+        buffer += "\n";
+      }
+      continue;
+    }
+    buffer += char;
   }
-  return paragraphs.slice(0, 1000);
+  cells === null ? flushParagraphs() : endRow();
+  return segments.slice(0, 1000);
 }
 
-function removeTrailingFooterArtifacts(paragraphs: string[]): string[] {
+function cleanWordCellText(value: string): string {
+  return value
+    .split("\n")
+    .map((line) => cleanWordText(line))
+    .filter((line) => line.length > 0)
+    .join("\n");
+}
+
+function segmentsToParagraphs(segments: WordSegment[]): string[] {
+  return segments
+    .map(segmentDisplayText)
+    .filter((text) => text.length > 0)
+    .slice(0, 1000);
+}
+
+function segmentDisplayText(segment: WordSegment): string {
+  if (segment.kind === "pageBreak") {
+    return WORD_PAGE_BREAK;
+  }
+  return segment.kind === "row" ? segment.cells.filter((cell) => cell.length > 0).join("\t") : segment.text;
+}
+
+function removeTrailingFooterSegments(segments: WordSegment[]): WordSegment[] {
+  const paragraphs = segments.map(segmentDisplayText);
   const tailStart = Math.max(0, paragraphs.length - 32);
   const tail = paragraphs.slice(tailStart);
   const relativePageFieldIndex = tail.findIndex(isFooterPageField);
   if (relativePageFieldIndex < 0) {
-    return paragraphs;
+    return segments;
   }
 
   let start = tailStart + relativePageFieldIndex;
@@ -1295,9 +1390,9 @@ function removeTrailingFooterArtifacts(paragraphs: string[]): string[] {
   const artifactSlice = paragraphs.slice(start);
   const footerCueCount = artifactSlice.filter(isLikelyFooterArtifact).length;
   if (footerCueCount < 2) {
-    return paragraphs;
+    return segments;
   }
-  return paragraphs.slice(0, start);
+  return segments.slice(0, start);
 }
 
 function isFooterPageField(paragraph: string): boolean {
@@ -1315,17 +1410,32 @@ function isLikelyFooterArtifact(paragraph: string): boolean {
   );
 }
 
-function buildWordBlocks(paragraphs: string[]): LegacyWordBlock[] {
+function buildWordBlocks(segments: WordSegment[]): LegacyWordBlock[] {
   const blocks: LegacyWordBlock[] = [];
   let index = 0;
-  while (index < paragraphs.length) {
-    const paragraph = paragraphs[index];
-    if (paragraph === WORD_PAGE_BREAK) {
+  while (index < segments.length) {
+    const segment = segments[index];
+    if (segment.kind === "pageBreak") {
       blocks.push({ type: "pageBreak" });
       index += 1;
       continue;
     }
 
+    if (segment.kind === "row") {
+      const rows: string[][] = [];
+      while (index < segments.length) {
+        const rowSegment = segments[index];
+        if (rowSegment.kind !== "row") {
+          break;
+        }
+        rows.push(rowSegment.cells);
+        index += 1;
+      }
+      blocks.push({ type: "table", rows: applyTableColumnSpans(rows) });
+      continue;
+    }
+
+    const paragraph = segment.text;
     const toc = parseTocEntry(paragraph);
     if (toc) {
       blocks.push(toc);
@@ -1335,8 +1445,12 @@ function buildWordBlocks(paragraphs: string[]): LegacyWordBlock[] {
 
     if (isTableRowCandidate(paragraph)) {
       const rows: string[][] = [];
-      while (index < paragraphs.length && isTableRowCandidate(paragraphs[index])) {
-        rows.push(...normalizeTableRows(splitTableRow(paragraphs[index])));
+      while (index < segments.length) {
+        const tabSegment = segments[index];
+        if (tabSegment.kind !== "paragraph" || !isTableRowCandidate(tabSegment.text)) {
+          break;
+        }
+        rows.push(...normalizeTableRows(splitTableRow(tabSegment.text)));
         index += 1;
       }
       blocks.push({ type: "table", rows });
@@ -1347,6 +1461,19 @@ function buildWordBlocks(paragraphs: string[]): LegacyWordBlock[] {
     index += 1;
   }
   return blocks;
+}
+
+// 短行的最后一个单元格按表格最大列数补跨度，近似还原合并单元格布局。
+function applyTableColumnSpans(rows: string[][]): LegacyWordTableRow[] {
+  const columnCount = Math.max(...rows.map((row) => row.length));
+  return rows.map((row) => {
+    if (row.length >= columnCount || row.length === 0) {
+      return row;
+    }
+    const cells: LegacyWordTableCell[] = row.slice(0, -1);
+    cells.push({ text: row[row.length - 1], colSpan: columnCount - row.length + 1 });
+    return cells;
+  });
 }
 
 function inferLayoutHints(paragraphs: string[], assets: LegacyWordAsset[]): LegacyWordLayoutHints {
@@ -1462,6 +1589,13 @@ function classifyParagraphBlock(text: string, previousBlocks: LegacyWordBlock[])
   if (visibleIndex === 1 && /draft|version|20\d{2}|19\d{2}/i.test(text) && text.length <= 140) {
     return { type: "subtitle", text };
   }
+  if (
+    visibleIndex === 1 &&
+    text.length <= 40 &&
+    previousBlocks.some((block) => block.type === "title" && block.text.includes(text))
+  ) {
+    return { type: "subtitle", text };
+  }
   const headingLevel = inferHeadingLevel(text, previousBlocks);
   if (headingLevel) {
     return { type: "heading", text, level: headingLevel };
@@ -1502,6 +1636,9 @@ function inferHeadingLevel(text: string, previousBlocks: LegacyWordBlock[]): 1 |
   const numbered = text.match(/^([1-9](?:\.\d+)*)\s+.+/);
   if (numbered) {
     return Math.min(3, numbered[1].split(".").length) as 1 | 2 | 3;
+  }
+  if (/^[一二三四五六七八九十]+\s*[.、．]\s*.{1,40}$/.test(text)) {
+    return 2;
   }
   if (/^(?:terminology|overall style|title page|headings|paragraphs|lists|tables|code examples|character styles|normative)$/i.test(text)) {
     return 2;

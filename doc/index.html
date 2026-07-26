@@ -7,8 +7,8 @@
       name="description"
       content="Open File Viewer is a framework-agnostic file preview SDK for vanilla JavaScript, React, Vue and Svelte."
     />
-    <meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#080912" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#05060e" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="shortcut icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="mask-icon" href="/favicon.svg" color="#7c5cff" />
@@ -16,38 +16,40 @@
       (() => {
         const root = document.documentElement;
         root.dataset.siteBoot = "loading";
+        root.dataset.motion = "on";
         try {
-          const theme = localStorage.getItem("ofv-site-theme") === "dark" ? "dark" : "light";
+          const theme = localStorage.getItem("ofv-site-theme") === "light" ? "light" : "dark";
           root.dataset.siteTheme = theme;
         } catch {
-          root.dataset.siteTheme = "light";
+          root.dataset.siteTheme = "dark";
         }
         window.setTimeout(() => {
           if (root.dataset.siteBoot === "loading") {
             root.dataset.siteBoot = "timeout";
+            delete root.dataset.motion;
           }
         }, 1600);
       })();
     </script>
     <style>
       :root {
-        color-scheme: light;
-        background: #fbfaf8;
+        color-scheme: dark;
+        background: #05060e;
       }
 
-      :root[data-site-theme="dark"] {
-        color-scheme: dark;
-        background: #080912;
+      :root[data-site-theme="light"] {
+        color-scheme: light;
+        background: #f6f7fb;
       }
 
       html,
       body {
         min-height: 100%;
-        background-color: #fbfaf8;
+        background-color: #05060e;
       }
 
-      :root[data-site-theme="dark"] body {
-        background-color: #080912;
+      :root[data-site-theme="light"] body {
+        background-color: #f6f7fb;
       }
 
       :root[data-site-boot="loading"] body {
@@ -66,8 +68,10 @@
   <body>
     <svg class="icon-sprite" aria-hidden="true" focusable="false">
       <symbol id="icon-logo" viewBox="0 0 24 24">
-        <path class="logo-ring" d="M12 5.35a6.65 6.65 0 1 1 0 13.3 6.65 6.65 0 0 1 0-13.3Z" />
-        <path class="logo-pointer" d="M8.55 8.15 16.85 11.45 12.95 12.78 11.65 16.72 8.55 8.15Z" />
+        <g stroke="none">
+          <path fill="url(#ofv-body)" fill-rule="evenodd" d="M5.9 2 L13.5 2 L20.5 9 L20.5 19.6 A2.4 2.4 0 0 1 18.1 22 L5.9 22 A2.4 2.4 0 0 1 3.5 19.6 L3.5 4.4 A2.4 2.4 0 0 1 5.9 2 Z M9.2 9.2 L16 12.4 L9.2 15.6 Z" />
+          <path fill="url(#ofv-flap)" d="M13.5 2 L20.5 9 L13.5 9 Z" />
+        </g>
       </symbol>
       <symbol id="icon-docs" viewBox="0 0 24 24">
         <path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
@@ -129,169 +133,262 @@
         <path d="M4 9V4h5M20 15v5h-5M4 15v5h5M20 9V4h-5" />
         <path d="m4 4 6 6M20 20l-6-6M4 20l6-6M20 4l-6 6" />
       </symbol>
-      <symbol id="icon-file" viewBox="0 0 24 24">
-        <path d="M6 3h7l5 5v13H6V3Z" />
-        <path d="M13 3v5h5" />
-      </symbol>
-      <symbol id="icon-image" viewBox="0 0 24 24">
-        <path d="M4 5h16v14H4V5Z" />
-        <path d="m4 16 5-5 4 4 2-2 5 5M15.5 9.5h.01" />
-      </symbol>
-      <symbol id="icon-code" viewBox="0 0 24 24">
-        <path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 4l-4 16" />
-      </symbol>
-      <symbol id="icon-cube" viewBox="0 0 24 24">
-        <path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" />
-        <path d="m4.2 7.7 7.8 4.4 7.8-4.4M12 12.1V21" />
-      </symbol>
-      <symbol id="icon-archive" viewBox="0 0 24 24">
-        <path d="M4 7h16M5 7l1-4h12l1 4v14H5V7Z" />
-        <path d="M9 11h6" />
-      </symbol>
-      <symbol id="icon-database" viewBox="0 0 24 24">
-        <path d="M5 6c0-1.66 3.13-3 7-3s7 1.34 7 3-3.13 3-7 3-7-1.34-7-3Z" />
-        <path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" />
-      </symbol>
       <symbol id="icon-check" viewBox="0 0 24 24">
         <path d="m5 12 4 4 10-10" />
       </symbol>
       <symbol id="icon-heart" viewBox="0 0 24 24">
         <path d="M20.8 5.6a5.2 5.2 0 0 0-7.4 0L12 7l-1.4-1.4a5.2 5.2 0 0 0-7.4 7.4L12 21l8.8-8a5.2 5.2 0 0 0 0-7.4Z" />
       </symbol>
+      <symbol id="icon-bolt" viewBox="0 0 24 24">
+        <path d="M13 2 4.5 13.5H11L9.8 22l8.7-11.5H12L13 2Z" />
+      </symbol>
     </svg>
+
+    <div class="fx-layer" aria-hidden="true">
+      <div class="fx-aurora">
+        <span class="fx-blob fx-blob-a"></span>
+        <span class="fx-blob fx-blob-b"></span>
+        <span class="fx-blob fx-blob-c"></span>
+      </div>
+      <div class="fx-grid"></div>
+    </div>
+    <div class="scroll-progress" id="scrollProgress" aria-hidden="true"></div>
 
     <header class="site-header">
       <a class="brand" href="#top" aria-label="Open File Viewer home">
         <span class="brand-mark">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path class="logo-ring" d="M12 5.35a6.65 6.65 0 1 1 0 13.3 6.65 6.65 0 0 1 0-13.3Z" />
-            <path class="logo-pointer" d="M8.55 8.15 16.85 11.45 12.95 12.78 11.65 16.72 8.55 8.15Z" />
+            <defs>
+              <linearGradient id="ofv-body" gradientUnits="userSpaceOnUse" x1="4.2" y1="2.8" x2="20" y2="21.4">
+                <stop offset="0" stop-color="#7deefb" /><stop offset="0.52" stop-color="#7c5cff" /><stop offset="1" stop-color="#3b21c4" />
+              </linearGradient>
+              <linearGradient id="ofv-flap" gradientUnits="userSpaceOnUse" x1="14.6" y1="7.9" x2="17.6" y2="4.9">
+                <stop offset="0" stop-color="#e9ffb2" /><stop offset="1" stop-color="#a2df31" />
+              </linearGradient>
+            </defs>
+            <use href="#icon-logo" />
           </svg>
         </span>
-        <span>Open File Viewer</span>
+        <span class="brand-name">Open File Viewer</span>
       </a>
       <nav class="desktop-nav" aria-label="Primary navigation" data-i18n-aria-label="nav.primaryAria">
-        <a href="#docs"><svg><use href="#icon-docs"></use></svg><span data-i18n="nav.docs">Documentation</span></a>
-        <a href="#frameworks"><svg><use href="#icon-framework"></use></svg><span data-i18n="nav.frameworks">Frameworks</span></a>
-        <a href="#formats"><svg><use href="#icon-grid"></use></svg><span data-i18n="nav.formats">Formats</span></a>
-        <a href="/api.html"><svg><use href="#icon-api"></use></svg><span data-i18n="nav.api">API</span></a>
-        <a href="#playground"><svg><use href="#icon-play"></use></svg><span data-i18n="nav.playground">Live Demo</span></a>
-        <a href="/about.html"><svg><use href="#icon-heart"></use></svg><span data-i18n="nav.about">About</span></a>
+        <a href="#docs"><span data-i18n="nav.docs">Documentation</span></a>
+        <a href="#frameworks"><span data-i18n="nav.frameworks">Frameworks</span></a>
+        <a href="#formats"><span data-i18n="nav.formats">Formats</span></a>
+        <a href="/api.html"><span data-i18n="nav.api">API</span></a>
+        <a href="#playground"><span data-i18n="nav.playground">Live Demo</span></a>
+        <a href="/about.html"><span data-i18n="nav.about">About</span></a>
       </nav>
       <div class="nav-actions">
-        <button class="ghost-icon" id="themeToggle" type="button" aria-label="Toggle dark mode"><svg><use href="#icon-moon"></use></svg></button>
+        <button class="ghost-icon" id="themeToggle" type="button" aria-label="Toggle dark mode"><svg><use href="#icon-sun"></use></svg></button>
         <button class="ghost-icon" id="languageToggle" type="button" aria-label="Switch to Chinese">ZH</button>
-        <a class="github-button" href="https://github.com/xushanpei/open-file-viewer" target="_blank" rel="noreferrer"><svg><use href="#icon-github"></use></svg><span>GitHub</span></a>
+        <a class="github-button" href="https://github.com/xushanpei/open-file-viewer" target="_blank" rel="noreferrer"><svg><use href="#icon-github"></use></svg><span>GitHub</span><span class="gh-stars" data-gh-stars hidden></span></a>
       </div>
     </header>
 
     <main id="top">
       <section class="hero">
-        <div class="hero-badge" data-i18n="hero.badge">Open source file preview SDK</div>
-        <h1 data-i18n="hero.title">Preview any file without the pain</h1>
-        <p data-i18n="hero.lede">
-          A framework-agnostic embedded file viewer for vanilla JavaScript, React, Vue and Svelte. Put PDF, Office, images, media, archives, email, drawings, 3D, GIS and engineering files inside one stable container.
-        </p>
-        <div class="hero-actions">
-          <a class="primary-button" href="/api.html"><span data-i18n="hero.primary">Get Started</span><svg><use href="#icon-arrow"></use></svg></a>
-          <a class="secondary-button" href="#playground"><svg><use href="#icon-eye"></use></svg><span data-i18n="hero.secondary">Live Demo</span></a>
-          <a class="secondary-button" href="#formats"><svg><use href="#icon-grid"></use></svg><span data-i18n="hero.tertiary">Formats</span></a>
+        <div class="hero-inner">
+          <div class="hero-copy">
+            <div class="hero-badge" data-reveal>
+              <span class="badge-pulse"></span>
+              <span data-i18n="hero.badge">Open source file preview SDK</span>
+            </div>
+            <h1 class="hero-title" data-reveal data-reveal-delay="1" data-i18n="hero.title">Preview any file without the pain</h1>
+            <p class="hero-lede" data-reveal data-reveal-delay="2" data-i18n="hero.lede">
+              A framework-agnostic embedded file viewer for vanilla JavaScript, React, Vue and Svelte. Put PDF, Office, images, media, archives, email, drawings, 3D, GIS and engineering files inside one stable container.
+            </p>
+            <div class="hero-actions" data-reveal data-reveal-delay="3">
+              <a class="primary-button" href="/api.html"><span data-i18n="hero.primary">Get Started</span><svg><use href="#icon-arrow"></use></svg></a>
+              <a class="secondary-button" href="#playground"><svg><use href="#icon-eye"></use></svg><span data-i18n="hero.secondary">Live Demo</span></a>
+            </div>
+            <div class="works-with" data-reveal data-reveal-delay="4" aria-label="Framework support" data-i18n-aria-label="hero.frameworksAria">
+              <span data-i18n="hero.works">Works seamlessly with</span>
+              <div>
+                <strong><span class="logo-chip js-logo">JS</span>Native JS</strong>
+                <strong><span class="logo-chip ts-logo">TS</span>TypeScript</strong>
+                <strong>
+                  <span class="logo-chip react-logo" aria-hidden="true">
+                    <svg viewBox="-11.5 -10.23 23 20.46" focusable="false">
+                      <circle cx="0" cy="0" r="2.05"></circle>
+                      <ellipse rx="11" ry="4.2"></ellipse>
+                      <ellipse rx="11" ry="4.2" transform="rotate(60)"></ellipse>
+                      <ellipse rx="11" ry="4.2" transform="rotate(120)"></ellipse>
+                    </svg>
+                  </span>
+                  React
+                </strong>
+                <strong>
+                  <span class="logo-chip vue-logo" aria-hidden="true">
+                    <svg viewBox="0 0 256 221" focusable="false">
+                      <path class="vue-mark-outer" d="M204.8 0H256L128 220.8 0 0h97.92L128 51.2 157.44 0h47.36Z"></path>
+                      <path class="vue-mark-inner" d="M97.92 0 128 51.2 157.44 0h47.36L128 132.48 51.2 0h46.72Z"></path>
+                    </svg>
+                  </span>
+                  Vue
+                </strong>
+                <strong>
+                  <span class="logo-chip svelte-logo" aria-hidden="true">
+                    <svg viewBox="0 0 107 128" preserveAspectRatio="xMidYMid meet" focusable="false">
+                      <path d="M94.1566 22.8189c-10.4-14.8851-30.94-19.2971-45.7914-9.8348L22.2825 29.6078A29.9234 29.9234 0 0 0 8.7639 49.6506a31.5136 31.5136 0 0 0 3.1076 20.2318A30.0061 30.0061 0 0 0 7.3953 81.0653a31.8886 31.8886 0 0 0 5.4473 24.1157c10.4022 14.8865 30.9423 19.2966 45.7914 9.8348l26.0827-16.6237A29.9177 29.9177 0 0 0 98.2353 78.3493 31.5263 31.5263 0 0 0 95.13 58.117a30 30 0 0 0 4.4743-11.1824 31.88 31.88 0 0 0-5.4473-24.1157"></path>
+                      <path d="M45.8171 106.5815A20.7182 20.7182 0 0 1 23.58 98.3389a19.1739 19.1739 0 0 1-3.2766-14.5025 18.1886 18.1886 0 0 1 .6233-2.4357l.4912-1.4978 1.3363.9815a33.6443 33.6443 0 0 0 10.203 5.0978l.9694.2941-.0893.9675a5.8474 5.8474 0 0 0 1.052 3.8781 6.2389 6.2389 0 0 0 6.6952 2.485 5.7449 5.7449 0 0 0 1.6021-.7041L69.27 76.281a5.4306 5.4306 0 0 0 2.4506-3.631 5.7948 5.7948 0 0 0-.9875-4.3712 6.2436 6.2436 0 0 0-6.6978-2.4864 5.7427 5.7427 0 0 0-1.6.7036l-9.9532 6.3449a19.0329 19.0329 0 0 1-5.2965 2.3259 20.7181 20.7181 0 0 1-22.2368-8.2427 19.1725 19.1725 0 0 1-3.2766-14.5024 17.9885 17.9885 0 0 1 8.13-12.0513l26.0811-16.6232a19.0038 19.0038 0 0 1 5.3-2.3287A20.7182 20.7182 0 0 1 83.42 29.6611a19.1739 19.1739 0 0 1 3.2766 14.5025 18.4 18.4 0 0 1-.6233 2.4357l-.4912 1.4978-1.3356-.98a33.6175 33.6175 0 0 0-10.2037-5.1l-.9694-.2942.0893-.9675a5.8588 5.8588 0 0 0-1.052-3.878 6.2389 6.2389 0 0 0-6.6952-2.485 5.7449 5.7449 0 0 0-1.6021.7041L37.73 51.719a5.4218 5.4218 0 0 0-2.4487 3.63 5.7862 5.7862 0 0 0 .9856 4.3717 6.2437 6.2437 0 0 0 6.6978 2.4864 5.7652 5.7652 0 0 0 1.602-.7041l9.9519-6.3425a18.978 18.978 0 0 1 5.2959-2.3278 20.7181 20.7181 0 0 1 22.2368 8.2427 19.1725 19.1725 0 0 1 3.2766 14.5024 17.9977 17.9977 0 0 1-8.13 12.0532l-26.0812 16.6218a19.0038 19.0038 0 0 1-5.3 2.3287"></path>
+                    </svg>
+                  </span>
+                  Svelte
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="hero-stage" data-reveal data-reveal-delay="2" aria-label="Product preview" data-i18n-aria-label="showcase.productAria">
+            <div class="stage-orbit" aria-hidden="true">
+              <span class="orbit-chip oc-1">.pdf</span>
+              <span class="orbit-chip oc-2">.docx</span>
+              <span class="orbit-chip oc-3">.glb</span>
+              <span class="orbit-chip oc-4">.dwg</span>
+              <span class="orbit-chip oc-5">.zip</span>
+              <span class="orbit-chip oc-6">.svg</span>
+              <span class="orbit-chip oc-7">.geojson</span>
+            </div>
+            <div class="viewer-shell" data-tilt>
+              <div class="shell-top">
+                <div class="traffic"><span></span><span></span><span></span></div>
+                <div class="address"><svg><use href="#icon-logo"></use></svg><span class="address-path">preview/</span><span id="stageFile">contract.pdf</span></div>
+                <div class="shell-tools">
+                  <svg><use href="#icon-search"></use></svg>
+                  <svg><use href="#icon-zoom"></use></svg>
+                  <svg><use href="#icon-download"></use></svg>
+                </div>
+              </div>
+              <div class="shell-body">
+                <aside class="file-rail" aria-hidden="true">
+                  <button class="is-active" type="button" data-scene="pdf">PDF</button>
+                  <button type="button" data-scene="xlsx">XLSX</button>
+                  <button type="button" data-scene="png">PNG</button>
+                  <button type="button" data-scene="glb">GLB</button>
+                  <button type="button" data-scene="zip">ZIP</button>
+                  <button type="button" data-scene="mp3">MP3</button>
+                </aside>
+                <div class="scene-stack" aria-hidden="true">
+                  <div class="scene scene-pdf is-active" data-scene="pdf">
+                    <div class="paper">
+                      <span class="paper-title"></span>
+                      <span class="paper-line w-90"></span>
+                      <span class="paper-line w-75"></span>
+                      <span class="paper-line w-85 is-hit"></span>
+                      <span class="paper-line w-60"></span>
+                      <span class="paper-block"></span>
+                      <span class="paper-line w-80"></span>
+                      <span class="paper-line w-50"></span>
+                    </div>
+                  </div>
+                  <div class="scene scene-sheet" data-scene="xlsx">
+                    <div class="sheet">
+                      <span></span><span></span><span></span><span></span>
+                      <span></span><span class="cell-hot"></span><span></span><span></span>
+                      <span></span><span></span><span class="cell-hot"></span><span></span>
+                      <span></span><span></span><span></span><span></span>
+                      <span class="cell-hot"></span><span></span><span></span><span></span>
+                      <span></span><span></span><span></span><span class="cell-hot"></span>
+                    </div>
+                    <div class="sheet-selection"></div>
+                  </div>
+                  <div class="scene scene-image" data-scene="png">
+                    <svg viewBox="0 0 200 120" preserveAspectRatio="none" focusable="false">
+                      <circle class="img-sun" cx="152" cy="34" r="14"></circle>
+                      <path class="img-hill-back" d="M0 96 45 48l32 34 30-44 48 58 45-40v64H0Z"></path>
+                      <path class="img-hill-front" d="M0 120 60 70l42 40 38-30 60 40H0Z"></path>
+                    </svg>
+                  </div>
+                  <div class="scene scene-model" data-scene="glb">
+                    <div class="cube-space">
+                      <div class="cube">
+                        <span class="face f-front"></span>
+                        <span class="face f-back"></span>
+                        <span class="face f-left"></span>
+                        <span class="face f-right"></span>
+                        <span class="face f-top"></span>
+                        <span class="face f-bottom"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="scene scene-archive" data-scene="zip">
+                    <div class="tree">
+                      <span class="tree-row is-dir">assets/</span>
+                      <span class="tree-row indent">logo.svg</span>
+                      <span class="tree-row indent">cover.png</span>
+                      <span class="tree-row is-dir">docs/</span>
+                      <span class="tree-row indent">readme.md</span>
+                      <span class="tree-row indent">spec.pdf</span>
+                    </div>
+                  </div>
+                  <div class="scene scene-audio" data-scene="mp3">
+                    <div class="eq">
+                      <span></span><span></span><span></span><span></span><span></span><span></span>
+                      <span></span><span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="scan-beam" aria-hidden="true"></div>
+              <div class="shell-meta" aria-hidden="true">
+                <code>createViewer({ theme: "auto" })</code>
+                <span class="meta-ok"><svg><use href="#icon-check"></use></svg><span data-i18n="showcase.ready">plugin matched</span></span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="works-with" aria-label="Framework support" data-i18n-aria-label="hero.frameworksAria">
-          <span data-i18n="hero.works">Works seamlessly with</span>
-          <div>
-            <strong><span class="logo-chip js-logo">JS</span>Native JS</strong>
-            <strong><span class="logo-chip ts-logo">TS</span>TypeScript</strong>
-            <strong>
-              <span class="logo-chip react-logo" aria-hidden="true">
-                <svg viewBox="-11.5 -10.23 23 20.46" focusable="false">
-                  <circle cx="0" cy="0" r="2.05"></circle>
-                  <ellipse rx="11" ry="4.2"></ellipse>
-                  <ellipse rx="11" ry="4.2" transform="rotate(60)"></ellipse>
-                  <ellipse rx="11" ry="4.2" transform="rotate(120)"></ellipse>
-                </svg>
-              </span>
-              React
-            </strong>
-            <strong>
-              <span class="logo-chip vue-logo" aria-hidden="true">
-                <svg viewBox="0 0 256 221" focusable="false">
-                  <path class="vue-mark-outer" d="M204.8 0H256L128 220.8 0 0h97.92L128 51.2 157.44 0h47.36Z"></path>
-                  <path class="vue-mark-inner" d="M97.92 0 128 51.2 157.44 0h47.36L128 132.48 51.2 0h46.72Z"></path>
-                </svg>
-              </span>
-              Vue
-            </strong>
-            <strong>
-              <span class="logo-chip svelte-logo" aria-hidden="true">
-                <svg viewBox="0 0 107 128" preserveAspectRatio="xMidYMid meet" focusable="false">
-                  <path d="M94.1566 22.8189c-10.4-14.8851-30.94-19.2971-45.7914-9.8348L22.2825 29.6078A29.9234 29.9234 0 0 0 8.7639 49.6506a31.5136 31.5136 0 0 0 3.1076 20.2318A30.0061 30.0061 0 0 0 7.3953 81.0653a31.8886 31.8886 0 0 0 5.4473 24.1157c10.4022 14.8865 30.9423 19.2966 45.7914 9.8348l26.0827-16.6237A29.9177 29.9177 0 0 0 98.2353 78.3493 31.5263 31.5263 0 0 0 95.13 58.117a30 30 0 0 0 4.4743-11.1824 31.88 31.88 0 0 0-5.4473-24.1157"></path>
-                  <path d="M45.8171 106.5815A20.7182 20.7182 0 0 1 23.58 98.3389a19.1739 19.1739 0 0 1-3.2766-14.5025 18.1886 18.1886 0 0 1 .6233-2.4357l.4912-1.4978 1.3363.9815a33.6443 33.6443 0 0 0 10.203 5.0978l.9694.2941-.0893.9675a5.8474 5.8474 0 0 0 1.052 3.8781 6.2389 6.2389 0 0 0 6.6952 2.485 5.7449 5.7449 0 0 0 1.6021-.7041L69.27 76.281a5.4306 5.4306 0 0 0 2.4506-3.631 5.7948 5.7948 0 0 0-.9875-4.3712 6.2436 6.2436 0 0 0-6.6978-2.4864 5.7427 5.7427 0 0 0-1.6.7036l-9.9532 6.3449a19.0329 19.0329 0 0 1-5.2965 2.3259 20.7181 20.7181 0 0 1-22.2368-8.2427 19.1725 19.1725 0 0 1-3.2766-14.5024 17.9885 17.9885 0 0 1 8.13-12.0513l26.0811-16.6232a19.0038 19.0038 0 0 1 5.3-2.3287A20.7182 20.7182 0 0 1 83.42 29.6611a19.1739 19.1739 0 0 1 3.2766 14.5025 18.4 18.4 0 0 1-.6233 2.4357l-.4912 1.4978-1.3356-.98a33.6175 33.6175 0 0 0-10.2037-5.1l-.9694-.2942.0893-.9675a5.8588 5.8588 0 0 0-1.052-3.878 6.2389 6.2389 0 0 0-6.6952-2.485 5.7449 5.7449 0 0 0-1.6021.7041L37.73 51.719a5.4218 5.4218 0 0 0-2.4487 3.63 5.7862 5.7862 0 0 0 .9856 4.3717 6.2437 6.2437 0 0 0 6.6978 2.4864 5.7652 5.7652 0 0 0 1.602-.7041l9.9519-6.3425a18.978 18.978 0 0 1 5.2959-2.3278 20.7181 20.7181 0 0 1 22.2368 8.2427 19.1725 19.1725 0 0 1 3.2766 14.5024 17.9977 17.9977 0 0 1-8.13 12.0532l-26.0812 16.6218a19.0038 19.0038 0 0 1-5.3 2.3287"></path>
-                </svg>
-              </span>
-              Svelte
-            </strong>
+
+        <div class="format-marquee" aria-hidden="true">
+          <div class="marquee-track">
+            <div class="marquee-group">
+              <span>pdf</span><span>docx</span><span>xlsx</span><span>pptx</span><span>ofd</span><span>epub</span><span>xps</span><span>md</span><span>json</span><span>svg</span><span>png</span><span>heic</span><span>mp4</span><span>m3u8</span><span>mp3</span><span>zip</span><span>rar</span><span>7z</span><span>eml</span><span>msg</span><span>dxf</span><span>dwg</span><span>step</span><span>ifc</span><span>gds</span><span>oas</span><span>gltf</span><span>glb</span><span>stl</span><span>usdz</span><span>geojson</span><span>kml</span><span>shp</span><span>sqlite</span><span>parquet</span><span>wasm</span><span>psd</span><span>ttf</span><span>ipynb</span><span>drawio</span>
+            </div>
+            <div class="marquee-group">
+              <span>pdf</span><span>docx</span><span>xlsx</span><span>pptx</span><span>ofd</span><span>epub</span><span>xps</span><span>md</span><span>json</span><span>svg</span><span>png</span><span>heic</span><span>mp4</span><span>m3u8</span><span>mp3</span><span>zip</span><span>rar</span><span>7z</span><span>eml</span><span>msg</span><span>dxf</span><span>dwg</span><span>step</span><span>ifc</span><span>gds</span><span>oas</span><span>gltf</span><span>glb</span><span>stl</span><span>usdz</span><span>geojson</span><span>kml</span><span>shp</span><span>sqlite</span><span>parquet</span><span>wasm</span><span>psd</span><span>ttf</span><span>ipynb</span><span>drawio</span>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="preview-showcase" aria-label="Product preview" data-i18n-aria-label="showcase.productAria">
-        <div class="browser-shell">
-          <div class="browser-top">
-            <div class="traffic"><span></span><span></span><span></span></div>
-            <div class="address">open-file-viewer.dev/preview</div>
-            <div class="top-actions"><span></span><span></span></div>
+      <section class="stats-band" aria-label="Project stats">
+        <div class="stats-grid">
+          <div class="stat" data-reveal>
+            <strong><span data-count-to="120">0</span>+</strong>
+            <span data-i18n="stats.formats">File formats</span>
           </div>
-          <div class="product-ui">
-            <aside class="file-rail">
-              <button class="active">PDF</button>
-              <button>DOCX</button>
-              <button>XLSX</button>
-              <button>DXF</button>
-              <button>GLB</button>
-            </aside>
-            <section class="paper-preview">
-              <div class="paper-toolbar">
-                <span><svg><use href="#icon-search"></use></svg><span data-i18n="showcase.search">Search</span></span>
-                <span><svg><use href="#icon-zoom"></use></svg><span data-i18n="showcase.zoom">Zoom</span></span>
-                <span><svg><use href="#icon-rotate"></use></svg><span data-i18n="showcase.rotate">Rotate</span></span>
-                <span><svg><use href="#icon-download"></use></svg><span data-i18n="showcase.download">Download</span></span>
-              </div>
-              <div class="paper">
-                <div class="paper-title"></div>
-                <div class="paper-line short"></div>
-                <div class="paper-line"></div>
-                <div class="paper-line medium"></div>
-                <div class="drawing-panel"><span></span><span></span><span></span></div>
-              </div>
-            </section>
-            <aside class="meta-panel">
-              <p>createViewer()</p>
-              <code>theme: "auto"</code>
-              <code>fit: "contain"</code>
-              <code>plugins: all</code>
-            </aside>
+          <div class="stat" data-reveal data-reveal-delay="1">
+            <strong><span data-count-to="16">0</span></strong>
+            <span data-i18n="stats.plugins">Built-in plugins</span>
+          </div>
+          <div class="stat" data-reveal data-reveal-delay="2">
+            <strong><span data-count-to="4">0</span></strong>
+            <span data-i18n="stats.frameworks">Framework adapters</span>
+          </div>
+          <div class="stat" data-reveal data-reveal-delay="3">
+            <strong>MIT</strong>
+            <span data-i18n="stats.license">Open source license</span>
           </div>
         </div>
       </section>
 
       <section class="section two-ways" id="docs">
-        <div class="section-heading">
+        <div class="section-heading" data-reveal>
           <p data-i18n="ways.eyebrow">Two ways to integrate</p>
           <h2 data-i18n="ways.title">Use the ready-made viewer, or build your own.</h2>
         </div>
         <div class="way-grid">
-          <article>
-            <span><svg><use href="#icon-eye"></use></svg><span data-i18n="ways.dropin.label">Drop-in</span></span>
+          <article class="glow-card" data-reveal data-tilt data-spotlight>
+            <span class="card-tag"><svg><use href="#icon-eye"></use></svg><span data-i18n="ways.dropin.label">Drop-in</span></span>
             <h3 data-i18n="ways.dropin.title">OpenFileViewer Component</h3>
             <p data-i18n="ways.dropin.desc">Ship quickly with toolbar, themes, multi-file queues, responsive containers and tested fallbacks.</p>
             <div class="editor-window compact-editor">
               <div class="editor-titlebar"><span></span><span></span><span></span><strong>terminal</strong></div>
-              <pre><code>npm install @open-file-viewer/core</code></pre>
+              <pre class="type-pre"><code data-no-highlight><span class="type-prompt">$</span> <span class="type-line">npm install @open-file-viewer/core</span><span class="type-caret"></span></code></pre>
             </div>
           </article>
-          <article>
-            <span><svg><use href="#icon-puzzle"></use></svg><span data-i18n="ways.headless.label">Composable</span></span>
+          <article class="glow-card" data-reveal data-reveal-delay="1" data-tilt data-spotlight>
+            <span class="card-tag"><svg><use href="#icon-puzzle"></use></svg><span data-i18n="ways.headless.label">Composable</span></span>
             <h3 data-i18n="ways.headless.title">Plugin-first Core</h3>
             <p data-i18n="ways.headless.desc">Attach custom renderers, WASM pipelines or server-converted output while React, Vue, Svelte and vanilla JS share one core.</p>
             <div class="editor-window compact-editor">
@@ -304,17 +401,17 @@
 
       <section class="section feature-section">
         <div class="feature-list">
-          <article>
+          <article class="glow-card" data-reveal data-tilt data-spotlight>
             <div class="feature-icon"><svg><use href="#icon-layers"></use></svg></div>
             <h3 data-i18n="feature.one.title">Batteries included</h3>
             <p data-i18n="feature.one.desc">PDF, Office, OFD, EPUB, XPS, image, media, archive, email, CAD, GIS, 3D and text plugins are ready to use.</p>
           </article>
-          <article>
+          <article class="glow-card" data-reveal data-reveal-delay="1" data-tilt data-spotlight>
             <div class="feature-icon"><svg><use href="#icon-framework"></use></svg></div>
             <h3 data-i18n="feature.two.title">Framework agnostic</h3>
             <p data-i18n="feature.two.desc">Vanilla JavaScript, React, Vue and Svelte share the same core so teams can reuse one preview strategy across products.</p>
           </article>
-          <article>
+          <article class="glow-card" data-reveal data-reveal-delay="2" data-tilt data-spotlight>
             <div class="feature-icon"><svg><use href="#icon-resize"></use></svg></div>
             <h3 data-i18n="feature.three.title">Container-first</h3>
             <p data-i18n="feature.three.desc">Every preview stays inside your DOM container with resize handling, dark mode, downloads and error boundaries.</p>
@@ -323,15 +420,15 @@
       </section>
 
       <section class="section integration-section" id="frameworks">
-        <div class="split-heading">
+        <div class="split-heading" data-reveal>
           <div>
             <p data-i18n="integration.eyebrow">Drop-in Integration</p>
             <h2 data-i18n="integration.title">Add a viewer in minutes.</h2>
           </div>
           <p data-i18n="integration.desc">Pick Vanilla JS, React, Vue or Svelte. The plugin capability stays consistent, while the UI can start default and evolve later.</p>
         </div>
-        <div class="code-frame">
-          <div class="editor-window">
+        <div class="code-frame" data-reveal>
+          <div class="editor-window main-editor">
             <div class="editor-titlebar">
               <span></span><span></span><span></span>
               <strong>Open File Viewer</strong>
@@ -349,14 +446,14 @@
       </section>
 
       <section class="section playground-section" id="playground">
-        <div class="split-heading">
+        <div class="split-heading" data-reveal>
           <div>
             <p data-i18n="playground.eyebrow">Try it live</p>
             <h2 data-i18n="playground.title">Drop files and preview them instantly.</h2>
           </div>
           <p data-i18n="playground.desc">Local files stay in your browser and are not uploaded. Built-in samples cover Markdown, JSON, Office, SVG, DXF, 3D, GDSII, OASIS and DWG.</p>
         </div>
-        <div class="playground-shell">
+        <div class="playground-shell" data-reveal>
           <aside class="controls-card">
             <label class="file-drop" for="file">
               <span class="drop-icon"><svg><use href="#icon-upload"></use></svg></span>
@@ -424,7 +521,7 @@
       </section>
 
       <section class="section formats-section" id="formats">
-        <div class="section-heading">
+        <div class="section-heading" data-reveal>
           <p data-i18n="formats.eyebrow">Format matrix</p>
           <h2 data-i18n="formats.title">Built for real product attachments.</h2>
         </div>
@@ -432,7 +529,7 @@
       </section>
 
       <section class="section api-section" id="api">
-        <div class="split-heading">
+        <div class="split-heading" data-reveal>
           <div>
             <p data-i18n="api.eyebrow">API Reference</p>
             <h2 data-i18n="api.title">A small API surface with room to extend.</h2>
@@ -440,39 +537,68 @@
           <p data-i18n="api.desc">The API stays focused: container, file, plugins, size, theme and lifecycle callbacks. Complex formats are extended through plugins.</p>
         </div>
         <div class="api-summary-grid">
-          <a class="api-summary-card" href="/api.html#frameworks">
-            <span><svg><use href="#icon-framework"></use></svg></span>
+          <a class="api-summary-card glow-card" data-reveal data-tilt data-spotlight href="/api.html#frameworks">
+            <span class="summary-icon"><svg><use href="#icon-framework"></use></svg></span>
             <strong data-i18n="api.frameworks.title">Frameworks</strong>
             <p data-i18n="api.frameworks.desc">Installation and integration guidance for Vanilla JS, React, Vue and Svelte.</p>
+            <span class="card-arrow"><svg><use href="#icon-arrow"></use></svg></span>
           </a>
-          <a class="api-summary-card" href="/api.html#options">
-            <span><svg><use href="#icon-api"></use></svg></span>
+          <a class="api-summary-card glow-card" data-reveal data-reveal-delay="1" data-tilt data-spotlight href="/api.html#options">
+            <span class="summary-icon"><svg><use href="#icon-api"></use></svg></span>
             <strong data-i18n="api.options.title">PreviewOptions</strong>
             <p data-i18n="api.options.desc">Complete reference for file sources, queues, sizing, themes, callbacks, fallbacks and instance methods.</p>
+            <span class="card-arrow"><svg><use href="#icon-arrow"></use></svg></span>
           </a>
-          <a class="api-summary-card" href="/api.html#toolbar">
-            <span><svg><use href="#icon-puzzle"></use></svg></span>
+          <a class="api-summary-card glow-card" data-reveal data-reveal-delay="2" data-tilt data-spotlight href="/api.html#toolbar">
+            <span class="summary-icon"><svg><use href="#icon-puzzle"></use></svg></span>
             <strong data-i18n="toolbar.title">Toolbar Customization</strong>
             <p data-i18n="toolbar.desc">Change labels, order, icons, approval/favorite/share actions or replace the toolbar completely.</p>
+            <span class="card-arrow"><svg><use href="#icon-arrow"></use></svg></span>
           </a>
-          <a class="api-summary-card" href="/api.html#plugins">
-            <span><svg><use href="#icon-layers"></use></svg></span>
+          <a class="api-summary-card glow-card" data-reveal data-reveal-delay="3" data-tilt data-spotlight href="/api.html#plugins">
+            <span class="summary-icon"><svg><use href="#icon-layers"></use></svg></span>
             <strong data-i18n="api.plugins.title">Plugin Protocol</strong>
             <p data-i18n="api.plugins.desc">Extend custom formats, server-converted results or product-specific renderers through the match/render protocol.</p>
+            <span class="card-arrow"><svg><use href="#icon-arrow"></use></svg></span>
           </a>
         </div>
       </section>
 
-      <section class="cta-band">
-        <h2 data-i18n="cta.title">Ship file previews without building every renderer from scratch.</h2>
-        <p data-i18n="cta.desc">Start from a stable container and keep evolving preview capability.</p>
-        <a class="primary-button" href="#playground"><span data-i18n="cta.action">Try the playground</span><svg><use href="#icon-arrow"></use></svg></a>
+      <section class="cta-band" data-reveal>
+        <div class="cta-inner">
+          <h2 data-i18n="cta.title">Ship file previews without building every renderer from scratch.</h2>
+          <p data-i18n="cta.desc">Start from a stable container and keep evolving preview capability.</p>
+          <div class="cta-actions">
+            <a class="primary-button" href="#playground"><span data-i18n="cta.action">Try the playground</span><svg><use href="#icon-arrow"></use></svg></a>
+            <a class="secondary-button" href="https://github.com/xushanpei/open-file-viewer" target="_blank" rel="noreferrer"><svg class="gh-fill"><use href="#icon-github"></use></svg><span>GitHub</span><span class="gh-stars" data-gh-stars hidden></span></a>
+          </div>
+        </div>
       </section>
     </main>
 
     <footer class="site-footer">
-      <span>Open File Viewer</span>
-      <span data-i18n="footer.text">Framework-agnostic file preview SDK for modern web products.</span>
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <span class="footer-brand-row">
+            <span class="brand-mark">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <use href="#icon-logo" />
+              </svg>
+            </span>
+            <strong>Open File Viewer</strong>
+          </span>
+          <p data-i18n="footer.text">Framework-agnostic file preview SDK for modern web products.</p>
+        </div>
+        <nav class="footer-links" aria-label="Footer">
+          <a href="/api.html" data-i18n="nav.api">API</a>
+          <a href="#playground" data-i18n="nav.playground">Live Demo</a>
+          <a href="#formats" data-i18n="nav.formats">Formats</a>
+          <a href="/about.html" data-i18n="nav.about">About</a>
+          <a href="https://github.com/xushanpei/open-file-viewer" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="https://www.npmjs.com/package/@open-file-viewer/core" target="_blank" rel="noreferrer">NPM</a>
+        </nav>
+      </div>
+      <div class="footer-bottom"><span>MIT License</span><span>© Open File Viewer</span></div>
     </footer>
 
     <script type="module" src="/src/main.ts"></script>

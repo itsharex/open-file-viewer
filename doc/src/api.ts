@@ -5,6 +5,8 @@ import "prismjs/components/prism-typescript";
 import "prismjs/components/prism-tsx";
 import "prismjs/components/prism-markup";
 import "./style.css";
+import { initMotion } from "./motion";
+import { initGithubStars } from "./github";
 
 Prism.manual = true;
 
@@ -24,7 +26,6 @@ const zhTranslations: Record<string, string> = {
   "aria.primaryNav": "主导航",
   "aria.apiSections": "API 章节",
   "aria.aboutSections": "关于我们章节",
-  "aria.communityQr": "社区与打赏二维码",
   "api.pageTitle": "API 参考 - Open File Viewer",
   "api.hero.title": "Open File Viewer 接入与 API 指南",
   "api.hero.eyebrow": "API 文档",
@@ -152,11 +153,13 @@ const zhTranslations: Record<string, string> = {
   "api.faq.convertTitle": "如何接入服务端转换？",
   "api.faq.convertBody":
     "可以写一个自定义插件，在 <code>render(ctx)</code> 中调用你的转换服务，然后把返回的 HTML、图片、PDF 或结构化数据渲染到 <code>ctx.viewport</code>。",
+  "api.faq.qiankunTitle": "qiankun / micro-app 子应用中 Office 预览为什么一直加载？",
+  "api.faq.qiankunBody":
+    "微前端沙箱会在子应用卸载时移除 window <code>message</code> 事件监听器，而 jszip 依赖的 <code>setImmediate</code> polyfill 正是基于它实现的，导致 <code>JSZip.loadAsync</code> 永远不返回，docx、xlsx、pptx、epub、ofd 等 zip 类预览停留在加载状态。新版本检测到 <code>__POWERED_BY_QIANKUN__</code> 等沙箱标志后会自动切换到基于 MessageChannel 的调度器；0.1.27 及更早版本可在子应用入口的所有 import 之前手动补丁 <code>window.setImmediate = (fn, ...args) =&gt; setTimeout(fn, 0, ...args)</code>。",
   "about.pageTitle": "关于我们 - Open File Viewer",
   "about.hero.title": "开源不易，感谢每一次认真使用。",
   "about.hero.eyebrow": "关于 Open File Viewer",
   "about.sidebar.openSource": "开源项目",
-  "about.sidebar.community": "社区交流",
   "about.sidebar.support": "支持作者",
   "about.sidebar.thanks": "致谢",
   "about.eyebrow.openSource": "开源项目",
@@ -168,30 +171,13 @@ const zhTranslations: Record<string, string> = {
   "about.openSource.protocol": "统一预览容器与插件协议",
   "about.support.title": "支持这个项目继续进化",
   "about.support.body": "如果这个开源项目帮你节省了开发时间，欢迎给项目点一个免费的 GitHub Star。",
-  "about.support.coffee":
-    "如果你愿意请作者喝杯咖啡或一瓶水，也是非常真诚的鼓励。支持者欢迎添加作者微信，后续交流前端相关问题。",
-  "about.community.officialTitle": "公众号",
-  "about.community.officialBody": "前端开发爱好者",
-  "about.community.groupTitle": "交流群",
-  "about.community.groupBody": "扫码加入前端技术交流",
-  "about.community.wechatTitle": "作者微信",
-  "about.community.wechatBody": "支持者可添加，交流前端问题",
-  "about.community.wechatPayTitle": "微信打赏",
-  "about.community.wechatPayBody": "请作者喝杯咖啡",
-  "about.community.alipayTitle": "支付宝打赏",
-  "about.community.alipayBody": "请作者喝瓶矿泉水",
   "about.thanks.title": "每一次反馈，都会让预览体验更进一步",
   "about.thanks.body":
-    "欢迎通过 GitHub Issue、交流群或作者微信反馈真实业务里的文件样例、排版问题、容器适配问题和新的格式诉求。项目会持续围绕更稳定的预览、更清晰的接入和更完整的格式覆盖向前迭代。",
+    "欢迎通过 GitHub Issue 反馈真实业务里的文件样例、排版问题、容器适配问题和新的格式诉求。项目会持续围绕更稳定的预览、更清晰的接入和更完整的格式覆盖向前迭代。",
   "about.thanks.issueTitle": "反馈问题",
   "about.thanks.issueBody": "遇到格式识别、渲染异常、移动端适配或工具栏交互问题时，欢迎提交可复现信息。",
   "about.thanks.caseTitle": "贡献案例",
-  "about.thanks.caseBody": "如果你在业务中接入了 Open File Viewer，也欢迎分享使用场景和优化建议。",
-  "about.alt.official": "公众号二维码：前端开发爱好者",
-  "about.alt.group": "交流群二维码",
-  "about.alt.wechat": "作者微信二维码",
-  "about.alt.wechatPay": "微信打赏二维码",
-  "about.alt.alipay": "支付宝打赏二维码"
+  "about.thanks.caseBody": "如果你在业务中接入了 Open File Viewer，也欢迎分享使用场景和优化建议。"
 };
 
 const themeToggle = requiredElement<HTMLButtonElement>("#themeToggle");
@@ -211,7 +197,7 @@ const englishAria = new Map(
 const englishTitle = document.title;
 const pageTitleKey = document.body.classList.contains("about-doc-page") ? "about.pageTitle" : "api.pageTitle";
 let language: Language = readStorage("ofv-language") === "zh" ? "zh" : "en";
-let siteTheme: SiteTheme = readStorage("ofv-site-theme") === "dark" ? "dark" : "light";
+let siteTheme: SiteTheme = readStorage("ofv-site-theme") === "light" ? "light" : "dark";
 
 function requiredElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -293,7 +279,7 @@ function setHighlightedCode(element: HTMLElement, source: string, languageName: 
   const highlighted = Prism.highlight(source, grammar, languageName);
   element.innerHTML = highlighted
     .split("\n")
-    .map((line: string) => `<span class="code-line">${line || "&nbsp;"}</span>`)
+    .map((line: string, index: number) => `<span class="code-line" style="--i:${index}">${line || "&nbsp;"}</span>`)
     .join("");
 }
 
@@ -317,6 +303,8 @@ window.addEventListener("scroll", syncNavigationState, { passive: true });
 applyLanguage(language);
 highlightCodeBlocks();
 syncNavigationState();
+initMotion();
+void initGithubStars();
 requestAnimationFrame(() => {
   document.documentElement.dataset.siteReady = "true";
   document.documentElement.dataset.siteBoot = "ready";

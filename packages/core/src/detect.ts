@@ -251,6 +251,7 @@ const extensionMimeMap: Record<string, string> = {
   sldprt: "application/sldworks",
   sldasm: "application/sldworks",
   gds: "application/vnd.gds",
+  gdsii: "application/x-gdsii",
   oas: "application/vnd.oasis.layout",
   oasis: "application/vnd.oasis.layout",
   ttf: "font/ttf",

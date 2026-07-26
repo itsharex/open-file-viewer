@@ -31,6 +31,8 @@ import "prismjs/components/prism-typescript";
 import "prismjs/components/prism-tsx";
 import "prismjs/components/prism-markup";
 import "./style.css";
+import { initMotion, rescanReveals } from "./motion";
+import { initGithubStars } from "./github";
 
 Prism.manual = true;
 
@@ -117,6 +119,11 @@ const translations: Record<Language, Record<string, string>> = {
     "showcase.zoom": "缩放",
     "showcase.rotate": "旋转",
     "showcase.download": "下载",
+    "showcase.ready": "插件已匹配",
+    "stats.formats": "可预览格式",
+    "stats.plugins": "内置插件",
+    "stats.frameworks": "框架适配",
+    "stats.license": "开源协议",
     "toolbar.title": "工具栏自定义",
     "toolbar.desc": "支持自定义文案、顺序、图标、审批/收藏/分享等业务按钮，也可以完全替换工具栏。",
     "about.eyebrow": "About us",
@@ -124,19 +131,8 @@ const translations: Record<Language, Record<string, string>> = {
     "about.desc": "Open File Viewer 会持续完善更多格式预览、框架接入和真实业务场景。如果它帮你节省了开发时间，欢迎给项目点一个免费的 Star。",
     "about.supportTitle": "支持这个项目继续进化",
     "about.supportBody": "开源项目不容易。如果该项目帮到了您，节省了您宝贵的开发时间，还请您不吝给项目点个免费的赞。",
-    "about.coffeeBody": "当然了，如果您能请作者喝杯咖啡，哪怕喝瓶娃哈哈矿泉水，也是对作者最真诚的鼓励。打赏用户欢迎添加微信，后续交流前端相关问题。",
     "about.starAction": "GitHub Star",
     "about.tryAction": "在线体验",
-    "about.officialTitle": "公众号",
-    "about.officialDesc": "前端开发爱好者",
-    "about.groupTitle": "交流群",
-    "about.groupDesc": "扫码加入前端技术交流",
-    "about.wechatTitle": "作者微信",
-    "about.wechatDesc": "打赏用户可添加，交流前端问题",
-    "about.wechatPayTitle": "微信打赏",
-    "about.wechatPayDesc": "请作者喝杯咖啡",
-    "about.alipayTitle": "支付宝打赏",
-    "about.alipayDesc": "请作者喝瓶娃哈哈矿泉水",
     "cta.title": "无需从头开发每一种渲染器，也能快速上线文件预览。",
     "cta.desc": "从一个稳定容器开始，让文件预览能力持续进化。",
     "cta.action": "在线体验",
@@ -210,6 +206,11 @@ const translations: Record<Language, Record<string, string>> = {
     "showcase.zoom": "Zoom",
     "showcase.rotate": "Rotate",
     "showcase.download": "Download",
+    "showcase.ready": "plugin matched",
+    "stats.formats": "File formats",
+    "stats.plugins": "Built-in plugins",
+    "stats.frameworks": "Framework adapters",
+    "stats.license": "Open source license",
     "toolbar.title": "Toolbar Customization",
     "toolbar.desc": "Change labels, order, icons, approval/favorite/share actions or replace the toolbar completely.",
     "about.eyebrow": "About us",
@@ -217,19 +218,8 @@ const translations: Record<Language, Record<string, string>> = {
     "about.desc": "Open File Viewer will keep improving format coverage, framework adapters and production preview workflows. If it saves you time, a free GitHub Star means a lot.",
     "about.supportTitle": "Help the project keep moving",
     "about.supportBody": "Open source is not easy. If this project helped you and saved valuable development time, please consider giving it a free star.",
-    "about.coffeeBody": "If you would like to buy the author a coffee, or even a bottle of water, it is a sincere encouragement. Supporters are welcome to add WeChat for future frontend discussions.",
     "about.starAction": "GitHub Star",
     "about.tryAction": "Live Demo",
-    "about.officialTitle": "Official Account",
-    "about.officialDesc": "前端开发爱好者",
-    "about.groupTitle": "Community Group",
-    "about.groupDesc": "Scan to join frontend discussions",
-    "about.wechatTitle": "Author WeChat",
-    "about.wechatDesc": "Supporters can add WeChat for frontend Q&A",
-    "about.wechatPayTitle": "WeChat Donation",
-    "about.wechatPayDesc": "Buy the author a coffee",
-    "about.alipayTitle": "Alipay Donation",
-    "about.alipayDesc": "Buy the author bottled water",
     "cta.title": "Ship file previews without building every renderer from scratch.",
     "cta.desc": "Start from a stable container and keep evolving preview capability.",
     "cta.action": "Try the playground",
@@ -250,7 +240,7 @@ const formats = [
     items: "jpg jpeg png gif webp avif jxl svg bmp ico heic heif mp4 webm m3u8 flv m2ts mp3 wav flac midi"
   },
   { title: "Text / Code", icon: "code", level: { zh: "高亮与编辑器模式", en: "Highlight and editor mode" }, items: "txt md json jsonc json5 ipynb yaml toml ini proto hcl tex gv http js ts vue react css html py go rs rb swift kt" },
-  { title: "Engineering", icon: "engineering", level: { zh: "工程资料、芯片版图与结构预览", en: "Engineering, layout and structure" }, items: "dxf dwg step ifc gds oas oasis gltf glb obj stl fbx dae 3mf usdz geojson kml kmz gpx shp drawio excalidraw" },
+  { title: "Engineering", icon: "engineering", level: { zh: "工程资料、芯片版图与结构预览", en: "Engineering, layout and structure" }, items: "dxf dwg step ifc gds gdsii oas oasis gltf glb obj stl fbx dae 3mf usdz geojson kml kmz gpx shp drawio excalidraw" },
   { title: "Archive / Email", icon: "archive", level: { zh: "目录、正文与附件", en: "Structure, body and attachments" }, items: "zip rar 7z tar gz tgz bz2 xz eml msg mbox" },
   { title: "Assets / Data", icon: "data", level: { zh: "结构解析与安全摘要", en: "Structure parsing and safe summaries" }, items: "ttf otf woff woff2 psd ai eps sqlite wasm parquet avro webarchive" }
 ];
@@ -1522,7 +1512,7 @@ let viewer: FileViewer | null = null;
 let currentFiles: Array<PreviewSource | PreviewItem> = [demoFiles[0].file];
 let currentFileName: string | undefined;
 let language: Language = readStorage("ofv-language") === "zh" ? "zh" : "en";
-let siteTheme: SiteTheme = readStorage("ofv-site-theme") === "dark" ? "dark" : "light";
+let siteTheme: SiteTheme = readStorage("ofv-site-theme") === "light" ? "light" : "dark";
 let activeCodeTab: CodeTab = "vanilla";
 let viewerHeightIsResponsive = true;
 
@@ -1561,33 +1551,7 @@ function renderViewer() {
     fit: fitInput.value as PreviewFit,
     theme: themeInput.value as PreviewTheme,
     locale: language === "zh" ? "zh-CN" : "en-US",
-    toolbar:
-      language === "zh"
-        ? {
-            labels: {
-              previous: "上一个",
-              next: "下一个",
-              "rotate-right": "旋转",
-              download: "下载",
-              fullscreen: "全屏",
-              print: "打印",
-              search: "搜索"
-            },
-            titles: {
-              previous: "上一个文件",
-              next: "下一个文件",
-              queue: "当前文件位置",
-              "zoom-out": "缩小",
-              "zoom-in": "放大",
-              "zoom-reset": "重置缩放",
-              "rotate-right": "向右旋转",
-              download: "下载文件",
-              fullscreen: "全屏预览",
-              print: "打印预览",
-              search: "搜索预览内容"
-            }
-          }
-        : true,
+    toolbar: true,
     plugins: createPlugins(),
     onLoad(file) {
       currentFileLabel.textContent = file.name;
@@ -1803,6 +1767,7 @@ function populateFormats() {
       return card;
     })
   );
+  rescanReveals();
 }
 
 function iconSvg(id: string): string {
@@ -1879,12 +1844,12 @@ function setHighlightedCode(element: HTMLElement, source: string, languageName: 
   const highlighted = Prism.highlight(source, grammar, languageName);
   element.innerHTML = highlighted
     .split("\n")
-    .map((line: string) => `<span class="code-line">${line || "&nbsp;"}</span>`)
+    .map((line: string, index: number) => `<span class="code-line" style="--i:${index}">${line || "&nbsp;"}</span>`)
     .join("");
 }
 
 function highlightStaticCodeBlocks() {
-  for (const code of document.querySelectorAll<HTMLElement>("pre code:not(#codeSample)")) {
+  for (const code of document.querySelectorAll<HTMLElement>("pre code:not(#codeSample):not([data-no-highlight])")) {
     const text = code.textContent || "";
     const languageName = text.trim().startsWith("npm ") ? "bash" : "typescript";
     setHighlightedCode(code, text, languageName);
@@ -2059,6 +2024,8 @@ highlightStaticCodeBlocks();
 syncNavigationState();
 updateFilePickerLabel();
 syncResponsiveViewerHeight();
+initMotion();
+void initGithubStars();
 renderViewer();
 requestAnimationFrame(() => {
   document.documentElement.dataset.siteReady = "true";

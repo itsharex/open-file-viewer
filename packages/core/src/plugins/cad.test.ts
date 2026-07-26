@@ -418,6 +418,23 @@ describe("cadPlugin", () => {
     expect(zoomReset?.textContent).toBe("100%");
   });
 
+  it("renders GDSII layout through the .gdsii alias extension", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: sampleGds(),
+      fileName: "chip.gdsii",
+      plugins: [cadPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-layout-stage")));
+
+    expect(container.textContent).toContain("GDSII 版图预览");
+    expect(container.querySelectorAll(".ofv-layout-stage polygon")).toHaveLength(1);
+  });
+
   it("expands GDSII cell references into drawable geometry", async () => {
     const container = document.createElement("div");
     document.body.append(container);

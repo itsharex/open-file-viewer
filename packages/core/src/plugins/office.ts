@@ -16,6 +16,13 @@ const SHEET_WINDOW_ROWS = 200;
 const SHEET_WINDOW_COLUMNS = 80;
 const DEFAULT_DOCX_RENDER_TIMEOUT_MS = 15000;
 const DEFAULT_PPTX_RENDER_TIMEOUT_MS = 12000;
+const ZIP_SNIFF_TIMEOUT_MS = 10000;
+
+// Format sniffing runs before the render timeouts, so a JSZip hang here (seen in
+// micro-frontend sandboxes, see qiankun#2589) must reject instead of spinning forever.
+function loadZipForSniffing(arrayBuffer: ArrayBuffer): Promise<JSZip> {
+  return withTimeout(JSZip.loadAsync(arrayBuffer), ZIP_SNIFF_TIMEOUT_MS, "Office package sniffing");
+}
 const PPTX_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships";
 const officeMimeTypes = new Set([
   "application/msword",
@@ -411,7 +418,7 @@ function shouldSniffPackagedOffice(extension: string): boolean {
 
 async function detectPackagedOfficeFormat(arrayBuffer: ArrayBuffer): Promise<"docx" | "xlsx" | "pptx" | undefined> {
   try {
-    const zip = await JSZip.loadAsync(arrayBuffer);
+    const zip = await loadZipForSniffing(arrayBuffer);
     const entries = Object.values(zip.files).filter((entry) => !entry.dir);
     const hasEntry = (path: string) => entries.some((entry) => entry.name.toLowerCase() === path.toLowerCase());
     if (hasEntry("word/document.xml")) {
@@ -522,7 +529,7 @@ async function docxPreviewMissesRichTextboxContent(container: HTMLElement, array
     if (!(await docxHasRichTextboxContent(arrayBuffer))) {
       return false;
     }
-    const zip = await JSZip.loadAsync(arrayBuffer);
+    const zip = await loadZipForSniffing(arrayBuffer);
     const documentXml = await zip.file("word/document.xml")?.async("text");
     if (!documentXml) {
       return false;
@@ -546,7 +553,7 @@ async function docxPreviewMissesRichTextboxContent(container: HTMLElement, array
 
 async function docxHasRichTextboxContent(arrayBuffer: ArrayBuffer): Promise<boolean> {
   try {
-    const zip = await JSZip.loadAsync(arrayBuffer);
+    const zip = await loadZipForSniffing(arrayBuffer);
     const documentXml = await zip.file("word/document.xml")?.async("text");
     if (!documentXml || !/\btxbxContent\b/.test(documentXml)) {
       return false;
@@ -567,7 +574,7 @@ async function docxHasRichTextboxContent(arrayBuffer: ArrayBuffer): Promise<bool
 
 async function docxShouldPreferTextboxLayoutFallback(arrayBuffer: ArrayBuffer): Promise<boolean> {
   try {
-    const zip = await JSZip.loadAsync(arrayBuffer);
+    const zip = await loadZipForSniffing(arrayBuffer);
     const documentXml = await zip.file("word/document.xml")?.async("text");
     if (!documentXml || !/\btxbxContent\b/.test(documentXml)) {
       return false;
@@ -3363,12 +3370,14 @@ function applyWorkbookCellStyle(cell: HTMLTableCellElement, sourceCell: any): vo
     return;
   }
 
-  const fill = readWorkbookColor(style.fgColor || style.fill?.fgColor);
-  if (fill && style.patternType !== "none") {
+  const parsedFill = readWorkbookColor(style.fgColor || style.fill?.fgColor);
+  const fill = style.patternType === "none" ? undefined : parsedFill;
+  if (fill) {
     cell.style.backgroundColor = fill;
   }
 
   const font = style.font;
+  const fontColor = font ? readWorkbookColor(font.color) : undefined;
   if (font) {
     if (font.bold) {
       cell.style.fontWeight = "700";
@@ -3379,11 +3388,8 @@ function applyWorkbookCellStyle(cell: HTMLTableCellElement, sourceCell: any): vo
     if (font.sz) {
       cell.style.fontSize = `${Math.max(9, Math.min(24, Number(font.sz)))}pt`;
     }
-    const fontColor = readWorkbookColor(font.color);
-    if (fontColor) {
-      cell.style.color = fontColor;
-    }
   }
+  applyWorkbookCellInk(cell, fill, fontColor);
 
   const alignment = style.alignment;
   if (alignment) {
@@ -3407,6 +3413,95 @@ function readWorkbookColor(color: { rgb?: string; indexed?: number } | undefined
   }
   const rgb = color.rgb.length === 8 ? color.rgb.slice(2) : color.rgb;
   return /^[\da-f]{6}$/i.test(rgb) ? `#${rgb}` : undefined;
+}
+
+// Cell fills and font colors from the file assume Excel's white canvas. Resolve
+// an ink per cell so the viewer theme can never pair light text with a light
+// fill (or dark text with the dark-theme grid).
+function applyWorkbookCellInk(cell: HTMLTableCellElement, fill: string | undefined, fontColor: string | undefined): void {
+  if (fill) {
+    // Inline colors: a filled cell is self-contained and theme-independent.
+    cell.style.color = fontColor ?? (sheetColorLuminance(fill) < 0.42 ? "#f8fafc" : "#1f2937");
+    return;
+  }
+  if (!fontColor) {
+    return;
+  }
+  // No fill: the ink sits on the themed grid surface, so expose per-theme
+  // readable variants and let the stylesheet pick by theme.
+  cell.classList.add("ofv-cell-ink");
+  cell.style.setProperty("--ofv-cell-ink-light", readableSheetInk(fontColor, "light"));
+  cell.style.setProperty("--ofv-cell-ink-dark", readableSheetInk(fontColor, "dark"));
+}
+
+function sheetColorLuminance(hex: string): number {
+  const channels = [hex.slice(1, 3), hex.slice(3, 5), hex.slice(5, 7)].map((part) => {
+    const value = parseInt(part, 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+// Keep the hue but clamp lightness so the ink stays legible on the target surface.
+function readableSheetInk(hex: string, surface: "light" | "dark"): string {
+  const luminance = sheetColorLuminance(hex);
+  if (surface === "light" ? luminance <= 0.62 : luminance >= 0.12) {
+    return hex;
+  }
+  const [h, s, l] = sheetHexToHsl(hex);
+  return sheetHslToHex(h, s, surface === "light" ? Math.min(l, 0.42) : Math.max(l, 0.68));
+}
+
+function sheetHexToHsl(hex: string): [number, number, number] {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) {
+    return [0, 0, l];
+  }
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) {
+    h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  } else if (max === g) {
+    h = ((b - r) / d + 2) / 6;
+  } else {
+    h = ((r - g) / d + 4) / 6;
+  }
+  return [h, s, l];
+}
+
+function sheetHslToHex(h: number, s: number, l: number): string {
+  const hueToChannel = (p: number, q: number, t: number): number => {
+    let value = t;
+    if (value < 0) value += 1;
+    if (value > 1) value -= 1;
+    if (value < 1 / 6) return p + (q - p) * 6 * value;
+    if (value < 1 / 2) return q;
+    if (value < 2 / 3) return p + (q - p) * (2 / 3 - value) * 6;
+    return p;
+  };
+  let r: number;
+  let g: number;
+  let b: number;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hueToChannel(p, q, h + 1 / 3);
+    g = hueToChannel(p, q, h);
+    b = hueToChannel(p, q, h - 1 / 3);
+  }
+  const toHex = (value: number): string =>
+    Math.round(value * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
 function normalizeSheetHorizontalAlign(value: string | undefined): string | undefined {

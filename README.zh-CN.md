@@ -203,6 +203,23 @@ pdfPlugin({
 `pdfjs-dist/legacy/build/pdf.worker.min.mjs`。确认只面向现代 Chrome、Edge 时，也可以设置
 `compatibilityMode: "modern"`。
 
+### qiankun / micro-app 子应用中 Office 预览一直加载
+
+在 qiankun、micro-app 等微前端沙箱里，jszip 依赖的 `setImmediate` polyfill 基于
+window `message` 事件监听器实现，而沙箱会在子应用卸载时移除这些监听器，导致
+`JSZip.loadAsync` 永远不返回——docx / xlsx / pptx / epub / ofd 等所有 zip 类预览会
+一直停留在"正在加载"（参见 [qiankun#2589](https://github.com/umijs/qiankun/issues/2589)）。
+
+`createViewer()` 检测到 `__POWERED_BY_QIANKUN__`、`__MICRO_APP_ENVIRONMENT__` 等
+标志时，会自动换成基于 MessageChannel 的安全调度器，无需额外配置。如果使用的是
+0.1.27 及更早版本，可以在子应用入口的所有 import 之前手动补丁：
+
+```js
+if (window.__POWERED_BY_QIANKUN__) {
+  window.setImmediate = (fn, ...args) => setTimeout(fn, 0, ...args);
+}
+```
+
 ### React
 
 ```tsx
@@ -338,7 +355,7 @@ const plugins = [
 | 数据 / 资产 | `assetPlugin()` | `sqlite`, `db`, `parquet`, `avro`, `wasm`, `psd`, `psb`, `ai`, `eps`, `ps`, `webarchive`, `ttf`, `otf`, `woff`, `woff2` |
 | 邮件 | `emailPlugin()` | `eml`, `msg`, `mbox` |
 | 绘图 / 白板 | `drawingPlugin()` | `drawio`, `dio`, `excalidraw`, `tldraw` |
-| CAD / 工程 / 芯片版图 | `cadPlugin()` | `dxf`, `dwg`, `dwf`, `step`, `stp`, `iges`, `igs`, `ifc`, `skp`, `sldprt`, `gds`, `oas`, `oasis` |
+| CAD / 工程 / 芯片版图 | `cadPlugin()` | `dxf`, `dwg`, `dwf`, `step`, `stp`, `iges`, `igs`, `ifc`, `skp`, `sldprt`, `gds`, `gdsii`, `oas`, `oasis` |
 | 3D 模型 | `model3dPlugin()` | `gltf`, `glb`, `obj`, `stl`, `fbx`, `dae`, `ply`, `3mf`, `usd`, `usdz` |
 | GIS | `gisPlugin()` | `geojson`, `topojson`, `kml`, `kmz`, `gpx`, `shp` |
 | 资产识别 | `assetPlugin()` | `ttf`, `woff2`, `psd`, `ai`, `eps`, `sqlite`, `wasm`, `parquet`, `avro` |
@@ -753,49 +770,7 @@ pnpm pack:check
 
 Open File Viewer 会持续完善更多格式预览、框架接入和真实业务场景。开源项目不容易，如果它帮你节省了开发时间，欢迎给项目点一个免费的 Star，这对项目后续迭代非常重要。
 
-- 反馈问题：欢迎通过 GitHub Issue、交流群或作者微信反馈文件样例、排版问题、容器适配问题和新的格式诉求。
-- 交流学习：公众号「前端开发爱好者」会持续分享前端工程、组件开发和开源实践。
-- 支持作者：如果你愿意请作者喝杯咖啡，哪怕喝瓶娃哈哈矿泉水，也是非常真诚的鼓励。打赏用户欢迎添加作者微信，后续交流前端相关问题。
-
-<table>
-  <tr>
-    <td align="center" width="20%">
-      <img src="./doc/public/images/official-account-qr.jpg" width="140" alt="公众号二维码：前端开发爱好者" />
-      <br />
-      <strong>公众号</strong>
-      <br />
-      前端开发爱好者
-    </td>
-    <td align="center" width="20%">
-      <img src="./doc/public/images/community-group-qr.png" width="140" alt="交流群二维码" />
-      <br />
-      <strong>交流群</strong>
-      <br />
-      前端技术交流
-    </td>
-    <td align="center" width="20%">
-      <img src="./doc/public/images/author-wechat-qr.png" width="140" alt="作者微信二维码" />
-      <br />
-      <strong>作者微信</strong>
-      <br />
-      交流前端问题
-    </td>
-    <td align="center" width="20%">
-      <img src="./doc/public/images/wechat-donation-qr.png" width="140" alt="微信打赏二维码" />
-      <br />
-      <strong>微信打赏</strong>
-      <br />
-      请作者喝杯咖啡
-    </td>
-    <td align="center" width="20%">
-      <img src="./doc/public/images/alipay-donation-qr.png" width="140" alt="支付宝打赏二维码" />
-      <br />
-      <strong>支付宝打赏</strong>
-      <br />
-      请作者喝瓶水
-    </td>
-  </tr>
-</table>
+- 反馈问题：欢迎通过 GitHub Issue 反馈文件样例、排版问题、容器适配问题和新的格式诉求。
 
 ## 链接
 

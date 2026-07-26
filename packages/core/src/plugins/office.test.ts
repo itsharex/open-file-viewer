@@ -374,6 +374,14 @@ describe("officePlugin", () => {
     const table = container.querySelector<HTMLTableElement>(".ofv-workbook-table");
     expect(titleCell?.colSpan).toBe(3);
     expect(titleCell?.style.backgroundColor).toBe("rgb(217, 245, 214)");
+    expect(titleCell?.style.color).toBe("rgb(31, 41, 55)");
+    const darkFillCell = container.querySelector<HTMLTableCellElement>('[data-cell="A4"]');
+    expect(darkFillCell?.style.backgroundColor).toBe("rgb(30, 58, 138)");
+    expect(darkFillCell?.style.color).toBe("rgb(248, 250, 252)");
+    // SheetJS CE only surfaces fills for xlsx (cell.s = Fills[fillid]), so no ink class here.
+    const inkCell = container.querySelector<HTMLTableCellElement>('[data-cell="C4"]');
+    expect(inkCell?.textContent).toBe("Black ink");
+    expect(inkCell?.classList.contains("ofv-cell-ink")).toBe(false);
     expect(container.querySelector('[data-cell="B1"]')).toBeNull();
     expect(mergedNote?.rowSpan).toBe(2);
     expect(mergedNote?.classList.contains("ofv-cell-multiline")).toBe(true);
@@ -2194,20 +2202,26 @@ async function createStyledWorkbook(): Promise<Blob> {
     "xl/styles.xml",
     `<?xml version="1.0" encoding="UTF-8"?>
       <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-        <fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>
-        <fills count="3">
+        <fonts count="2">
+          <font><sz val="11"/><name val="Calibri"/></font>
+          <font><sz val="11"/><color rgb="FF000000"/><name val="Calibri"/></font>
+        </fonts>
+        <fills count="4">
           <fill><patternFill patternType="none"/></fill>
           <fill><patternFill patternType="gray125"/></fill>
           <fill><patternFill patternType="solid"><fgColor rgb="FFD9F5D6"/><bgColor indexed="64"/></patternFill></fill>
+          <fill><patternFill patternType="solid"><fgColor rgb="FF1E3A8A"/><bgColor indexed="64"/></patternFill></fill>
         </fills>
         <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
         <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-        <cellXfs count="3">
+        <cellXfs count="5">
           <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
           <xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/>
           <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1">
             <alignment vertical="top" wrapText="1"/>
           </xf>
+          <xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/>
+          <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
         </cellXfs>
       </styleSheet>`
   );
@@ -2232,6 +2246,10 @@ async function createStyledWorkbook(): Promise<Blob> {
           <row r="3">
             <c r="A3" t="inlineStr"><is><t>A</t></is></c>
             <c r="C3"><v>42</v></c>
+          </row>
+          <row r="4">
+            <c r="A4" t="inlineStr" s="3"><is><t>Dark fill</t></is></c>
+            <c r="C4" t="inlineStr" s="4"><is><t>Black ink</t></is></c>
           </row>
         </sheetData>
         <mergeCells count="2">

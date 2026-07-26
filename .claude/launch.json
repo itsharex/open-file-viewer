@@ -1,0 +1,103 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "doc-site",
+      "runtimeExecutable": "/Users/kuangkuang/.nvm/versions/node/v22.20.0/bin/node",
+      "runtimeArgs": [
+        "doc/node_modules/vite/bin/vite.js",
+        "--config",
+        "doc/vite.config.ts",
+        "doc",
+        "--port",
+        "5178",
+        "--strictPort"
+      ],
+      "port": 5178
+    },
+    {
+      "name": "doc-site-alt",
+      "runtimeExecutable": "/Users/kuangkuang/.nvm/versions/node/v22.20.0/bin/node",
+      "runtimeArgs": [
+        "doc/node_modules/vite/bin/vite.js",
+        "--config",
+        "doc/vite.config.ts",
+        "doc",
+        "--port",
+        "5183",
+        "--strictPort"
+      ],
+      "port": 5183
+    },
+    {
+      "name": "doc-site-logo",
+      "runtimeExecutable": "/Users/kuangkuang/.nvm/versions/node/v22.20.0/bin/node",
+      "runtimeArgs": [
+        "doc/node_modules/vite/bin/vite.js",
+        "--config",
+        "doc/vite.config.ts",
+        "doc",
+        "--port",
+        "5186",
+        "--strictPort"
+      ],
+      "port": 5186
+    },
+    {
+      "name": "vanilla-example",
+      "runtimeExecutable": "/Users/kuangkuang/.nvm/versions/node/v22.20.0/bin/node",
+      "runtimeArgs": [
+        "examples/vanilla/node_modules/vite/bin/vite.js",
+        "--config",
+        "examples/vanilla/vite.config.ts",
+        "examples/vanilla",
+        "--port",
+        "5179",
+        "--strictPort"
+      ],
+      "port": 5179
+    },
+    {
+      "name": "vanilla-example-alt",
+      "runtimeExecutable": "/Users/kuangkuang/.nvm/versions/node/v22.20.0/bin/node",
+      "runtimeArgs": [
+        "examples/vanilla/node_modules/vite/bin/vite.js",
+        "--config",
+        "examples/vanilla/vite.config.ts",
+        "examples/vanilla",
+        "--port",
+        "5184",
+        "--strictPort"
+      ],
+      "port": 5184
+    },
+    {
+      "name": "doc-site-issue45",
+      "runtimeExecutable": "/Users/kuangkuang/.nvm/versions/node/v22.20.0/bin/node",
+      "runtimeArgs": [
+        "doc/node_modules/vite/bin/vite.js",
+        "--config",
+        "doc/vite.config.ts",
+        "doc",
+        "--port",
+        "5192",
+        "--strictPort"
+      ],
+      "port": 5192
+    },
+    {
+      "name": "doc-site-issue37",
+      "runtimeExecutable": "/Users/kuangkuang/.nvm/versions/node/v22.20.0/bin/node",
+      "runtimeArgs": [
+        "doc/node_modules/vite/bin/vite.js",
+        "--config",
+        "doc/vite.config.ts",
+        "doc",
+        "--port",
+        "5191",
+        "--strictPort"
+      ],
+      "port": 5191
+    }
+  ]
+}

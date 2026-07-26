@@ -147,7 +147,6 @@ type OfdTextObject = {
   letterSpacing?: number;
   deltaX?: number[];
   vertical?: boolean;
-  align?: "start" | "end";
 };
 
 type OfdPathObject = {
@@ -188,6 +187,7 @@ type OfdPagePreview = {
   paths: OfdPathObject[];
   lines: OfdLineObject[];
   images: OfdImageObject[];
+  stamps: OfdImageObject[];
 };
 
 type OfdContext = {
@@ -195,6 +195,7 @@ type OfdContext = {
   templates: Map<string, string>;
   fonts: Map<string, string>;
   pageSize?: { width: number; height: number };
+  stampsByPage: Map<string, OfdImageObject[]>;
 };
 
 async function readOfdPages(
@@ -208,8 +209,15 @@ async function readOfdPages(
   for (const entry of pageEntries) {
     const xml = await entry.async("text");
     const templates = await readPageTemplates(xml, context, entries);
-    const page = parseOfdPage(entry.name, xml, context.images, context.fonts, templates, context.pageSize);
-    if (page.texts.length > 0 || page.paths.length > 0 || page.lines.length > 0 || page.images.length > 0) {
+    const stamps = context.stampsByPage.get(normalizeOfdPath(entry.name)) || [];
+    const page = parseOfdPage(entry.name, xml, context.images, context.fonts, templates, context.pageSize, stamps);
+    if (
+      page.texts.length > 0 ||
+      page.paths.length > 0 ||
+      page.lines.length > 0 ||
+      page.images.length > 0 ||
+      page.stamps.length > 0
+    ) {
       pages.push(page);
     }
   }
@@ -242,11 +250,12 @@ function parseOfdPage(
   images: Map<string, string>,
   fonts: Map<string, string>,
   templateXmls: string[] = [],
-  defaultPageSize?: { width: number; height: number }
+  defaultPageSize?: { width: number; height: number },
+  stamps: OfdImageObject[] = []
 ): OfdPagePreview {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.querySelector("parsererror")) {
-    return { name, width: 210, height: 297, texts: [], paths: [], lines: [], images: [] };
+    return { name, width: 210, height: 297, texts: [], paths: [], lines: [], images: [], stamps };
   }
   const pageSize = parseOfdPageSize(doc, defaultPageSize);
   const templatePages = templateXmls.map((templateXml) => {
@@ -259,19 +268,19 @@ function parseOfdPage(
   const lines = [...templatePages.flatMap((page) => page.lines), ...pageContent.lines];
   const imageObjects = [...templatePages.flatMap((page) => page.images), ...pageContent.images];
   if (pageSize.explicit) {
-    return { name, width: pageSize.width, height: pageSize.height, texts, paths, lines, images: imageObjects };
+    return { name, width: pageSize.width, height: pageSize.height, texts, paths, lines, images: imageObjects, stamps };
   }
-  const bounds = createOfdBounds(texts, paths, lines, imageObjects);
+  const bounds = createOfdBounds(texts, paths, lines, [...imageObjects, ...stamps]);
   const width = Math.max(pageSize.width, ...bounds.map((item) => item.x + item.width + 12));
   const height = Math.max(pageSize.height, ...bounds.map((item) => item.y + item.height + 12));
-  return { name, width, height, texts, paths, lines, images: imageObjects };
+  return { name, width, height, texts, paths, lines, images: imageObjects, stamps };
 }
 
 function parseOfdPageContent(
   doc: Document,
   images: Map<string, string>,
   fonts: Map<string, string>
-): Omit<OfdPagePreview, "name" | "width" | "height"> {
+): Omit<OfdPagePreview, "name" | "width" | "height" | "stamps"> {
   const textObjects = Array.from(doc.getElementsByTagName("*")).filter((element) => element.localName === "TextObject");
   const texts = textObjects.flatMap((element) => parseOfdTextObject(element, fonts));
   const paths = Array.from(doc.getElementsByTagName("*"))
@@ -286,7 +295,7 @@ function parseOfdPageContent(
   return { texts, paths, lines, images: imageObjects };
 }
 
-function emptyOfdPageContent(): Omit<OfdPagePreview, "name" | "width" | "height"> {
+function emptyOfdPageContent(): Omit<OfdPagePreview, "name" | "width" | "height" | "stamps"> {
   return { texts: [], paths: [], lines: [], images: [] };
 }
 
@@ -323,9 +332,8 @@ function parseOfdTextObject(element: Element, fonts: Map<string, string>): OfdTe
   return textCodes.flatMap((code): OfdTextObject[] => {
     const x = boundary.x + finiteNumber(getOfdAttribute(code, "X"), 0);
     const y = boundary.y + finiteNumber(getOfdAttribute(code, "Y"), 0);
-    const text = code.textContent?.trim() || "";
+    const text = decodeOfdTextEscapes(code.textContent?.trim() || "");
     const deltaX = parseOfdDeltaX(getOfdAttribute(code, "DeltaX"));
-    const align = deltaX ? "start" : inferOfdTextAlign(text, boundary);
     const deltaY = getOfdAttribute(code, "DeltaY");
     if (deltaY && text.length > 1) {
       const step = parseOfdDeltaStep(deltaY, size);
@@ -340,8 +348,7 @@ function parseOfdTextObject(element: Element, fonts: Map<string, string>): OfdTe
         weight,
         fontFamily,
         letterSpacing: objectLetterSpacing,
-        vertical: true,
-        align
+        vertical: true
       }));
     }
     return [
@@ -356,8 +363,7 @@ function parseOfdTextObject(element: Element, fonts: Map<string, string>): OfdTe
         weight,
         fontFamily,
         letterSpacing: deltaX ? undefined : objectLetterSpacing,
-        deltaX,
-        align
+        deltaX
       }
     ];
   }).filter((item) => item.text);
@@ -380,8 +386,8 @@ function parseOfdPathObject(element: Element): OfdPathObject[] {
       y: boundary.y,
       width: boundary.width,
       height: boundary.height,
-      stroke: parseOfdColor(element, "#111827", "StrokeColor"),
-      fill: parseOfdFill(element),
+      stroke: parseOfdBoolean(getOfdAttribute(element, "Stroke")) === false ? "none" : parseOfdColor(element, "#111827", "StrokeColor"),
+      fill: parseOfdBoolean(getOfdAttribute(element, "Fill")) === false ? "transparent" : parseOfdFill(element),
       strokeWidth: finiteNumber(getOfdAttribute(element, "LineWidth"), 1),
       transform: createOfdPathTransform(boundary.x, boundary.y, ctm)
     }
@@ -441,26 +447,7 @@ function renderOfdPage(page: OfdPagePreview): HTMLElement {
   svg.append(paper);
 
   for (const item of page.images) {
-    if (item.href) {
-      const image = document.createElementNS(svg.namespaceURI, "image");
-      image.setAttribute("x", String(item.x));
-      image.setAttribute("y", String(item.y));
-      image.setAttribute("width", String(item.width));
-      image.setAttribute("height", String(item.height));
-      image.setAttribute("href", item.href);
-      image.setAttribute("preserveAspectRatio", "xMidYMid meet");
-      svg.append(image);
-    } else {
-      const placeholder = document.createElementNS(svg.namespaceURI, "rect");
-      placeholder.setAttribute("x", String(item.x));
-      placeholder.setAttribute("y", String(item.y));
-      placeholder.setAttribute("width", String(item.width));
-      placeholder.setAttribute("height", String(item.height));
-      placeholder.setAttribute("fill", "#f8fafc");
-      placeholder.setAttribute("stroke", "#94a3b8");
-      placeholder.setAttribute("stroke-dasharray", "4 3");
-      svg.append(placeholder);
-    }
+    appendOfdImage(svg, item);
   }
 
   for (const item of page.paths) {
@@ -487,7 +474,7 @@ function renderOfdPage(page: OfdPagePreview): HTMLElement {
 
   for (const item of page.texts) {
     const text = document.createElementNS(svg.namespaceURI, "text");
-    text.setAttribute("x", String(item.align === "end" ? item.x + item.width : item.x));
+    text.setAttribute("x", String(item.x));
     text.setAttribute("y", String(item.y));
     text.setAttribute("font-size", String(item.size));
     text.setAttribute("fill", item.color);
@@ -496,7 +483,7 @@ function renderOfdPage(page: OfdPagePreview): HTMLElement {
     if (item.letterSpacing !== undefined) {
       text.setAttribute("letter-spacing", String(item.letterSpacing));
     }
-    if (item.deltaX && item.deltaX.length > 0 && item.align !== "end") {
+    if (item.deltaX && item.deltaX.length > 0) {
       const chars = Array.from(item.text);
       let x = item.x;
       for (let index = 0; index < chars.length; index += 1) {
@@ -510,23 +497,137 @@ function renderOfdPage(page: OfdPagePreview): HTMLElement {
         text.append(span);
       }
     } else {
-      if (item.align === "end") {
-        text.setAttribute("text-anchor", "end");
-      }
       text.textContent = item.text;
     }
     svg.append(text);
+  }
+
+  for (const item of page.stamps) {
+    appendOfdImage(svg, item);
   }
 
   figure.append(svg);
   return figure;
 }
 
+function appendOfdImage(svg: SVGElement, item: OfdImageObject): void {
+  if (item.href) {
+    const image = document.createElementNS(svg.namespaceURI, "image");
+    image.setAttribute("x", String(item.x));
+    image.setAttribute("y", String(item.y));
+    image.setAttribute("width", String(item.width));
+    image.setAttribute("height", String(item.height));
+    image.setAttribute("href", item.href);
+    image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    svg.append(image);
+  } else {
+    const placeholder = document.createElementNS(svg.namespaceURI, "rect");
+    placeholder.setAttribute("x", String(item.x));
+    placeholder.setAttribute("y", String(item.y));
+    placeholder.setAttribute("width", String(item.width));
+    placeholder.setAttribute("height", String(item.height));
+    placeholder.setAttribute("fill", "#f8fafc");
+    placeholder.setAttribute("stroke", "#94a3b8");
+    placeholder.setAttribute("stroke-dasharray", "4 3");
+    svg.append(placeholder);
+  }
+}
+
 async function readOfdContext(entries: JSZip.JSZipObject[]): Promise<OfdContext> {
   const images = await readOfdImages(entries);
   const fonts = await readOfdFonts(entries);
-  const { templates, pageSize } = await readOfdDocumentInfo(entries);
-  return { images, templates, fonts, pageSize };
+  const { templates, pageSize, pagePaths } = await readOfdDocumentInfo(entries);
+  const stampsByPage = await readOfdStamps(entries, pagePaths);
+  return { images, templates, fonts, pageSize, stampsByPage };
+}
+
+async function readOfdStamps(
+  entries: JSZip.JSZipObject[],
+  pagePaths: Map<string, string>
+): Promise<Map<string, OfdImageObject[]>> {
+  const stamps = new Map<string, OfdImageObject[]>();
+  for (const entry of entries.filter((item) => /(?:^|\/)Signatures\.xml$/i.test(item.name))) {
+    const doc = new DOMParser().parseFromString(await entry.async("text"), "application/xml");
+    if (doc.querySelector("parsererror")) {
+      continue;
+    }
+    const signaturesDir = directoryName(entry.name);
+    for (const signature of Array.from(doc.getElementsByTagName("*")).filter((element) => element.localName === "Signature")) {
+      const baseLoc = getOfdAttribute(signature, "BaseLoc");
+      const signatureEntry = baseLoc
+        ? findOfdEntry(entries, joinOfdPath(signaturesDir, baseLoc)) || findOfdEntry(entries, baseLoc)
+        : undefined;
+      if (!signatureEntry) {
+        continue;
+      }
+      const signatureDoc = new DOMParser().parseFromString(await signatureEntry.async("text"), "application/xml");
+      if (signatureDoc.querySelector("parsererror")) {
+        continue;
+      }
+      const signatureElements = Array.from(signatureDoc.getElementsByTagName("*"));
+      const signatureDir = directoryName(signatureEntry.name);
+      const signedValueLoc = signatureElements.find((element) => element.localName === "SignedValue")?.textContent?.trim() || "SignedValue.dat";
+      const signedValueEntry =
+        findOfdEntry(entries, joinOfdPath(signatureDir, signedValueLoc)) || findOfdEntry(entries, signedValueLoc);
+      const href = signedValueEntry ? extractOfdStampImage(await signedValueEntry.async("uint8array")) : undefined;
+      for (const annot of signatureElements.filter((element) => element.localName === "StampAnnot")) {
+        const boundary = parseBoundary(getOfdAttribute(annot, "Boundary"));
+        const pageRef = getOfdAttribute(annot, "PageRef");
+        const pagePath = pageRef ? pagePaths.get(pageRef) : undefined;
+        const pageEntry = pagePath ? findOfdEntry(entries, pagePath) : undefined;
+        if (!pageEntry || boundary.width <= 0 || boundary.height <= 0) {
+          continue;
+        }
+        const key = normalizeOfdPath(pageEntry.name);
+        const list = stamps.get(key) || [];
+        list.push({ x: boundary.x, y: boundary.y, width: boundary.width, height: boundary.height, resourceId: "", href });
+        stamps.set(key, list);
+      }
+    }
+  }
+  return stamps;
+}
+
+function extractOfdStampImage(bytes: Uint8Array): string | undefined {
+  const pngStart = indexOfOfdBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (pngStart >= 0) {
+    const iend = indexOfOfdBytes(bytes, [0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82], pngStart);
+    const end = iend >= 0 ? iend + 8 : bytes.length;
+    return ofdBytesToDataUrl("image/png", bytes.subarray(pngStart, end));
+  }
+  const jpegStart = indexOfOfdBytes(bytes, [0xff, 0xd8, 0xff]);
+  if (jpegStart >= 0) {
+    let end = bytes.length;
+    for (let index = bytes.length - 2; index > jpegStart; index -= 1) {
+      if (bytes[index] === 0xff && bytes[index + 1] === 0xd9) {
+        end = index + 2;
+        break;
+      }
+    }
+    return ofdBytesToDataUrl("image/jpeg", bytes.subarray(jpegStart, end));
+  }
+  return undefined;
+}
+
+function indexOfOfdBytes(bytes: Uint8Array, pattern: number[], fromIndex = 0): number {
+  outer: for (let index = fromIndex; index <= bytes.length - pattern.length; index += 1) {
+    for (let offset = 0; offset < pattern.length; offset += 1) {
+      if (bytes[index + offset] !== pattern[offset]) {
+        continue outer;
+      }
+    }
+    return index;
+  }
+  return -1;
+}
+
+function ofdBytesToDataUrl(mimeType: string, bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return `data:${mimeType};base64,${btoa(binary)}`;
 }
 
 async function readOfdFonts(entries: JSZip.JSZipObject[]): Promise<Map<string, string>> {
@@ -586,8 +687,13 @@ async function readOfdImages(entries: JSZip.JSZipObject[]): Promise<Map<string, 
   return images;
 }
 
-async function readOfdDocumentInfo(entries: JSZip.JSZipObject[]): Promise<{ templates: Map<string, string>; pageSize?: { width: number; height: number } }> {
+async function readOfdDocumentInfo(entries: JSZip.JSZipObject[]): Promise<{
+  templates: Map<string, string>;
+  pageSize?: { width: number; height: number };
+  pagePaths: Map<string, string>;
+}> {
   const templates = new Map<string, string>();
+  const pagePaths = new Map<string, string>();
   let pageSize: { width: number; height: number } | undefined;
   for (const entry of entries.filter((item) => /(?:^|\/)Document\.xml$/i.test(item.name))) {
     const xml = await entry.async("text");
@@ -614,8 +720,15 @@ async function readOfdDocumentInfo(entries: JSZip.JSZipObject[]): Promise<{ temp
         templates.set(id, joinOfdPath(documentDir, baseLoc));
       }
     }
+    for (const pageElement of Array.from(doc.getElementsByTagName("*")).filter((element) => element.localName === "Page")) {
+      const id = getOfdAttribute(pageElement, "ID");
+      const baseLoc = getOfdAttribute(pageElement, "BaseLoc");
+      if (id && baseLoc) {
+        pagePaths.set(id, joinOfdPath(documentDir, baseLoc));
+      }
+    }
   }
-  return { templates, pageSize };
+  return { templates, pageSize, pagePaths };
 }
 
 function parseOfdPageSize(doc: Document, defaultPageSize?: { width: number; height: number }): { width: number; height: number; explicit: boolean } {
@@ -640,9 +753,33 @@ function parseOfdColor(element: Element, fallback: string, preferredLocalName = 
   }
   const parts = value.trim().split(/\s+/).map((part) => Number(part));
   if (parts.length >= 3 && parts.every((part) => Number.isFinite(part))) {
-    return `rgb(${parts.slice(0, 3).map((part) => Math.max(0, Math.min(255, part))).join(" ")})`;
+    const channels = parts.slice(0, 3).map((part) => Math.max(0, Math.min(255, part))).join(" ");
+    const alpha = parseOfdAlpha(colorElement ? getOfdAttribute(colorElement, "Alpha") : null);
+    if (alpha <= 0) {
+      return "transparent";
+    }
+    return alpha >= 1 ? `rgb(${channels})` : `rgb(${channels} / ${formatOfdCssNumber(alpha)})`;
   }
   return fallback;
+}
+
+function parseOfdAlpha(value: string | null): number {
+  const parsed = value === null ? Number.NaN : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return 1;
+  }
+  return Math.max(0, Math.min(255, parsed)) / 255;
+}
+
+function parseOfdBoolean(value: string | null): boolean | undefined {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") {
+    return true;
+  }
+  if (normalized === "false" || normalized === "0") {
+    return false;
+  }
+  return undefined;
 }
 
 function parseOfdFill(element: Element): string {
@@ -694,6 +831,19 @@ function createOfdPathTransform(x: number, y: number, ctm?: [number, number, num
   return `translate(${x} ${y}) matrix(${a} ${b} ${c} ${d} ${e} ${f})`;
 }
 
+function decodeOfdTextEscapes(value: string): string {
+  if (!value.includes("\\")) {
+    return value;
+  }
+  return value.replace(/\\(?:0[xX]([0-9a-fA-F]{4})|u([0-9a-fA-F]{4})|\\)/g, (match, hex: string | undefined, unicode: string | undefined) => {
+    const digits = hex || unicode;
+    if (!digits) {
+      return "\\";
+    }
+    return String.fromCodePoint(Number.parseInt(digits, 16));
+  });
+}
+
 function parseOfdDeltaStep(value: string, fallback: number): number {
   const numbers = value.match(/-?\d+(?:\.\d+)?/g)?.map((part) => Number(part)).filter((part) => Number.isFinite(part)) || [];
   return numbers.length > 0 ? numbers[numbers.length - 1] : fallback;
@@ -739,17 +889,6 @@ function fontStackForOfdFont(fontName: string | undefined): string {
     return '"PingFang SC", "Microsoft YaHei", SimHei, sans-serif';
   }
   return '"SimSong", "Songti SC", "STSong", SimSun, "Noto Serif CJK SC", serif';
-}
-
-function inferOfdTextAlign(text: string, boundary: { x: number; y: number; width: number; height: number }): "start" | "end" {
-  const normalized = text.trim();
-  if (!/^[¥￥]?\d+(?:\.\d+)?%?$/.test(normalized)) {
-    return "start";
-  }
-  if (boundary.x >= 75 || boundary.width <= 30) {
-    return "end";
-  }
-  return "start";
 }
 
 function findOfdEntry(entries: JSZip.JSZipObject[], path: string): JSZip.JSZipObject | undefined {

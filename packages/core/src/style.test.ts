@@ -39,9 +39,11 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-image-stage")).toContain("min-height: min(320px, 55vh)");
     expect(rule(".ofv-image-stage")).toContain("overflow: auto");
     expect(rule(".ofv-image-scrollbox")).toContain("flex: 0 0 auto");
+    expect(rule(".ofv-image-scrollbox")).toContain("margin: auto");
     expect(rule(".ofv-image-content")).toContain("width: auto");
     expect(rule(".ofv-image-content")).toContain("height: auto");
     expect(rule(".ofv-image-content")).toContain("max-height: 100%");
+    expect(rule(".ofv-image-content")).toContain("transform-origin: center");
   });
 
   it("keeps large document, code, markdown, and PDF content inside local scroll regions", () => {

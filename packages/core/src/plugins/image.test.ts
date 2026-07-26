@@ -135,6 +135,57 @@ describe("imagePlugin", () => {
     viewer.destroy();
   });
 
+  it("swaps the scroll area footprint when the image is rotated sideways", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:rotated-image"),
+      revokeObjectURL: vi.fn()
+    });
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["<svg></svg>"], { type: "image/svg+xml" }),
+      fileName: "rotated.svg",
+      toolbar: true,
+      plugins: [imagePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-image-content")));
+
+    const image = container.querySelector<HTMLImageElement>(".ofv-image-content")!;
+    Object.defineProperty(image, "offsetWidth", { configurable: true, value: 640 });
+    Object.defineProperty(image, "offsetHeight", { configurable: true, value: 360 });
+    image.dispatchEvent(new Event("load"));
+
+    const scrollBox = container.querySelector<HTMLElement>(".ofv-image-scrollbox");
+    expect(scrollBox?.style.width).toBe("640px");
+    expect(scrollBox?.style.height).toBe("360px");
+
+    const rotate = container.querySelector<HTMLButtonElement>('button[aria-label="Rotate right"]');
+    rotate?.click();
+    expect(image.style.transform).toContain("rotate(90deg)");
+    expect(scrollBox?.style.width).toBe("360px");
+    expect(scrollBox?.style.height).toBe("640px");
+
+    rotate?.click();
+    expect(image.style.transform).toContain("rotate(180deg)");
+    expect(scrollBox?.style.width).toBe("640px");
+    expect(scrollBox?.style.height).toBe("360px");
+
+    const rotateLeft = container.querySelector<HTMLButtonElement>('button[aria-label="Rotate left"]');
+    rotateLeft?.click();
+    rotateLeft?.click();
+    rotateLeft?.click();
+    expect(image.style.transform).toContain("rotate(-90deg)");
+    expect(scrollBox?.style.width).toBe("360px");
+    expect(scrollBox?.style.height).toBe("640px");
+
+    viewer.destroy();
+  });
+
   it("renders inline image controls only when the shared toolbar is disabled", async () => {
     const container = document.createElement("div");
     document.body.append(container);

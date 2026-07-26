@@ -18,6 +18,7 @@ export type PreviewToolbarBuiltInAction =
   | "zoom-out"
   | "zoom-in"
   | "zoom-reset"
+  | "rotate-left"
   | "rotate-right"
   | "download"
   | "fullscreen"

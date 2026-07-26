@@ -2,6 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createViewer } from "../viewer";
 import { textPlugin } from "./text";
 
+const { mermaidInitialize, mermaidRender } = vi.hoisted(() => ({
+  mermaidInitialize: vi.fn(),
+  mermaidRender: vi.fn()
+}));
+
+vi.mock("mermaid", () => ({
+  default: {
+    initialize: mermaidInitialize,
+    render: mermaidRender
+  }
+}));
+
 describe("textPlugin", () => {
   afterEach(() => {
     document.body.replaceChildren();
@@ -117,6 +129,72 @@ describe("textPlugin", () => {
 
     expect(markdown.style.getPropertyValue("--ofv-markdown-zoom")).toBe("1.5");
     expect(reset.textContent).toBe("150%");
+  });
+
+  it("renders mermaid code fences as diagrams", async () => {
+    mermaidRender.mockResolvedValue({ svg: "<svg><g><text>A to B</text></g></svg>" });
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: new Blob(["# Diagram\n\n```mermaid\ngraph TD;\nA-->B;\n```\n\n```js\nconst a = 1;\n```\n"], {
+        type: "text/markdown"
+      }),
+      fileName: "diagram.md",
+      plugins: [textPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-mermaid svg")));
+
+    expect(mermaidRender).toHaveBeenCalledWith(
+      expect.stringContaining("ofv-mermaid-"),
+      expect.stringContaining("graph TD;")
+    );
+    expect(container.querySelector("code.language-mermaid")).toBeNull();
+    expect(container.querySelector("code.language-js")).not.toBeNull();
+  });
+
+  it("sanitizes mermaid svg output before inserting it", async () => {
+    mermaidRender.mockResolvedValue({
+      svg: '<svg><g onclick="alert(1)"></g><script>alert(2)</script><text>node label</text></svg>'
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: new Blob(["```mermaid\ngraph TD;\nA-->B;\n```\n"], { type: "text/markdown" }),
+      fileName: "diagram.md",
+      plugins: [textPlugin()]
+    });
+
+    const diagram = await waitFor(() => container.querySelector<HTMLElement>(".ofv-mermaid"));
+
+    expect(diagram.querySelector("script")).toBeNull();
+    expect(diagram.querySelector("g")?.getAttribute("onclick")).toBeNull();
+    expect(diagram.textContent).toContain("node label");
+  });
+
+  it("keeps the mermaid source block when diagram rendering fails", async () => {
+    mermaidRender.mockRejectedValue(new Error("parse error"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: new Blob(["```mermaid\nnot a diagram\n```\n"], { type: "text/markdown" }),
+      fileName: "broken.md",
+      plugins: [textPlugin()]
+    });
+
+    await waitFor(() =>
+      warn.mock.calls.some((call) => String(call[0]).includes("Mermaid diagram render failed"))
+    );
+
+    expect(container.querySelector(".ofv-mermaid")).toBeNull();
+    expect(container.querySelector("code.language-mermaid")?.textContent).toContain("not a diagram");
   });
 
   it("shows a local fallback when remote text cannot be fetched", async () => {

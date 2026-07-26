@@ -209,6 +209,13 @@ export function textPlugin(): PreviewPlugin {
         secureMarkdownLinks(container);
         ctx.viewport.appendChild(container);
 
+        // Render mermaid code fences as diagrams
+        try {
+          await renderMermaidBlocks(container, DOMPurify);
+        } catch (e) {
+          console.warn("Mermaid render for markdown failed:", e);
+        }
+
         // Highlight code blocks inside markdown
         try {
           const codeBlocks = container.querySelectorAll("pre code");
@@ -408,6 +415,61 @@ function getPrismLanguageFromElement(element: Element | null): string | undefine
     }
   }
   return undefined;
+}
+
+type MermaidApi = (typeof import("mermaid"))["default"];
+type MarkdownSanitizer = { sanitize(source: string, config: Record<string, unknown>): string };
+
+let mermaidLoad: Promise<MermaidApi> | undefined;
+let mermaidRenderSeq = 0;
+
+function loadMermaid(): Promise<MermaidApi> {
+  mermaidLoad ||= import("mermaid")
+    .then((module) => {
+      const mermaid = (module.default || module) as MermaidApi;
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: "strict",
+        theme: "default",
+        // Keep labels as plain SVG text: foreignObject html labels are stripped by DOMPurify.
+        htmlLabels: false,
+        flowchart: { htmlLabels: false },
+        class: { htmlLabels: false }
+      });
+      return mermaid;
+    })
+    .catch((error) => {
+      mermaidLoad = undefined;
+      throw error;
+    });
+  return mermaidLoad;
+}
+
+async function renderMermaidBlocks(container: HTMLElement, DOMPurify: MarkdownSanitizer): Promise<void> {
+  const blocks = Array.from(container.querySelectorAll<HTMLElement>("pre > code.language-mermaid"));
+  if (blocks.length === 0) {
+    return;
+  }
+  const mermaid = await loadMermaid();
+  for (const block of blocks) {
+    const pre = block.parentElement;
+    if (!pre) {
+      continue;
+    }
+    const renderId = `ofv-mermaid-${++mermaidRenderSeq}`;
+    try {
+      const { svg } = await mermaid.render(renderId, block.textContent ?? "");
+      const diagram = document.createElement("div");
+      diagram.className = "ofv-mermaid";
+      diagram.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });
+      pre.replaceWith(diagram);
+    } catch (error) {
+      // Keep the source code block and drop any temp nodes mermaid left in document.body.
+      document.getElementById(renderId)?.remove();
+      document.getElementById(`d${renderId}`)?.remove();
+      console.warn("Mermaid diagram render failed, keeping source block:", error);
+    }
+  }
 }
 
 async function loadPrismLanguage(language: string): Promise<void> {

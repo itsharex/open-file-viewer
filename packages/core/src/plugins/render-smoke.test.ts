@@ -599,6 +599,7 @@ describe("default plugin render smoke", () => {
         "EPS design asset",
         "FODS sheet",
         "GDS layout",
+        "GDSII alias layout",
         "GIS map",
         "HTML email",
         "ODP presentation",
@@ -1546,6 +1547,14 @@ function smokeCases(): SmokeCase[] {
       fileName: "layout.gds",
       plugins: [cadPlugin()],
       selector: ".ofv-cad",
+      text: "GDSII"
+    },
+    {
+      name: "GDSII alias layout",
+      file: minimalGds(),
+      fileName: "layout.gdsii",
+      plugins: [cadPlugin()],
+      selector: ".ofv-layout-stage",
       text: "GDSII"
     },
     {
@@ -3386,6 +3395,16 @@ function toolbarSupportCases(): ToolbarSupportCase[] {
       name: "GDS layout",
       file: minimalGds(),
       fileName: "toolbar.gds",
+      plugins: [cadPlugin()],
+      selector: ".ofv-layout-stage",
+      text: "GDSII",
+      enabled: ["Zoom in", "Zoom out", "Reset zoom"],
+      disabled: ["Rotate right"]
+    },
+    {
+      name: "GDSII alias layout",
+      file: minimalGds(),
+      fileName: "toolbar.gdsii",
       plugins: [cadPlugin()],
       selector: ".ofv-layout-stage",
       text: "GDSII",

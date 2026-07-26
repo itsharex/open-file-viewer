@@ -147,6 +147,25 @@ viewer.resize();
 viewer.destroy();
 ```
 
+### Office previews stuck on "Loading" inside qiankun / micro-app
+
+Micro-frontend sandboxes (qiankun, micro-app, ...) tear down window `message`
+listeners when a sub-app unmounts, which breaks the `setImmediate` polyfill that
+jszip depends on. `JSZip.loadAsync` then never resolves, so every zip-based
+preview (docx / xlsx / pptx / epub / ofd) hangs on the loading state forever
+(see [qiankun#2589](https://github.com/umijs/qiankun/issues/2589)).
+
+`createViewer()` detects sandbox flags such as `__POWERED_BY_QIANKUN__` and
+`__MICRO_APP_ENVIRONMENT__` and automatically installs a MessageChannel-based
+scheduler that sandboxes cannot break — no configuration needed. On versions up
+to 0.1.27, patch it manually in the sub-app entry before any imports:
+
+```js
+if (window.__POWERED_BY_QIANKUN__) {
+  window.setImmediate = (fn, ...args) => setTimeout(fn, 0, ...args);
+}
+```
+
 ### React
 
 ```tsx
@@ -281,7 +300,7 @@ const plugins = [
 | Archives | `archivePlugin()` | `zip`, `rar`, `7z`, `tar`, `gz`, `tgz`, `bz2`, `xz` |
 | Email | `emailPlugin()` | `eml`, `msg`, `mbox` |
 | Drawing / whiteboard | `drawingPlugin()` | `drawio`, `dio`, `excalidraw`, `tldraw` |
-| CAD / engineering | `cadPlugin()` | `dxf`, `dwg`, `dwf`, `step`, `stp`, `iges`, `igs`, `ifc`, `skp`, `sldprt` |
+| CAD / engineering / chip layout | `cadPlugin()` | `dxf`, `dwg`, `dwf`, `step`, `stp`, `iges`, `igs`, `ifc`, `skp`, `sldprt`, `gds`, `gdsii`, `oas`, `oasis` |
 | 3D models | `model3dPlugin()` | `gltf`, `glb`, `obj`, `stl`, `fbx`, `dae`, `ply`, `3mf`, `usd`, `usdz` |
 | GIS | `gisPlugin()` | `geojson`, `topojson`, `kml`, `kmz`, `gpx`, `shp` |
 | Asset recognition | `assetPlugin()` | `ttf`, `woff2`, `psd`, `ai`, `eps`, `sqlite`, `wasm`, `parquet`, `avro` |
@@ -625,49 +644,7 @@ pnpm pack:check
 
 Open File Viewer will continue improving format preview, framework integration, and real business scenarios. Open source is not easy. If it saves you development time, a free GitHub star is a meaningful way to support future iteration.
 
-- Feedback: use GitHub Issues, the community group, or the author's WeChat to share file samples, layout problems, container adaptation issues, and new format requests.
-- Learning and discussion: the official account "Frontend Development Enthusiasts" will continue sharing frontend engineering, component development, and open-source practice.
-- Support the author: if you would like to buy the author a coffee, or even a bottle of mineral water, that encouragement is appreciated. Donation users are welcome to add the author's WeChat for future frontend discussions.
-
-<table>
-  <tr>
-    <td align="center" width="20%">
-      <img src="./doc/public/images/official-account-qr.jpg" width="140" alt="Official account QR code: Frontend Development Enthusiasts" />
-      <br />
-      <strong>Official Account</strong>
-      <br />
-      Frontend Development Enthusiasts
-    </td>
-    <td align="center" width="20%">
-      <img src="./doc/public/images/community-group-qr.png" width="140" alt="Community group QR code" />
-      <br />
-      <strong>Community Group</strong>
-      <br />
-      Frontend technology discussion
-    </td>
-    <td align="center" width="20%">
-      <img src="./doc/public/images/author-wechat-qr.png" width="140" alt="Author WeChat QR code" />
-      <br />
-      <strong>Author WeChat</strong>
-      <br />
-      Frontend discussion
-    </td>
-    <td align="center" width="20%">
-      <img src="./doc/public/images/wechat-donation-qr.png" width="140" alt="WeChat donation QR code" />
-      <br />
-      <strong>WeChat Donation</strong>
-      <br />
-      Buy the author a coffee
-    </td>
-    <td align="center" width="20%">
-      <img src="./doc/public/images/alipay-donation-qr.png" width="140" alt="Alipay donation QR code" />
-      <br />
-      <strong>Alipay Donation</strong>
-      <br />
-      Buy the author a bottle of water
-    </td>
-  </tr>
-</table>
+- Feedback: use GitHub Issues to share file samples, layout problems, container adaptation issues, and new format requests.
 
 ## Links
 

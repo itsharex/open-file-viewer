@@ -393,6 +393,241 @@ describe("ofdPlugin", () => {
     expect(texts[2]?.getAttribute("font-family")).toContain("SimSong");
   });
 
+  it("keeps adjacent digit runs at their explicit coordinates without overlap", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "Doc_0/Pages/Page_0/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Area>
+          <ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>
+        </ofd:Area>
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:TextObject Boundary="133.9134 249.3927 5.2193 4.9918" Size="4.9565">
+              <ofd:TextCode X="0.7488" Y="4.2686">2</ofd:TextCode>
+            </ofd:TextObject>
+            <ofd:TextObject Boundary="136.3688 249.3927 4.4317 4.9918" Size="4.9565">
+              <ofd:TextCode X="0.7488" Y="4.2686">5</ofd:TextCode>
+            </ofd:TextObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "digits.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-ofd-pages svg")));
+
+    const texts = container.querySelectorAll(".ofv-ofd-page text");
+    expect(texts).toHaveLength(2);
+    expect(Number(texts[0]?.getAttribute("x"))).toBeCloseTo(134.6622, 4);
+    expect(Number(texts[1]?.getAttribute("x"))).toBeCloseTo(137.1176, 4);
+    expect(texts[0]?.getAttribute("text-anchor")).toBeNull();
+    expect(texts[1]?.getAttribute("text-anchor")).toBeNull();
+  });
+
+  it("decodes escaped TextCode characters instead of rendering escape sequences", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "Doc_0/Pages/Page_0/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Area>
+          <ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>
+        </ofd:Area>
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:TextObject Boundary="20 30 120 8" Size="4">
+              <ofd:TextCode X="0" Y="4" DeltaX="g 6 4">名\\0x0020\\0x0020称:</ofd:TextCode>
+            </ofd:TextObject>
+            <ofd:TextObject Boundary="20 44 120 8" Size="4">
+              <ofd:TextCode X="0" Y="4">价税\\u5408计\\\\备注</ofd:TextCode>
+            </ofd:TextObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "escaped.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-ofd-pages svg")));
+
+    const texts = container.querySelectorAll(".ofv-ofd-page text");
+    expect(texts[0]?.textContent).toBe("名  称:");
+    expect(texts[0]?.querySelectorAll("tspan")).toHaveLength(5);
+    expect(texts[1]?.textContent).toBe("价税合计\\备注");
+    expect(container.textContent).not.toContain("0x0020");
+  });
+
+  it("respects path Fill/Stroke switches and color Alpha instead of painting black boxes", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "Doc_0/Pages/Page_0/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Area>
+          <ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>
+        </ofd:Area>
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:PathObject Boundary="10 10 90 30" LineWidth="0.25" Stroke="true" Fill="false">
+              <ofd:FillColor Value="0 0 0"/>
+              <ofd:StrokeColor Value="156 82 35"/>
+              <ofd:AbbreviatedData>M 0 0 L 90 0 L 90 30 L 0 30 Z</ofd:AbbreviatedData>
+            </ofd:PathObject>
+            <ofd:PathObject Boundary="10 50 90 30" LineWidth="0.25">
+              <ofd:FillColor Value="0 0 0" Alpha="0"/>
+              <ofd:StrokeColor Value="156 82 35"/>
+              <ofd:AbbreviatedData>M 0 0 L 90 0 L 90 30 L 0 30 Z</ofd:AbbreviatedData>
+            </ofd:PathObject>
+            <ofd:PathObject Boundary="10 90 90 30" Stroke="false" Fill="true">
+              <ofd:FillColor Value="255 0 0" Alpha="127"/>
+              <ofd:AbbreviatedData>M 0 0 L 90 0 L 90 30 L 0 30 Z</ofd:AbbreviatedData>
+            </ofd:PathObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "cells.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-ofd-pages svg")));
+
+    const paths = container.querySelectorAll(".ofv-ofd-page path");
+    expect(paths).toHaveLength(3);
+    expect(paths[0]?.getAttribute("fill")).toBe("transparent");
+    expect(paths[0]?.getAttribute("stroke")).toBe("rgb(156 82 35)");
+    expect(paths[1]?.getAttribute("fill")).toBe("transparent");
+    expect(paths[1]?.getAttribute("stroke")).toBe("rgb(156 82 35)");
+    expect(paths[2]?.getAttribute("fill")).toBe("rgb(255 0 0 / 0.498)");
+    expect(paths[2]?.getAttribute("stroke")).toBe("none");
+  });
+
+  it("renders signature stamp annotations on the referenced page", async () => {
+    const pngBytes = Uint8Array.from(
+      atob(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+      ),
+      (char) => char.charCodeAt(0)
+    );
+    const signedValue = new Uint8Array(32 + pngBytes.length + 8);
+    signedValue.set([0x30, 0x82, 0x36, 0x1a], 0);
+    signedValue.set(pngBytes, 32);
+    const zip = new JSZip();
+    zip.file(
+      "OFD.xml",
+      `<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:DocBody>
+          <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>
+          <ofd:Signatures>Doc_0/Signs/Signatures.xml</ofd:Signatures>
+        </ofd:DocBody>
+      </ofd:OFD>`
+    );
+    zip.file(
+      "Doc_0/Document.xml",
+      `<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:CommonData>
+          <ofd:PageArea>
+            <ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>
+          </ofd:PageArea>
+        </ofd:CommonData>
+        <ofd:Pages>
+          <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>
+          <ofd:Page ID="124" BaseLoc="Pages/Page_1/Content.xml"/>
+        </ofd:Pages>
+      </ofd:Document>`
+    );
+    zip.file(
+      "Doc_0/Pages/Page_0/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:TextObject Boundary="20 30 120 16" Size="12">
+              <ofd:TextCode X="0" Y="12">正文首页</ofd:TextCode>
+            </ofd:TextObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    zip.file(
+      "Doc_0/Pages/Page_1/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:TextObject Boundary="20 30 120 16" Size="12">
+              <ofd:TextCode X="0" Y="12">落款页</ofd:TextCode>
+            </ofd:TextObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    zip.file(
+      "Doc_0/Signs/Signatures.xml",
+      `<ofd:Signatures xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:MaxSignId>1</ofd:MaxSignId>
+        <ofd:Signature ID="1" Type="Seal" BaseLoc="Sign_0/Signature.xml"/>
+      </ofd:Signatures>`
+    );
+    zip.file(
+      "Doc_0/Signs/Sign_0/Signature.xml",
+      `<ofd:Signature xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:SignedInfo>
+          <ofd:StampAnnot PageRef="124" ID="1" Boundary="120.499 85.581 42 42"/>
+        </ofd:SignedInfo>
+        <ofd:SignedValue>SignedValue.dat</ofd:SignedValue>
+      </ofd:Signature>`
+    );
+    zip.file("Doc_0/Signs/Sign_0/SignedValue.dat", signedValue);
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "sealed.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => container.querySelectorAll(".ofv-ofd-page").length === 2);
+
+    const pages = container.querySelectorAll(".ofv-ofd-page");
+    expect(pages[0]?.querySelector("image")).toBeNull();
+    const stamp = pages[1]?.querySelector("image");
+    expect(stamp).not.toBeNull();
+    expect(stamp?.getAttribute("href")).toContain("data:image/png;base64,");
+    expect(stamp?.getAttribute("x")).toBe("120.499");
+    expect(stamp?.getAttribute("y")).toBe("85.581");
+    expect(stamp?.getAttribute("width")).toBe("42");
+    expect(stamp?.getAttribute("height")).toBe("42");
+  });
+
   it("shows a local fallback for invalid OFD packages", async () => {
     const onError = vi.fn();
     const objectUrl = "blob:broken-ofd";

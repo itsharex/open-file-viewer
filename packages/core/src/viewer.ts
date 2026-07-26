@@ -1,6 +1,7 @@
 import { normalizeFile } from "./detect";
 import { applyBoxSize, createObjectUrl, getElementSize, resolveContainer, revokeObjectUrl } from "./dom";
 import { resolveMessages } from "./messages";
+import { ensureSafeAsyncScheduling } from "./sandbox-compat";
 import { fallbackPlugin } from "./plugins/fallback";
 import type {
   FileViewer,
@@ -19,6 +20,7 @@ import type {
 } from "./types";
 
 export function createViewer(options: PreviewOptions): FileViewer {
+  ensureSafeAsyncScheduling();
   const container = resolveContainer(options.container);
   applyBoxSize(container, options.width, options.height);
 
@@ -34,7 +36,17 @@ export function createViewer(options: PreviewOptions): FileViewer {
 
   const status = document.createElement("div");
   status.className = "ofv-status";
+  status.setAttribute("role", "status");
   status.hidden = true;
+  const statusChip = document.createElement("div");
+  statusChip.className = "ofv-status-chip";
+  const statusSpinner = document.createElement("span");
+  statusSpinner.className = "ofv-status-spinner";
+  statusSpinner.setAttribute("aria-hidden", "true");
+  const statusText = document.createElement("span");
+  statusText.className = "ofv-status-text";
+  statusChip.append(statusSpinner, statusText);
+  status.append(statusChip);
 
   const viewport = document.createElement("div");
   viewport.className = "ofv-viewport";
@@ -82,12 +94,14 @@ export function createViewer(options: PreviewOptions): FileViewer {
 
   const setLoading = (loading: boolean) => {
     status.hidden = !loading;
-    status.textContent = loading ? normalizedOptions.messages.loading : "";
+    status.classList.remove("ofv-status-error");
+    statusText.textContent = loading ? normalizedOptions.messages.loading : "";
   };
 
   const setError = (error: Error | string) => {
     status.hidden = false;
-    status.textContent = typeof error === "string" ? error : error.message;
+    status.classList.add("ofv-status-error");
+    statusText.textContent = typeof error === "string" ? error : error.message;
   };
 
   const resize = () => {
@@ -412,11 +426,12 @@ function createToolbar(
     title: string,
     action: () => void,
     className?: string,
-    icon?: string | HTMLElement | SVGElement
+    icon?: string | HTMLElement | SVGElement,
+    iconOnly = false
   ) => {
     const button = document.createElement("button");
     button.type = "button";
-    setToolbarButtonContent(button, label, icon);
+    setToolbarButtonContent(button, label, icon, iconOnly);
     button.title = title;
     button.setAttribute("aria-label", title);
     if (className) {
@@ -436,7 +451,7 @@ function createToolbar(
   ) => {
     const button = addButton(label, title, () => {
       queue.command(command);
-    }, undefined, options.icons?.[id]);
+    }, undefined, getToolbarIcon(options, id), id !== "zoom-reset");
     button.disabled = true;
     commandButtons.push({ button, command });
   };
@@ -456,7 +471,8 @@ function createToolbar(
         getToolbarTitle(options, locale, "previous"),
         () => void queue.previous(),
         undefined,
-        options.icons?.previous
+        getToolbarIcon(options, "previous"),
+        true
       );
       return;
     }
@@ -466,7 +482,8 @@ function createToolbar(
         getToolbarTitle(options, locale, "next"),
         () => void queue.next(),
         undefined,
-        options.icons?.next
+        getToolbarIcon(options, "next"),
+        true
       );
       return;
     }
@@ -490,6 +507,10 @@ function createToolbar(
       updateZoomLabel();
       return;
     }
+    if (id === "rotate-left" && options.rotate) {
+      addCommandButton(id, getToolbarLabel(options, locale, id), getToolbarTitle(options, locale, id), "rotate-left");
+      return;
+    }
     if (id === "rotate-right" && options.rotate) {
       addCommandButton(id, getToolbarLabel(options, locale, id), getToolbarTitle(options, locale, id), "rotate-right");
       return;
@@ -500,7 +521,8 @@ function createToolbar(
         getToolbarTitle(options, locale, id),
         () => getContext().download(),
         undefined,
-        options.icons?.download
+        getToolbarIcon(options, "download"),
+        true
       );
       return;
     }
@@ -510,7 +532,8 @@ function createToolbar(
         getToolbarTitle(options, locale, id),
         () => getContext().fullscreen(),
         undefined,
-        options.icons?.fullscreen
+        getToolbarIcon(options, "fullscreen"),
+        true
       );
       updateFullscreenButton();
       return;
@@ -521,7 +544,8 @@ function createToolbar(
         getToolbarTitle(options, locale, id),
         () => getContext().print(),
         undefined,
-        options.icons?.print
+        getToolbarIcon(options, "print"),
+        true
       );
       return;
     }
@@ -548,6 +572,11 @@ function createToolbar(
     const searchGroup = document.createElement("div");
     searchGroup.className = "ofv-toolbar-search";
     searchGroup.title = getToolbarTitle(options, locale, "search");
+    const searchIcon = document.createElement("span");
+    searchIcon.className = "ofv-toolbar-search-icon";
+    searchIcon.setAttribute("aria-hidden", "true");
+    searchIcon.append(sanitizeToolbarIcon(defaultToolbarIcons.search ?? ""));
+    searchGroup.append(searchIcon);
     const nextSearchInput = document.createElement("input");
     nextSearchInput.type = "search";
     nextSearchInput.placeholder = getToolbarLabel(options, locale, "search");
@@ -577,7 +606,30 @@ function createToolbar(
       }
       return;
     }
-    getToolbarOrder(options, queue.getLength()).forEach(renderDefaultAction);
+    const order = getToolbarOrder(options, queue.getLength());
+    if (options.order) {
+      order.forEach(renderDefaultAction);
+    } else {
+      const rendered = new Set<PreviewToolbarActionId>();
+      for (const group of defaultToolbarGroups) {
+        const ids = group.filter((id) => order.includes(id));
+        if (ids.length === 0) {
+          continue;
+        }
+        const before = element.childElementCount;
+        for (const id of ids) {
+          rendered.add(id);
+          renderDefaultAction(id);
+        }
+        if (before > 0 && element.childElementCount > before) {
+          const separator = document.createElement("span");
+          separator.className = "ofv-toolbar-sep";
+          separator.setAttribute("aria-hidden", "true");
+          element.insertBefore(separator, element.children[before]);
+        }
+      }
+      order.filter((id) => !rendered.has(id)).forEach(renderDefaultAction);
+    }
     getImplicitCustomActions(options).forEach(renderCustomAction);
   };
 
@@ -617,6 +669,7 @@ function createToolbar(
       currentZoom === undefined ? getToolbarLabel(options, locale, "zoom-reset") : formatToolbarZoom(currentZoom),
       options.icons?.["zoom-reset"]
     );
+    zoomResetButton.classList.add("ofv-toolbar-zoom-reset");
   }
 
   function refreshCommandSupport() {
@@ -639,8 +692,10 @@ function createToolbar(
     }
     const active = isFullscreenActive();
     const id: PreviewToolbarBuiltInAction = active ? "exit-fullscreen" : "fullscreen";
-    const icon = active ? options.icons?.["exit-fullscreen"] ?? options.icons?.fullscreen : options.icons?.fullscreen;
-    setToolbarButtonContent(fullscreenButton, getToolbarLabel(options, locale, id), icon);
+    const icon = active
+      ? options.icons?.["exit-fullscreen"] ?? options.icons?.fullscreen ?? defaultToolbarIcons["exit-fullscreen"]
+      : getToolbarIcon(options, "fullscreen");
+    setToolbarButtonContent(fullscreenButton, getToolbarLabel(options, locale, id), icon, true);
     const title = getToolbarTitle(options, locale, id);
     fullscreenButton.title = title;
     fullscreenButton.setAttribute("aria-label", title);
@@ -786,6 +841,52 @@ function createToolbarContext({
   };
 }
 
+const toolbarIcon = (content: string): string =>
+  `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${content}</svg>`;
+
+const defaultToolbarIcons: Partial<Record<PreviewToolbarBuiltInAction, string>> = {
+  previous: toolbarIcon('<path d="M9.8 3.8 5.6 8l4.2 4.2"/>'),
+  next: toolbarIcon('<path d="M6.2 3.8 10.4 8l-4.2 4.2"/>'),
+  "zoom-out": toolbarIcon(
+    '<circle cx="7.2" cy="7.2" r="4.4"/><path d="M13.5 13.5l-3.2-3.2"/><path d="M5.4 7.2h3.6"/>'
+  ),
+  "zoom-in": toolbarIcon(
+    '<circle cx="7.2" cy="7.2" r="4.4"/><path d="M13.5 13.5l-3.2-3.2"/><path d="M5.4 7.2h3.6"/><path d="M7.2 5.4v3.6"/>'
+  ),
+  "rotate-left": toolbarIcon(
+    '<path d="M2.2 8a5.8 5.8 0 1 0 1.7-4.1L2.2 5.6"/><path d="M2.2 2.2v3.4h3.4"/>'
+  ),
+  "rotate-right": toolbarIcon(
+    '<path d="M13.8 8a5.8 5.8 0 1 1-1.7-4.1l1.7 1.7"/><path d="M13.8 2.2v3.4h-3.4"/>'
+  ),
+  download: toolbarIcon(
+    '<path d="M8 2.6v6.9"/><path d="m4.9 6.6 3.1 3.1 3.1-3.1"/><path d="M2.9 11.2v1a1.3 1.3 0 0 0 1.3 1.3h7.6a1.3 1.3 0 0 0 1.3-1.3v-1"/>'
+  ),
+  fullscreen: toolbarIcon(
+    '<path d="M6 2.9H4.2A1.3 1.3 0 0 0 2.9 4.2V6"/><path d="M10 2.9h1.8a1.3 1.3 0 0 1 1.3 1.3V6"/><path d="M6 13.1H4.2a1.3 1.3 0 0 1-1.3-1.3V10"/><path d="M10 13.1h1.8a1.3 1.3 0 0 0 1.3-1.3V10"/>'
+  ),
+  "exit-fullscreen": toolbarIcon(
+    '<path d="M2.9 6h1.8A1.3 1.3 0 0 0 6 4.7V2.9"/><path d="M13.1 6h-1.8A1.3 1.3 0 0 1 10 4.7V2.9"/><path d="M2.9 10h1.8A1.3 1.3 0 0 1 6 11.3v1.8"/><path d="M13.1 10h-1.8a1.3 1.3 0 0 0-1.3 1.3v1.8"/>'
+  ),
+  print: toolbarIcon(
+    '<path d="M4.7 5.8V2.9h6.6v2.9"/><path d="M4.7 11.4H3.5a1.3 1.3 0 0 1-1.3-1.3V7.2a1.4 1.4 0 0 1 1.4-1.4h8.8a1.4 1.4 0 0 1 1.4 1.4v2.9a1.3 1.3 0 0 1-1.3 1.3h-1.2"/><path d="M4.7 9.5h6.6v3.6H4.7z"/>'
+  ),
+  search: toolbarIcon('<circle cx="7.2" cy="7.2" r="4.4"/><path d="M13.5 13.5l-3.2-3.2"/>')
+};
+
+function getToolbarIcon(
+  options: PreviewToolbarOptions,
+  id: PreviewToolbarBuiltInAction
+): string | HTMLElement | SVGElement | undefined {
+  return options.icons?.[id] ?? defaultToolbarIcons[id];
+}
+
+const defaultToolbarGroups: PreviewToolbarActionId[][] = [
+  ["previous", "next", "queue"],
+  ["zoom-out", "zoom-in", "zoom-reset", "rotate-left", "rotate-right"],
+  ["download", "fullscreen", "print"]
+];
+
 const defaultToolbarText: Record<
   PreviewLocale,
   {
@@ -803,6 +904,7 @@ const defaultToolbarText: Record<
       "zoom-out": "-",
       "zoom-in": "+",
       "zoom-reset": "100%",
+      "rotate-left": "左旋",
       "rotate-right": "旋转",
       download: "下载",
       fullscreen: "全屏",
@@ -817,6 +919,7 @@ const defaultToolbarText: Record<
       "zoom-out": "缩小",
       "zoom-in": "放大",
       "zoom-reset": "重置缩放",
+      "rotate-left": "向左旋转",
       "rotate-right": "向右旋转",
       download: "下载文件",
       fullscreen: "全屏查看预览",
@@ -834,6 +937,7 @@ const defaultToolbarText: Record<
       "zoom-out": "-",
       "zoom-in": "+",
       "zoom-reset": "100%",
+      "rotate-left": "Rotate left",
       "rotate-right": "Rotate",
       download: "Download",
       fullscreen: "Fullscreen",
@@ -848,6 +952,7 @@ const defaultToolbarText: Record<
       "zoom-out": "Zoom out",
       "zoom-in": "Zoom in",
       "zoom-reset": "Reset zoom",
+      "rotate-left": "Rotate left",
       "rotate-right": "Rotate right",
       download: "Download file",
       fullscreen: "Open preview fullscreen",
@@ -891,7 +996,7 @@ function getToolbarOrder(options: PreviewToolbarOptions, queueLength: number): P
     actions.push("zoom-out", "zoom-in", "zoom-reset");
   }
   if (options.rotate) {
-    actions.push("rotate-right");
+    actions.push("rotate-left", "rotate-right");
   }
   if (options.download !== false) {
     actions.push("download");
@@ -925,9 +1030,11 @@ function evaluateToolbarFlag(
 function setToolbarButtonContent(
   button: HTMLButtonElement,
   label: string,
-  icon?: string | HTMLElement | SVGElement
+  icon?: string | HTMLElement | SVGElement,
+  iconOnly = false
 ): void {
   button.replaceChildren();
+  button.classList.toggle("ofv-toolbar-icon-button", Boolean(icon) && iconOnly);
   if (!icon) {
     button.textContent = label;
     return;

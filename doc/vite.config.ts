@@ -2,6 +2,7 @@ import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  server: process.env.PORT ? { port: Number(process.env.PORT), strictPort: true } : {},
   build: {
     chunkSizeWarningLimit: 2500,
     rollupOptions: {
