@@ -102,7 +102,7 @@ describe("core responsive styles", () => {
     expect(css).toContain("color: var(--ofv-text);\n  background-color: var(--ofv-surface-muted);");
     expect(rule(".ofv-markdown-body table")).toContain("max-width: 100%");
     expect(rule(".ofv-pdf")).toContain("overflow-x: auto");
-    expect(rule(".ofv-pdf")).toContain("overflow-y: auto");
+    expect(rule(".ofv-pdf")).toContain("overflow-y: scroll");
     expect(rule(".ofv-pdf-page-wrapper")).toContain("overflow: hidden");
     expect(rule(".ofv-pdf-page-wrapper")).not.toContain("max-width: 100%");
     expect(rule(".ofv-pdf-text-layer")).toContain("text-size-adjust: none");
@@ -116,13 +116,13 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-ofd-pages")).toContain("width: max-content");
     expect(rule(".ofv-ofd-pages")).toContain("min-width: 100%");
     expect(rule(".ofv-ofd-page")).toContain(
-      "width: min(100%, calc(var(--ofv-ofd-page-width, 210mm) * var(--ofv-ofd-zoom)))"
+      "width: calc(var(--ofv-ofd-page-width, 210mm) * var(--ofv-ofd-zoom))"
     );
     expect(rule(".ofv-ofd-page")).toContain(
       "aspect-ratio: var(--ofv-ofd-page-width, 210mm) / var(--ofv-ofd-page-height, 297mm)"
     );
     expect(rule(".ofv-ofd.is-ofd-rotated-sideways .ofv-ofd-page")).toContain(
-      "width: min(100%, calc(var(--ofv-ofd-page-height, 297mm) * var(--ofv-ofd-zoom)))"
+      "width: calc(var(--ofv-ofd-page-height, 297mm) * var(--ofv-ofd-zoom))"
     );
     expect(rule(".ofv-ofd-page svg")).toContain("transform: rotate(var(--ofv-ofd-rotation))");
     expect(rule(".ofv-ofd-page svg")).toContain("transform-origin: center");
@@ -160,6 +160,19 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-parquet-schema")).toContain("overflow: auto");
     expect(rule(".ofv-parquet-records")).toContain("max-width: 100%");
     expect(rule(".ofv-parquet-records")).toContain("overflow: auto");
+  });
+
+  it("keeps sheet cells theme-independent on a light canvas", () => {
+    expect(
+      rule(".ofv-sheet .ofv-table-scroll td:empty::before,\n.ofv-sheet .ofv-table-scroll th:empty::before")
+    ).toContain('content: "\\00a0"');
+    const darkCanvas = rule(".ofv-root.ofv-theme-dark .ofv-sheet .ofv-table-scroll");
+    expect(darkCanvas).toContain("--ofv-border: #e3e7ef");
+    expect(darkCanvas).toContain("--ofv-text-muted: #5b6478");
+    expect(darkCanvas).toContain("background: #ffffff");
+    expect(darkCanvas).toContain("color: #1c2333");
+    expect(darkCanvas).toContain("color-scheme: light");
+    expect(css).not.toContain("--ofv-cell-ink");
   });
 
   it("keeps specialized preview surfaces constrained and locally scrollable", () => {

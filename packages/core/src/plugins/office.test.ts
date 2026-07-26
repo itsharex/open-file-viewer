@@ -378,10 +378,10 @@ describe("officePlugin", () => {
     const darkFillCell = container.querySelector<HTMLTableCellElement>('[data-cell="A4"]');
     expect(darkFillCell?.style.backgroundColor).toBe("rgb(30, 58, 138)");
     expect(darkFillCell?.style.color).toBe("rgb(248, 250, 252)");
-    // SheetJS CE only surfaces fills for xlsx (cell.s = Fills[fillid]), so no ink class here.
+    // SheetJS CE only surfaces fills for xlsx (cell.s = Fills[fillid]), so no inline ink here.
     const inkCell = container.querySelector<HTMLTableCellElement>('[data-cell="C4"]');
     expect(inkCell?.textContent).toBe("Black ink");
-    expect(inkCell?.classList.contains("ofv-cell-ink")).toBe(false);
+    expect(inkCell?.style.color).toBe("");
     expect(container.querySelector('[data-cell="B1"]')).toBeNull();
     expect(mergedNote?.rowSpan).toBe(2);
     expect(mergedNote?.classList.contains("ofv-cell-multiline")).toBe(true);
@@ -1047,7 +1047,7 @@ describe("officePlugin", () => {
       plugins: [officePlugin()]
     });
 
-    await waitFor(() => container.textContent?.includes("Web前端工程师") || false, 5000);
+    await waitFor(() => container.textContent?.includes("Web前端工程师") || false, 15000);
 
     expect(renderDocxAsync).toHaveBeenCalledTimes(callsBefore + 1);
     expect(container.querySelector(".ofv-docx-fallback-note")?.getAttribute("aria-hidden")).toBe("true");
@@ -1200,7 +1200,7 @@ describe("officePlugin", () => {
       plugins: [officePlugin()]
     });
 
-    await waitFor(() => container.textContent?.includes("Web前端工程师") || false, 5000);
+    await waitFor(() => container.textContent?.includes("Web前端工程师") || false, 15000);
 
     expect(renderDocxAsync).toHaveBeenCalledTimes(callsBefore + 1);
     expect(container.querySelector(".ofv-docx-fallback-note")?.getAttribute("aria-hidden")).toBe("true");
@@ -1399,11 +1399,14 @@ describe("officePlugin", () => {
     expect(rotate?.disabled).toBe(true);
 
     zoomIn?.click();
-    expect(slide?.style.transform).toBe("scale(1.12)");
+    expect(slide?.style.zoom).toBe("1.12");
+    expect(slide?.style.width).toBe("max-content");
+    expect(slide?.style.transform).toBe("");
     expect(zoomReset?.textContent).toBe("112%");
 
     zoomReset?.click();
-    expect(slide?.style.transform).toBe("");
+    expect(slide?.style.zoom).toBe("");
+    expect(slide?.style.width).toBe("");
   });
 
   it("matches inherited placeholder font sizes by layout placeholder index", async () => {

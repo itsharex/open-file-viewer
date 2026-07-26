@@ -1,7 +1,7 @@
 /// <reference path="../shims-text.d.ts" />
 import { isTextLike } from "../detect";
 import { formatPreviewMessage } from "../messages";
-import type { PreviewCommand, PreviewContext, PreviewMessages, PreviewPlugin } from "../types";
+import type { PreviewCommand, PreviewContext, PreviewInstance, PreviewMessages, PreviewPlugin } from "../types";
 import { decodeTextBuffer, getInitialZoom } from "./utils";
 
 const langMap: Record<string, string> = {
@@ -85,7 +85,9 @@ const langMap: Record<string, string> = {
   patch: "diff",
   php: "php",
   md: "markdown",
-  markdown: "markdown"
+  markdown: "markdown",
+  mmd: "mermaid",
+  mermaid: "mermaid"
 };
 const filenameLangMap: Record<string, string> = {
   dockerfile: "docker",
@@ -125,6 +127,7 @@ const filenameLangMap: Record<string, string> = {
 };
 const mimeLangMap: Record<string, string> = {
   "text/markdown": "markdown",
+  "text/vnd.mermaid": "mermaid",
   "text/html": "markup",
   "application/xml": "markup",
   "text/xml": "markup",
@@ -187,7 +190,16 @@ export function textPlugin(): PreviewPlugin {
         };
       }
 
-      // 1. Markdown path
+      // 1. Standalone mermaid diagram path (.mmd / .mermaid)
+      if (lang === "mermaid") {
+        const diagram = await renderMermaidFile(ctx, text);
+        if (diagram) {
+          return diagram;
+        }
+        // Fall back to the plain source view below when the diagram cannot render.
+      }
+
+      // 2. Markdown path
       if (isMarkdown) {
         const [markedModule, PrismModule, DOMPurifyModule] = await Promise.all([
           import("marked"),
@@ -202,10 +214,13 @@ export function textPlugin(): PreviewPlugin {
 
         const container = document.createElement("div");
         container.className = "ofv-markdown-body";
-        container.innerHTML = DOMPurify.sanitize(parseMarkdown(text), {
+        const markdownContent = document.createElement("div");
+        markdownContent.className = "ofv-markdown-content";
+        markdownContent.innerHTML = DOMPurify.sanitize(parseMarkdown(text), {
           USE_PROFILES: { html: true },
           ADD_ATTR: ["target"]
         });
+        container.append(markdownContent);
         secureMarkdownLinks(container);
         ctx.viewport.appendChild(container);
 
@@ -240,7 +255,7 @@ export function textPlugin(): PreviewPlugin {
           console.warn("Prism highlight for markdown failed:", e);
         }
 
-        const markdownZoom = createTextZoomController(container, "--ofv-markdown-zoom", ctx);
+        const markdownZoom = createTextZoomController(container, "--ofv-markdown-zoom", ctx, markdownContent);
 
         return {
           canCommand(command) {
@@ -255,7 +270,7 @@ export function textPlugin(): PreviewPlugin {
         };
       }
 
-      // 2. Syntax-highlighted code path
+      // 3. Syntax-highlighted code path
       const [PrismModule] = await Promise.all([import("prismjs")]);
       const Prism = PrismModule.default || PrismModule;
 
@@ -445,8 +460,58 @@ function loadMermaid(): Promise<MermaidApi> {
   return mermaidLoad;
 }
 
+// Mermaid's default maxTextSize: longer inputs are silently replaced with a
+// "Maximum text size in diagram exceeded" placeholder instead of throwing.
+const MERMAID_MAX_TEXT_CHARS = 50_000;
+
+async function renderMermaidFile(ctx: PreviewContext, text: string): Promise<PreviewInstance | undefined> {
+  if (text.length > MERMAID_MAX_TEXT_CHARS) {
+    return undefined;
+  }
+  const renderId = `ofv-mermaid-${++mermaidRenderSeq}`;
+  let svg: string;
+  try {
+    const [mermaid, DOMPurifyModule] = await Promise.all([loadMermaid(), import("dompurify")]);
+    const DOMPurify = (DOMPurifyModule.default || DOMPurifyModule) as MarkdownSanitizer;
+    const rendered = await mermaid.render(renderId, text);
+    svg = DOMPurify.sanitize(rendered.svg, { USE_PROFILES: { svg: true, svgFilters: true } });
+  } catch (error) {
+    document.getElementById(renderId)?.remove();
+    document.getElementById(`d${renderId}`)?.remove();
+    console.warn("Mermaid file render failed, falling back to source view:", error);
+    return undefined;
+  }
+
+  const container = document.createElement("div");
+  container.className = "ofv-mermaid-file";
+  const zoomLayer = document.createElement("div");
+  zoomLayer.className = "ofv-mermaid-zoom-layer";
+  const diagram = document.createElement("div");
+  diagram.className = "ofv-mermaid";
+  diagram.innerHTML = svg;
+  zoomLayer.appendChild(diagram);
+  container.appendChild(zoomLayer);
+  ctx.viewport.appendChild(container);
+
+  const zoom = createTextZoomController(container, "--ofv-mermaid-zoom", ctx, zoomLayer);
+
+  return {
+    canCommand(command) {
+      return zoom.canCommand(command);
+    },
+    command(command) {
+      return zoom.command(command);
+    },
+    destroy() {
+      container.remove();
+    }
+  };
+}
+
 async function renderMermaidBlocks(container: HTMLElement, DOMPurify: MarkdownSanitizer): Promise<void> {
-  const blocks = Array.from(container.querySelectorAll<HTMLElement>("pre > code.language-mermaid"));
+  const blocks = Array.from(container.querySelectorAll<HTMLElement>("pre > code.language-mermaid")).filter(
+    (block) => (block.textContent ?? "").length <= MERMAID_MAX_TEXT_CHARS
+  );
   if (blocks.length === 0) {
     return;
   }
@@ -554,11 +619,30 @@ async function loadPrismLanguageComponent(language: string): Promise<void> {
   }
 }
 
-function createTextZoomController(target: HTMLElement, cssVariable: string, ctx: PreviewContext) {
+function createTextZoomController(
+  target: HTMLElement,
+  cssVariable: string,
+  ctx: PreviewContext,
+  pinnedLayer?: HTMLElement
+) {
   let zoom = getInitialZoom(ctx, 0.5, 3);
 
   const apply = () => {
     const normalized = Math.round(zoom * 100) / 100;
+    if (pinnedLayer) {
+      // The layer scales via the CSS `zoom` property; pin it to its pre-zoom
+      // width so the content magnifies past the scroller's edge (horizontal
+      // scrollbar) instead of re-wrapping to the container width. Measure with
+      // the zoom var at 1 — a zoomed layer reports divided client sizes.
+      pinnedLayer.style.width = "";
+      target.style.setProperty(cssVariable, "1");
+      if (normalized !== 1) {
+        const base = pinnedLayer.clientWidth;
+        if (base > 0) {
+          pinnedLayer.style.width = `${base}px`;
+        }
+      }
+    }
     target.style.setProperty(cssVariable, String(normalized));
     ctx.toolbar?.setZoom(normalized === 1 ? undefined : normalized);
   };

@@ -46,6 +46,9 @@ export function emailPlugin(): PreviewPlugin {
       const DOMPurifyModule = await (domPurifyLoader ||= import("dompurify"));
       const DOMPurify = DOMPurifyModule.default;
       const panel = createPanel("ofv-email");
+      const content = document.createElement("div");
+      content.className = "ofv-email-content";
+      panel.append(content);
       ctx.viewport.append(panel);
 
       const url = createObjectUrl(ctx.file);
@@ -55,7 +58,7 @@ export function emailPlugin(): PreviewPlugin {
       const objectUrlsToRevoke: string[] = [];
       const attachmentObjectUrls = new Map<EmailAttachment, string>();
       const timersToClear: number[] = [];
-      const zoomController = createEmailZoomController(panel, ctx);
+      const zoomController = createEmailZoomController(panel, content, ctx);
       let mboxSummary: MboxMessageSummary[] = [];
 
       try {
@@ -156,7 +159,7 @@ export function emailPlugin(): PreviewPlugin {
         }
 
         if (mboxSummary.length > 0) {
-          panel.append(createMboxSummarySection(mboxSummary));
+          content.append(createMboxSummarySection(mboxSummary));
         }
 
         // 1. Render Header information section
@@ -169,7 +172,7 @@ export function emailPlugin(): PreviewPlugin {
           appendMeta(headerSection, "Cc", emailData.cc);
         }
         appendMeta(headerSection, "Date", emailData.date);
-        panel.append(headerSection);
+        content.append(headerSection);
 
         // 2. Render Attachments section if present
         if (emailData.attachments.length > 0) {
@@ -194,12 +197,12 @@ export function emailPlugin(): PreviewPlugin {
           });
           
           attachmentsSection.append(container);
-          panel.append(attachmentsSection);
+          content.append(attachmentsSection);
         }
 
         // 3. Render Body section (support inline cid images)
         const bodySection = createSection("正文");
-        panel.append(bodySection);
+        content.append(bodySection);
 
         let html = emailData.bodyHtml;
         if (html) {
@@ -303,14 +306,14 @@ export function emailPlugin(): PreviewPlugin {
         }
 
       } catch (err: any) {
-        panel.replaceChildren();
+        content.replaceChildren();
         const errorSection = createSection("邮件解析出错");
         const pre = document.createElement("pre");
         pre.className = "ofv-text-block";
         pre.style.color = "#ef4444";
         pre.textContent = `解析邮件时发生错误：\n${err.message || err}`;
         errorSection.append(pre);
-        panel.append(errorSection);
+        content.append(errorSection);
       }
 
       return {
@@ -333,16 +336,28 @@ export function emailPlugin(): PreviewPlugin {
   };
 }
 
-function createEmailZoomController(panel: HTMLElement, ctx: PreviewContext) {
+function createEmailZoomController(panel: HTMLElement, content: HTMLElement, ctx: PreviewContext) {
   let zoom = 1;
   let htmlBody: HTMLElement | undefined;
   let resizeHtmlBody: (() => void) | undefined;
 
   const apply = () => {
     const normalized = Math.round(zoom * 100) / 100;
-    panel.style.setProperty("--ofv-email-zoom", String(normalized));
+    // Scale the whole message (headers, attachments, body) via the CSS `zoom`
+    // property so the scaled size participates in layout and the panel scrolls.
+    // The width is pinned to the pre-zoom size first, otherwise the content
+    // keeps re-wrapping to the container instead of growing past it.
+    const style = content.style as CSSStyleDeclaration & { zoom: string };
+    style.zoom = "";
+    content.style.width = "";
+    if (normalized !== 1) {
+      const base = content.clientWidth;
+      if (base > 0) {
+        content.style.width = `${base}px`;
+      }
+      style.zoom = String(normalized);
+    }
     if (htmlBody) {
-      htmlBody.style.fontSize = `${Math.round(14 * normalized * 100) / 100}px`;
       resizeHtmlBody?.();
       window.setTimeout(() => resizeHtmlBody?.(), 0);
     }

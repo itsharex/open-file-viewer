@@ -84,8 +84,23 @@ function createEpubReaderController(
     return undefined;
   }
 
+  const layer = reader.querySelector<HTMLElement>(".ofv-epub-zoom-layer");
   let zoom = 1;
   const apply = () => {
+    if (layer) {
+      // Pin the layer to its pre-zoom width so the CSS `zoom` (from the
+      // --ofv-epub-zoom rule) magnifies the whole chapter column past the
+      // reader's edge instead of re-wrapping the text inside it. Measure with
+      // the zoom var at 1 — a zoomed layer reports divided client sizes.
+      layer.style.width = "";
+      reader.style.setProperty("--ofv-epub-zoom", "1");
+      if (zoom !== 1) {
+        const base = layer.clientWidth;
+        if (base > 0) {
+          layer.style.width = `${base}px`;
+        }
+      }
+    }
     reader.style.setProperty("--ofv-epub-zoom", String(zoom));
     ctx.toolbar?.setZoom(zoom);
   };
@@ -185,11 +200,14 @@ async function renderEpub(panel: HTMLElement, zip: JSZip): Promise<void> {
   }
   const article = document.createElement("article");
   article.className = "ofv-epub-reader";
+  const zoomLayer = document.createElement("div");
+  zoomLayer.className = "ofv-epub-zoom-layer";
+  article.append(zoomLayer);
 
   if (spine.length === 0) {
     const empty = document.createElement("p");
     empty.textContent = "未解析到可展示章节。";
-    article.append(empty);
+    zoomLayer.append(empty);
   } else {
     for (const [index, item] of spine.slice(0, 40).entries()) {
       const chapterPath = joinZipPath(basePath, item.href);
@@ -205,7 +223,7 @@ async function renderEpub(panel: HTMLElement, zip: JSZip): Promise<void> {
       content.className = "ofv-epub-content";
       content.innerHTML = sanitizeChapterHtml(rewriteAssetReferences(chapterText, assets, directoryName(chapterPath)));
       section.append(heading, content);
-      article.append(section);
+      zoomLayer.append(section);
     }
   }
 

@@ -330,10 +330,34 @@ Embed file previews inside any product surface.
 \`\`\`ts
 createViewer({ container: "#viewer", file, plugins });
 \`\`\`
+
+\`\`\`mermaid
+graph TD;
+  Upload[Upload file] --> Detect{Detect format};
+  Detect -->|Markdown| Markdown[Render markdown];
+  Detect -->|Office| Office[Render document];
+  Markdown --> Diagram[Mermaid diagram];
+\`\`\`
 `
       ],
       "welcome.md",
       { type: "text/markdown" }
+    )
+  },
+  {
+    label: { zh: "Mermaid 流程图", en: "Mermaid Diagram" },
+    file: new File(
+      [
+        `graph LR;
+  Viewer[Open File Viewer] --> Text[Text plugin];
+  Text --> Markdown[Markdown preview];
+  Text --> Mermaid[Mermaid diagram];
+  Markdown --> Fence[mermaid code fence];
+  Mermaid --> File[.mmd file];
+`
+      ],
+      "flowchart.mmd",
+      { type: "text/vnd.mermaid" }
     )
   },
   {

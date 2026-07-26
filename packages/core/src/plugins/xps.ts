@@ -50,8 +50,11 @@ function createXpsCanvasController(
   destroy: () => void;
 } | undefined {
   const canvases = Array.from(panel.querySelectorAll<SVGSVGElement>(".ofv-xps-canvas"))
-    .map((svg) => ({ svg, initialViewBox: parseSvgViewBox(svg) }))
-    .filter((item): item is { svg: SVGSVGElement; initialViewBox: SvgViewBox } => Boolean(item.initialViewBox));
+    .map((svg) => ({ svg, initialViewBox: parseSvgViewBox(svg), baseWidth: undefined as number | undefined }))
+    .filter(
+      (item): item is { svg: SVGSVGElement; initialViewBox: SvgViewBox; baseWidth: number | undefined } =>
+        Boolean(item.initialViewBox)
+    );
   if (canvases.length === 0) {
     return undefined;
   }
@@ -59,14 +62,37 @@ function createXpsCanvasController(
   let zoom = 1;
   let rotation = 0;
   const apply = () => {
-    for (const { svg, initialViewBox } of canvases) {
-      const width = initialViewBox.width / zoom;
-      const height = initialViewBox.height / zoom;
-      const x = initialViewBox.x + (initialViewBox.width - width) / 2;
-      const y = initialViewBox.y + (initialViewBox.height - height) / 2;
-      svg.setAttribute("viewBox", `${x} ${y} ${width} ${height}`);
+    // Zoom grows the page's layout width so the surrounding scroll containers
+    // gain real scrollbars; the intact viewBox keeps the vector content whole
+    // (the previous implementation shrank the viewBox, cropping the edges).
+    for (const entry of canvases) {
+      const { svg, initialViewBox } = entry;
+      svg.setAttribute(
+        "viewBox",
+        `${initialViewBox.x} ${initialViewBox.y} ${initialViewBox.width} ${initialViewBox.height}`
+      );
+      if (zoom === 1) {
+        svg.style.removeProperty("width");
+        svg.style.removeProperty("max-width");
+        svg.style.removeProperty("max-height");
+        entry.baseWidth = undefined;
+      } else {
+        if (entry.baseWidth === undefined) {
+          svg.style.removeProperty("width");
+          svg.style.removeProperty("max-width");
+          svg.style.removeProperty("max-height");
+          entry.baseWidth = svg.getBoundingClientRect().width || initialViewBox.width;
+        }
+        svg.style.width = `${entry.baseWidth * zoom}px`;
+        svg.style.maxWidth = "none";
+        svg.style.maxHeight = "none";
+      }
       svg.style.transformOrigin = "center center";
       svg.style.transform = rotation === 0 ? "" : `rotate(${rotation}deg)`;
+    }
+    for (const page of panel.querySelectorAll<HTMLElement>(".ofv-xps-page")) {
+      page.style.width = zoom === 1 ? "" : "max-content";
+      page.style.maxWidth = zoom === 1 ? "" : "none";
     }
     ctx.toolbar?.setZoom(zoom);
   };

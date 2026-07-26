@@ -118,7 +118,9 @@ describe("emailPlugin", () => {
     expect(rotate.disabled).toBe(true);
 
     zoomIn.click();
-    await waitFor(() => panel.style.getPropertyValue("--ofv-email-zoom") === "1.15");
+    await waitFor(
+      () => container.querySelector<HTMLElement>(".ofv-email-content")?.style.zoom === "1.15"
+    );
   });
 
   it("clears email iframe resize timers on destroy", async () => {
@@ -220,7 +222,9 @@ describe("emailPlugin", () => {
     });
 
     zoomIn.click();
-    await waitFor(() => iframe.contentDocument?.body?.style.fontSize === "16.1px");
+    await waitFor(
+      () => container.querySelector<HTMLElement>(".ofv-email-content")?.style.zoom === "1.15"
+    );
   });
 
   it("sanitizes HTML email bodies and secures external links", async () => {

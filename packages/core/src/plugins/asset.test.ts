@@ -620,7 +620,7 @@ describe("assetPlugin", () => {
     expect(canvas.style.transform).toBe("scale(1.25) rotate(450deg)");
 
     zoomReset?.click();
-    expect(canvas.style.transform).toBe("scale(1) rotate(0deg)");
+    expect(canvas.style.transform).toBe("");
     expect(zoomReset?.textContent).toBe("100%");
 
     viewer.destroy();
@@ -745,7 +745,7 @@ describe("assetPlugin", () => {
     await viewer.next();
     await waitFor(() => container.querySelector(".ofv-psd-canvas") === secondCanvas && zoomIn()?.disabled === false);
     expect(zoomLabel()?.textContent).toBe("100%");
-    expect(secondCanvas.style.transform).toBe("scale(1) rotate(0deg)");
+    expect(secondCanvas.style.transform).toBe("");
 
     viewer.destroy();
     vi.mocked(readPsd).mockReset();

@@ -53,15 +53,36 @@ export function ofdPlugin(): PreviewPlugin {
       const pages = await readOfdPages(entries, context);
       let zoom = 1;
       let rotation = 0;
+      // Pages wider than the panel are fitted down in JS; the user zoom then
+      // multiplies on top of that fit. The old CSS min(100%) cap cannot work
+      // here: against the pages grid's max-content width the percentage is
+      // cyclic, so zooming past the container width used to be a no-op.
+      const OFD_MM_TO_PX = 96 / 25.4;
+      const computeFitScale = () => {
+        if (pages.length === 0) {
+          return 1;
+        }
+        const normalizedRotation = ((rotation % 360) + 360) % 360;
+        const sideways = normalizedRotation === 90 || normalizedRotation === 270;
+        const widestMm = Math.max(...pages.map((page) => (sideways ? page.height : page.width)));
+        const available = panel.clientWidth - 32;
+        const widestPx = widestMm * OFD_MM_TO_PX;
+        if (!(widestPx > 0) || !(available > 0)) {
+          return 1;
+        }
+        return Math.min(1, available / widestPx);
+      };
       const applyZoom = () => {
-        panel.style.setProperty("--ofv-ofd-zoom", formatOfdCssNumber(zoom));
+        panel.style.setProperty("--ofv-ofd-zoom", formatOfdCssNumber(computeFitScale() * zoom));
         ctx.toolbar?.setZoom(zoom);
       };
       const applyRotation = () => {
         const normalizedRotation = ((rotation % 360) + 360) % 360;
         panel.style.setProperty("--ofv-ofd-rotation", `${normalizedRotation}deg`);
         panel.classList.toggle("is-ofd-rotated-sideways", normalizedRotation === 90 || normalizedRotation === 270);
+        applyZoom();
       };
+      let resizeObserver: ResizeObserver | undefined;
 
       if (pages.length > 0) {
         const pagesWrap = document.createElement("div");
@@ -72,6 +93,10 @@ export function ofdPlugin(): PreviewPlugin {
         panel.append(pagesWrap);
         applyZoom();
         applyRotation();
+        if (typeof ResizeObserver !== "undefined") {
+          resizeObserver = new ResizeObserver(() => applyZoom());
+          resizeObserver.observe(panel);
+        }
       }
       if (pages.length === 0) {
         const content = document.createElement("pre");
@@ -125,6 +150,7 @@ export function ofdPlugin(): PreviewPlugin {
           return false;
         },
         destroy() {
+          resizeObserver?.disconnect();
           ctx.toolbar?.setZoom(undefined);
           panel.remove();
           revokeObjectUrl(url, isExternal);
@@ -147,6 +173,10 @@ type OfdTextObject = {
   letterSpacing?: number;
   deltaX?: number[];
   vertical?: boolean;
+  transform?: string;
+  // CTM 文本的 x/y 是 Boundary 内相对坐标，页面尺寸估算需用 Boundary 原点
+  boundsX?: number;
+  boundsY?: number;
 };
 
 type OfdPathObject = {
@@ -157,8 +187,21 @@ type OfdPathObject = {
   height: number;
   stroke: string;
   fill: string;
+  fillRule?: "evenodd";
   strokeWidth: number;
   transform: string;
+};
+
+type OfdDrawParam = {
+  lineWidth?: number;
+  strokeColor?: string;
+  fillColor?: string;
+};
+
+type OfdPageResources = {
+  images: Map<string, string>;
+  fonts: Map<string, string>;
+  drawParams: Map<string, OfdDrawParam>;
 };
 
 type OfdLineObject = {
@@ -194,6 +237,7 @@ type OfdContext = {
   images: Map<string, string>;
   templates: Map<string, string>;
   fonts: Map<string, string>;
+  drawParams: Map<string, OfdDrawParam>;
   pageSize?: { width: number; height: number };
   stampsByPage: Map<string, OfdImageObject[]>;
 };
@@ -210,7 +254,12 @@ async function readOfdPages(
     const xml = await entry.async("text");
     const templates = await readPageTemplates(xml, context, entries);
     const stamps = context.stampsByPage.get(normalizeOfdPath(entry.name)) || [];
-    const page = parseOfdPage(entry.name, xml, context.images, context.fonts, templates, context.pageSize, stamps);
+    const resources: OfdPageResources = {
+      images: context.images,
+      fonts: context.fonts,
+      drawParams: context.drawParams
+    };
+    const page = parseOfdPage(entry.name, xml, resources, templates, context.pageSize, stamps);
     if (
       page.texts.length > 0 ||
       page.paths.length > 0 ||
@@ -247,8 +296,7 @@ async function readPageTemplates(xml: string, context: OfdContext, entries: JSZi
 function parseOfdPage(
   name: string,
   xml: string,
-  images: Map<string, string>,
-  fonts: Map<string, string>,
+  resources: OfdPageResources,
   templateXmls: string[] = [],
   defaultPageSize?: { width: number; height: number },
   stamps: OfdImageObject[] = []
@@ -260,9 +308,9 @@ function parseOfdPage(
   const pageSize = parseOfdPageSize(doc, defaultPageSize);
   const templatePages = templateXmls.map((templateXml) => {
     const templateDoc = new DOMParser().parseFromString(templateXml, "application/xml");
-    return templateDoc.querySelector("parsererror") ? emptyOfdPageContent() : parseOfdPageContent(templateDoc, images, fonts);
+    return templateDoc.querySelector("parsererror") ? emptyOfdPageContent() : parseOfdPageContent(templateDoc, resources);
   });
-  const pageContent = parseOfdPageContent(doc, images, fonts);
+  const pageContent = parseOfdPageContent(doc, resources);
   const texts = [...templatePages.flatMap((page) => page.texts), ...pageContent.texts];
   const paths = [...templatePages.flatMap((page) => page.paths), ...pageContent.paths];
   const lines = [...templatePages.flatMap((page) => page.lines), ...pageContent.lines];
@@ -278,20 +326,19 @@ function parseOfdPage(
 
 function parseOfdPageContent(
   doc: Document,
-  images: Map<string, string>,
-  fonts: Map<string, string>
+  resources: OfdPageResources
 ): Omit<OfdPagePreview, "name" | "width" | "height" | "stamps"> {
   const textObjects = Array.from(doc.getElementsByTagName("*")).filter((element) => element.localName === "TextObject");
-  const texts = textObjects.flatMap((element) => parseOfdTextObject(element, fonts));
+  const texts = textObjects.flatMap((element) => parseOfdTextObject(element, resources));
   const paths = Array.from(doc.getElementsByTagName("*"))
     .filter((element) => element.localName === "PathObject")
-    .flatMap((element) => parseOfdPathObject(element));
+    .flatMap((element) => parseOfdPathObject(element, resources));
   const lines = Array.from(doc.getElementsByTagName("*"))
     .filter((element) => element.localName === "LineObject")
-    .flatMap((element) => parseOfdLineObject(element));
+    .flatMap((element) => parseOfdLineObject(element, resources));
   const imageObjects = Array.from(doc.getElementsByTagName("*"))
     .filter((element) => element.localName === "ImageObject")
-    .flatMap((element) => parseOfdImageObject(element, images));
+    .flatMap((element) => parseOfdImageObject(element, resources.images));
   return { texts, paths, lines, images: imageObjects };
 }
 
@@ -306,7 +353,7 @@ function createOfdBounds(
   imageObjects: OfdImageObject[]
 ): Array<{ x: number; y: number; width: number; height: number }> {
   return [
-    ...texts.map((item) => ({ x: item.x, y: item.y, width: item.width, height: item.height })),
+    ...texts.map((item) => ({ x: item.boundsX ?? item.x, y: item.boundsY ?? item.y, width: item.width, height: item.height })),
     ...paths.map((item) => ({ x: item.x, y: item.y, width: item.width, height: item.height })),
     ...lines.map((item) => ({
       x: Math.min(item.x1, item.x2),
@@ -318,20 +365,28 @@ function createOfdBounds(
   ];
 }
 
-function parseOfdTextObject(element: Element, fonts: Map<string, string>): OfdTextObject[] {
+function parseOfdTextObject(element: Element, resources: OfdPageResources): OfdTextObject[] {
   const boundary = parseBoundary(getOfdAttribute(element, "Boundary"));
+  const drawParam = resolveOfdDrawParam(element, resources.drawParams);
   const size = finiteNumber(getOfdAttribute(element, "Size"), Math.max(4, boundary.height || 5));
-  const color = parseOfdColor(element, "#111827");
+  const color =
+    parseOfdColorElement(findOfdChild(element, "FillColor")) ||
+    parseOfdColorElement(findOfdChild(element, "StrokeColor")) ||
+    drawParam?.fillColor ||
+    "#111827";
   const weight = finiteNumber(getOfdAttribute(element, "Weight"), 400) >= 600 ? "700" : "400";
-  const fontFamily = fontStackForOfdFont(fonts.get(getOfdAttribute(element, "Font") || ""));
+  const fontFamily = fontStackForOfdFont(resources.fonts.get(getOfdAttribute(element, "Font") || ""));
   const objectLetterSpacing = getOfdAttribute(element, "DeltaX") ? 0.5 : undefined;
+  const ctm = parseOfdCtm(getOfdAttribute(element, "CTM"));
+  const transform = ctm ? createOfdPathTransform(boundary.x, boundary.y, ctm) : undefined;
   const textCodes = Array.from(element.getElementsByTagName("*")).filter((child) => child.localName === "TextCode");
   if (textCodes.length === 0) {
     return [];
   }
   return textCodes.flatMap((code): OfdTextObject[] => {
-    const x = boundary.x + finiteNumber(getOfdAttribute(code, "X"), 0);
-    const y = boundary.y + finiteNumber(getOfdAttribute(code, "Y"), 0);
+    // CTM 存在时坐标保持相对 Boundary，由 transform 完成平移与矩阵变换
+    const x = (transform ? 0 : boundary.x) + finiteNumber(getOfdAttribute(code, "X"), 0);
+    const y = (transform ? 0 : boundary.y) + finiteNumber(getOfdAttribute(code, "Y"), 0);
     const text = decodeOfdTextEscapes(code.textContent?.trim() || "");
     const deltaX = parseOfdDeltaX(getOfdAttribute(code, "DeltaX"));
     const deltaY = getOfdAttribute(code, "DeltaY");
@@ -348,7 +403,10 @@ function parseOfdTextObject(element: Element, fonts: Map<string, string>): OfdTe
         weight,
         fontFamily,
         letterSpacing: objectLetterSpacing,
-        vertical: true
+        vertical: true,
+        transform,
+        boundsX: transform ? boundary.x : undefined,
+        boundsY: transform ? boundary.y : undefined
       }));
     }
     return [
@@ -363,15 +421,23 @@ function parseOfdTextObject(element: Element, fonts: Map<string, string>): OfdTe
         weight,
         fontFamily,
         letterSpacing: deltaX ? undefined : objectLetterSpacing,
-        deltaX
+        deltaX,
+        transform,
+        boundsX: transform ? boundary.x : undefined,
+        boundsY: transform ? boundary.y : undefined
       }
     ];
   }).filter((item) => item.text);
 }
 
-function parseOfdPathObject(element: Element): OfdPathObject[] {
+// OFD 规范：LineWidth 缺省 0.353mm；Stroke 缺省 true；Fill 缺省 false——
+// 发票类文件常给描边网格线附带 FillColor，若据其存在就填充会把表格涂成大色块
+const OFD_DEFAULT_LINE_WIDTH = 0.353;
+
+function parseOfdPathObject(element: Element, resources: OfdPageResources): OfdPathObject[] {
   const boundary = parseBoundary(getOfdAttribute(element, "Boundary"));
   const ctm = parseOfdCtm(getOfdAttribute(element, "CTM"));
+  const drawParam = resolveOfdDrawParam(element, resources.drawParams);
   const commands = Array.from(element.getElementsByTagName("*")).filter(
     (child) => child.localName === "AbbreviatedData" || child.localName === "PathData"
   );
@@ -379,6 +445,18 @@ function parseOfdPathObject(element: Element): OfdPathObject[] {
   if (!raw) {
     return [];
   }
+  const stroke =
+    parseOfdBoolean(getOfdAttribute(element, "Stroke")) === false
+      ? "none"
+      : parseOfdColorElement(findOfdChild(element, "StrokeColor")) || drawParam?.strokeColor || "#111827";
+  // FillColor 存在但无法解析（如调色板 Index 引用）时宁可不填充，避免误涂深色块
+  const fillColorChild = findOfdChild(element, "FillColor");
+  const fill =
+    parseOfdBoolean(getOfdAttribute(element, "Fill")) === true
+      ? fillColorChild
+        ? parseOfdColorElement(fillColorChild) || "transparent"
+        : drawParam?.fillColor || "#111827"
+      : "transparent";
   return [
     {
       d: normalizeOfdPathData(raw),
@@ -386,16 +464,18 @@ function parseOfdPathObject(element: Element): OfdPathObject[] {
       y: boundary.y,
       width: boundary.width,
       height: boundary.height,
-      stroke: parseOfdBoolean(getOfdAttribute(element, "Stroke")) === false ? "none" : parseOfdColor(element, "#111827", "StrokeColor"),
-      fill: parseOfdBoolean(getOfdAttribute(element, "Fill")) === false ? "transparent" : parseOfdFill(element),
-      strokeWidth: finiteNumber(getOfdAttribute(element, "LineWidth"), 1),
+      stroke,
+      fill,
+      fillRule: /even/i.test(getOfdAttribute(element, "Rule") || "") ? "evenodd" : undefined,
+      strokeWidth: finiteNumber(getOfdAttribute(element, "LineWidth"), drawParam?.lineWidth ?? OFD_DEFAULT_LINE_WIDTH),
       transform: createOfdPathTransform(boundary.x, boundary.y, ctm)
     }
   ];
 }
 
-function parseOfdLineObject(element: Element): OfdLineObject[] {
+function parseOfdLineObject(element: Element, resources: OfdPageResources): OfdLineObject[] {
   const boundary = parseBoundary(getOfdAttribute(element, "Boundary"));
+  const drawParam = resolveOfdDrawParam(element, resources.drawParams);
   const start = parsePoint(getOfdAttribute(element, "StartPoint"), { x: 0, y: 0 });
   const end = parsePoint(getOfdAttribute(element, "EndPoint"), {
     x: boundary.width,
@@ -407,8 +487,12 @@ function parseOfdLineObject(element: Element): OfdLineObject[] {
       y1: boundary.y + start.y,
       x2: boundary.x + end.x,
       y2: boundary.y + end.y,
-      stroke: parseOfdColor(element, "#111827"),
-      strokeWidth: finiteNumber(getOfdAttribute(element, "LineWidth"), 1)
+      stroke:
+        parseOfdColorElement(findOfdChild(element, "StrokeColor")) ||
+        parseOfdColorElement(findOfdChild(element, "FillColor")) ||
+        drawParam?.strokeColor ||
+        "#111827",
+      strokeWidth: finiteNumber(getOfdAttribute(element, "LineWidth"), drawParam?.lineWidth ?? OFD_DEFAULT_LINE_WIDTH)
     }
   ];
 }
@@ -455,6 +539,9 @@ function renderOfdPage(page: OfdPagePreview): HTMLElement {
     path.setAttribute("d", item.d);
     path.setAttribute("transform", item.transform);
     path.setAttribute("fill", item.fill);
+    if (item.fillRule) {
+      path.setAttribute("fill-rule", item.fillRule);
+    }
     path.setAttribute("stroke", item.stroke);
     path.setAttribute("stroke-width", String(item.strokeWidth));
     svg.append(path);
@@ -476,6 +563,9 @@ function renderOfdPage(page: OfdPagePreview): HTMLElement {
     const text = document.createElementNS(svg.namespaceURI, "text");
     text.setAttribute("x", String(item.x));
     text.setAttribute("y", String(item.y));
+    if (item.transform) {
+      text.setAttribute("transform", item.transform);
+    }
     text.setAttribute("font-size", String(item.size));
     text.setAttribute("fill", item.color);
     text.setAttribute("font-weight", item.weight);
@@ -536,9 +626,76 @@ function appendOfdImage(svg: SVGElement, item: OfdImageObject): void {
 async function readOfdContext(entries: JSZip.JSZipObject[]): Promise<OfdContext> {
   const images = await readOfdImages(entries);
   const fonts = await readOfdFonts(entries);
+  const drawParams = await readOfdDrawParams(entries);
   const { templates, pageSize, pagePaths } = await readOfdDocumentInfo(entries);
   const stampsByPage = await readOfdStamps(entries, pagePaths);
-  return { images, templates, fonts, pageSize, stampsByPage };
+  return { images, templates, fonts, drawParams, pageSize, stampsByPage };
+}
+
+async function readOfdDrawParams(entries: JSZip.JSZipObject[]): Promise<Map<string, OfdDrawParam>> {
+  const raw = new Map<string, { relative?: string; own: OfdDrawParam }>();
+  for (const entry of entries.filter((item) => /(?:^|\/)(?:DocumentRes|PublicRes)\.xml$/i.test(item.name))) {
+    const doc = new DOMParser().parseFromString(await entry.async("text"), "application/xml");
+    if (doc.querySelector("parsererror")) {
+      continue;
+    }
+    for (const param of Array.from(doc.getElementsByTagName("*")).filter((element) => element.localName === "DrawParam")) {
+      const id = getOfdAttribute(param, "ID");
+      if (!id) {
+        continue;
+      }
+      const lineWidthAttr = getOfdAttribute(param, "LineWidth");
+      const lineWidth = lineWidthAttr === null ? Number.NaN : Number(lineWidthAttr);
+      raw.set(id, {
+        relative: getOfdAttribute(param, "Relative") || undefined,
+        own: {
+          lineWidth: Number.isFinite(lineWidth) ? lineWidth : undefined,
+          strokeColor: parseOfdColorElement(findOfdChild(param, "StrokeColor")),
+          fillColor: parseOfdColorElement(findOfdChild(param, "FillColor"))
+        }
+      });
+    }
+  }
+  const resolved = new Map<string, OfdDrawParam>();
+  const resolve = (id: string, seen: Set<string>): OfdDrawParam => {
+    const cached = resolved.get(id);
+    if (cached) {
+      return cached;
+    }
+    const item = raw.get(id);
+    if (!item || seen.has(id)) {
+      return {};
+    }
+    seen.add(id);
+    const base = item.relative ? resolve(item.relative, seen) : {};
+    const merged: OfdDrawParam = {
+      lineWidth: item.own.lineWidth ?? base.lineWidth,
+      strokeColor: item.own.strokeColor ?? base.strokeColor,
+      fillColor: item.own.fillColor ?? base.fillColor
+    };
+    resolved.set(id, merged);
+    return merged;
+  };
+  for (const id of raw.keys()) {
+    resolve(id, new Set());
+  }
+  return resolved;
+}
+
+// DrawParam 可挂在图元自身，也可挂在其所属 Layer/PageBlock 上，就近生效
+function resolveOfdDrawParam(element: Element, drawParams: Map<string, OfdDrawParam>): OfdDrawParam | undefined {
+  if (drawParams.size === 0) {
+    return undefined;
+  }
+  let current: Element | null = element;
+  while (current) {
+    const id = getOfdAttribute(current, "DrawParam");
+    if (id) {
+      return drawParams.get(id);
+    }
+    current = current.parentElement;
+  }
+  return undefined;
 }
 
 async function readOfdStamps(
@@ -745,22 +902,23 @@ function parseOfdPageSize(doc: Document, defaultPageSize?: { width: number; heig
   return { width: 210, height: 297, explicit: false };
 }
 
-function parseOfdColor(element: Element, fallback: string, preferredLocalName = "FillColor"): string {
-  const colorElement = findOfdChild(element, preferredLocalName) || findOfdChild(element, "StrokeColor") || findOfdChild(element, "FillColor");
+function parseOfdColorElement(colorElement: Element | undefined): string | undefined {
   const value = colorElement ? getOfdAttribute(colorElement, "Value") : null;
-  if (!value) {
-    return fallback;
+  if (!colorElement || !value) {
+    return undefined;
   }
   const parts = value.trim().split(/\s+/).map((part) => Number(part));
-  if (parts.length >= 3 && parts.every((part) => Number.isFinite(part))) {
-    const channels = parts.slice(0, 3).map((part) => Math.max(0, Math.min(255, part))).join(" ");
-    const alpha = parseOfdAlpha(colorElement ? getOfdAttribute(colorElement, "Alpha") : null);
+  // 单通道为灰度色（GB/T 33190 允许 1 通道颜色空间）
+  const rgbParts = parts.length === 1 && Number.isFinite(parts[0]) ? [parts[0], parts[0], parts[0]] : parts;
+  if (rgbParts.length >= 3 && rgbParts.every((part) => Number.isFinite(part))) {
+    const channels = rgbParts.slice(0, 3).map((part) => Math.max(0, Math.min(255, part))).join(" ");
+    const alpha = parseOfdAlpha(getOfdAttribute(colorElement, "Alpha"));
     if (alpha <= 0) {
       return "transparent";
     }
     return alpha >= 1 ? `rgb(${channels})` : `rgb(${channels} / ${formatOfdCssNumber(alpha)})`;
   }
-  return fallback;
+  return undefined;
 }
 
 function parseOfdAlpha(value: string | null): number {
@@ -782,11 +940,6 @@ function parseOfdBoolean(value: string | null): boolean | undefined {
   return undefined;
 }
 
-function parseOfdFill(element: Element): string {
-  const fillElement = findOfdChild(element, "FillColor");
-  return fillElement ? parseOfdColor(element, "transparent", "FillColor") : "transparent";
-}
-
 function findOfdChild(element: Element, localName: string): Element | undefined {
   return Array.from(element.children).find((child) => child.localName === localName);
 }
@@ -799,17 +952,24 @@ function parsePoint(value: string | null, fallback: { x: number; y: number }): {
   };
 }
 
+// OFD 图形操作符与 SVG 不同：S=起始点(等价 moveto)、B=三次贝塞尔、C=闭合子路径
+const OFD_PATH_COMMAND_MAP: Record<string, string> = {
+  S: "M",
+  M: "M",
+  L: "L",
+  Q: "Q",
+  B: "C",
+  A: "A",
+  C: "Z",
+  Z: "Z"
+};
+
 function normalizeOfdPathData(value: string): string {
   return value
-    .replace(/\bM\s+/gi, "M ")
-    .replace(/\bL\s+/gi, "L ")
-    .replace(/\bC\s+/gi, "C ")
-    .replace(/\bQ\s+/gi, "Q ")
-    .replace(/\bA\s+/gi, "A ")
-    .replace(/\bB\s+/gi, "C ")
-    .replace(/\bZ\b/gi, "Z")
-    .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    .split(/\s+/)
+    .map((token) => (/^[a-zA-Z]$/.test(token) ? OFD_PATH_COMMAND_MAP[token.toUpperCase()] || token : token))
+    .join(" ");
 }
 
 function parseOfdCtm(value: string | null): [number, number, number, number, number, number] | undefined {

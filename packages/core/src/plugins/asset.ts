@@ -1230,9 +1230,70 @@ function createAssetVisualController(
 ): PreviewInstance {
   let scale = 1;
   let rotation = 0;
+  let measuredBase: { width: number; height: number } | null = null;
+  let scaleBox: HTMLElement | null = null;
+
+  // Transforms do not affect layout, so the scaled/rotated visual is wrapped in
+  // a sizing box that reserves the transformed footprint — the panel then grows
+  // real scrollbars and the whole image stays reachable (a centered transform
+  // alone pushes the top/left overflow outside the scrollable range).
+  const ensureScaleBox = () => {
+    if (!scaleBox) {
+      scaleBox = document.createElement("div");
+      scaleBox.className = "ofv-asset-scale-box";
+      element.parentElement?.insertBefore(scaleBox, element);
+      scaleBox.append(element);
+    }
+    return scaleBox;
+  };
+
   const apply = () => {
-    element.style.transform = `scale(${scale}) rotate(${rotation}deg)`;
+    if (scale === 1 && rotation === 0) {
+      element.style.removeProperty("transform");
+      element.style.removeProperty("transform-origin");
+      element.style.removeProperty("width");
+      element.style.removeProperty("height");
+      element.style.removeProperty("max-width");
+      element.style.removeProperty("max-height");
+      if (scaleBox) {
+        scaleBox.style.removeProperty("width");
+        scaleBox.style.removeProperty("height");
+      }
+      measuredBase = null;
+      toolbar?.setZoom(scale);
+      return;
+    }
+    const box = ensureScaleBox();
+    if (!measuredBase) {
+      element.style.removeProperty("transform");
+      element.style.removeProperty("width");
+      element.style.removeProperty("height");
+      element.style.removeProperty("max-width");
+      element.style.removeProperty("max-height");
+      box.style.removeProperty("width");
+      box.style.removeProperty("height");
+      const rect = element.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        measuredBase = { width: rect.width, height: rect.height };
+        element.style.width = `${rect.width}px`;
+        element.style.height = `${rect.height}px`;
+        element.style.maxWidth = "none";
+        element.style.maxHeight = "none";
+      }
+    }
     element.style.transformOrigin = "center";
+    if (measuredBase) {
+      const sideways = Math.abs(rotation % 180) === 90;
+      const boxWidth = (sideways ? measuredBase.height : measuredBase.width) * scale;
+      const boxHeight = (sideways ? measuredBase.width : measuredBase.height) * scale;
+      box.style.width = `${Math.ceil(boxWidth)}px`;
+      box.style.height = `${Math.ceil(boxHeight)}px`;
+      const dx = (boxWidth - measuredBase.width) / 2;
+      const dy = (boxHeight - measuredBase.height) / 2;
+      element.style.transform = `translate(${dx}px, ${dy}px) scale(${scale}) rotate(${rotation}deg)`;
+    } else {
+      element.style.transform = `scale(${scale}) rotate(${rotation}deg)`;
+    }
     toolbar?.setZoom(scale);
   };
   apply();

@@ -63,7 +63,7 @@ describe("ofdPlugin", () => {
         </ofd:Area>
         <ofd:Content>
           <ofd:Layer>
-            <ofd:PathObject Boundary="10 10 60 30" LineWidth="2">
+            <ofd:PathObject Boundary="10 10 60 30" LineWidth="2" Fill="true">
               <ofd:FillColor Value="240 249 255"/>
               <ofd:StrokeColor Value="37 99 235"/>
               <ofd:AbbreviatedData>M 0 0 L 60 0 L 60 30 L 0 30 Z</ofd:AbbreviatedData>
@@ -526,6 +526,311 @@ describe("ofdPlugin", () => {
     expect(paths[1]?.getAttribute("stroke")).toBe("rgb(156 82 35)");
     expect(paths[2]?.getAttribute("fill")).toBe("rgb(255 0 0 / 0.498)");
     expect(paths[2]?.getAttribute("stroke")).toBe("none");
+  });
+
+  it("keeps paths unfilled when Fill is absent even if FillColor is present", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "Doc_0/Pages/Page_0/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Area>
+          <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+        </ofd:Area>
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:PathObject Boundary="4.5 30 201 90" LineWidth="0.25">
+              <ofd:StrokeColor Value="230 0 0"/>
+              <ofd:FillColor Value="0 0 0"/>
+              <ofd:AbbreviatedData>M 0 0 L 201 0 L 201 90 L 0 90 L 0 0 C</ofd:AbbreviatedData>
+            </ofd:PathObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "grid.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-ofd-pages svg")));
+
+    const path = container.querySelector(".ofv-ofd-page path");
+    expect(path?.getAttribute("fill")).toBe("transparent");
+    expect(path?.getAttribute("stroke")).toBe("rgb(230 0 0)");
+  });
+
+  it("translates OFD path operators S/B/C into SVG M/C/Z commands", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "Doc_0/Pages/Page_0/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Area>
+          <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+        </ofd:Area>
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:PathObject Boundary="10 10 20 20" LineWidth="0.5">
+              <ofd:StrokeColor Value="230 0 0"/>
+              <ofd:AbbreviatedData>S 1 1 L 19 1 L 19 19 L 1 19 C M 5 5 B 5 3 7 1 9 1</ofd:AbbreviatedData>
+            </ofd:PathObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "operators.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-ofd-pages svg")));
+
+    expect(container.querySelector(".ofv-ofd-page path")?.getAttribute("d")).toBe(
+      "M 1 1 L 19 1 L 19 19 L 1 19 Z M 5 5 C 5 3 7 1 9 1"
+    );
+  });
+
+  it("applies layer-level DrawParam colors, widths and Relative inheritance", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "Doc_0/Document.xml",
+      `<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:CommonData>
+          <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>
+        </ofd:CommonData>
+      </ofd:Document>`
+    );
+    zip.file(
+      "Doc_0/DocumentRes.xml",
+      `<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">
+        <ofd:DrawParams>
+          <ofd:DrawParam ID="8" LineWidth="0.25">
+            <ofd:FillColor ColorSpace="1" Value="128 0 0"/>
+            <ofd:StrokeColor ColorSpace="1" Value="128 0 0"/>
+          </ofd:DrawParam>
+          <ofd:DrawParam ID="9" Relative="8">
+            <ofd:StrokeColor ColorSpace="1" Value="0 82 217"/>
+          </ofd:DrawParam>
+        </ofd:DrawParams>
+      </ofd:Res>`
+    );
+    zip.file(
+      "Doc_0/Pages/Page_0/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Area>
+          <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+        </ofd:Area>
+        <ofd:Content>
+          <ofd:Layer DrawParam="8">
+            <ofd:PathObject Boundary="4.5 30 201 0.3">
+              <ofd:AbbreviatedData>M 0 0 L 201 0</ofd:AbbreviatedData>
+            </ofd:PathObject>
+            <ofd:PathObject Boundary="4.5 52 201 0.3" DrawParam="9">
+              <ofd:AbbreviatedData>M 0 0 L 201 0</ofd:AbbreviatedData>
+            </ofd:PathObject>
+            <ofd:TextObject Boundary="20 20 60 8" Size="4">
+              <ofd:TextCode X="0" Y="4">购买方信息</ofd:TextCode>
+            </ofd:TextObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "drawparam.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-ofd-pages svg")));
+
+    const paths = container.querySelectorAll(".ofv-ofd-page path");
+    expect(paths[0]?.getAttribute("stroke")).toBe("rgb(128 0 0)");
+    expect(paths[0]?.getAttribute("stroke-width")).toBe("0.25");
+    expect(paths[0]?.getAttribute("fill")).toBe("transparent");
+    expect(paths[1]?.getAttribute("stroke")).toBe("rgb(0 82 217)");
+    expect(paths[1]?.getAttribute("stroke-width")).toBe("0.25");
+    expect(container.querySelector(".ofv-ofd-page text")?.getAttribute("fill")).toBe("rgb(128 0 0)");
+  });
+
+  it("follows spec defaults for fill color, grayscale values, even-odd rule and line width", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "Doc_0/Pages/Page_0/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Area>
+          <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+        </ofd:Area>
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:PathObject Boundary="10 10 40 10" Stroke="false" Fill="true">
+              <ofd:AbbreviatedData>M 0 0 L 40 0 L 40 10 L 0 10 C</ofd:AbbreviatedData>
+            </ofd:PathObject>
+            <ofd:PathObject Boundary="10 24 40 10" Stroke="false" Fill="true">
+              <ofd:FillColor Value="255"/>
+              <ofd:AbbreviatedData>M 0 0 L 40 0 L 40 10 L 0 10 C</ofd:AbbreviatedData>
+            </ofd:PathObject>
+            <ofd:PathObject Boundary="10 38 40 10" Stroke="false" Fill="true">
+              <ofd:FillColor Index="2"/>
+              <ofd:AbbreviatedData>M 0 0 L 40 0 L 40 10 L 0 10 C</ofd:AbbreviatedData>
+            </ofd:PathObject>
+            <ofd:PathObject Boundary="10 52 40 10" Stroke="false" Fill="true" Rule="Even-Odd">
+              <ofd:FillColor Value="10 20 30"/>
+              <ofd:AbbreviatedData>M 0 0 L 40 0 L 40 10 L 0 10 C M 5 2 L 35 2 L 35 8 L 5 8 C</ofd:AbbreviatedData>
+            </ofd:PathObject>
+            <ofd:PathObject Boundary="10 66 40 10">
+              <ofd:StrokeColor Value="10 20 30"/>
+              <ofd:AbbreviatedData>M 0 0 L 40 0</ofd:AbbreviatedData>
+            </ofd:PathObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "spec-defaults.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-ofd-pages svg")));
+
+    const paths = container.querySelectorAll(".ofv-ofd-page path");
+    expect(paths).toHaveLength(5);
+    expect(paths[0]?.getAttribute("fill")).toBe("#111827");
+    expect(paths[0]?.getAttribute("fill-rule")).toBeNull();
+    expect(paths[1]?.getAttribute("fill")).toBe("rgb(255 255 255)");
+    expect(paths[2]?.getAttribute("fill")).toBe("transparent");
+    expect(paths[3]?.getAttribute("fill")).toBe("rgb(10 20 30)");
+    expect(paths[3]?.getAttribute("fill-rule")).toBe("evenodd");
+    expect(paths[4]?.getAttribute("stroke-width")).toBe("0.353");
+  });
+
+  it("reads DrawParams from PublicRes and keeps CTM text inside auto-sized pages", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "Doc_0/Document.xml",
+      `<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:CommonData>
+          <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>
+        </ofd:CommonData>
+      </ofd:Document>`
+    );
+    zip.file(
+      "Doc_0/PublicRes.xml",
+      `<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">
+        <ofd:DrawParams>
+          <ofd:DrawParam ID="8" LineWidth="0.25">
+            <ofd:StrokeColor Value="128 0 0"/>
+          </ofd:DrawParam>
+        </ofd:DrawParams>
+      </ofd:Res>`
+    );
+    zip.file(
+      "Doc_0/Pages/Page_0/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Content>
+          <ofd:Layer DrawParam="8">
+            <ofd:PathObject Boundary="15 105 180 0.3">
+              <ofd:AbbreviatedData>M 0 0 L 180 0</ofd:AbbreviatedData>
+            </ofd:PathObject>
+            <ofd:TextObject Boundary="250 40 30 8" Size="4" CTM="1 0 0 1 0 0">
+              <ofd:TextCode X="1" Y="4">页边文本</ofd:TextCode>
+            </ofd:TextObject>
+            <ofd:TextObject Boundary="20 60 6 20" Size="4" CTM="1 0 0 1 0 0">
+              <ofd:TextCode X="1" Y="4" DeltaY="g 2 4">竖排字</ofd:TextCode>
+            </ofd:TextObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "publicres-ctm.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-ofd-pages svg")));
+
+    const svg = container.querySelector(".ofv-ofd-pages svg");
+    expect(svg?.querySelector("path")?.getAttribute("stroke")).toBe("rgb(128 0 0)");
+    expect(svg?.querySelector("path")?.getAttribute("stroke-width")).toBe("0.25");
+    // CTM 文本参与页面尺寸估算时使用 Boundary 原点：页面应长到 250+30+12
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 292 297");
+    const texts = Array.from(svg?.querySelectorAll("text") || []);
+    const edge = texts.find((text) => text.textContent === "页边文本");
+    expect(edge?.getAttribute("transform")).toBe("translate(250 40) matrix(1 0 0 1 0 0)");
+    expect(edge?.getAttribute("x")).toBe("1");
+    const vertical = texts.filter((text) => "竖排字".includes(text.textContent || ""));
+    expect(vertical.map((text) => text.getAttribute("y"))).toEqual(["4", "8", "12"]);
+    expect(vertical.every((text) => text.getAttribute("transform") === "translate(20 60) matrix(1 0 0 1 0 0)")).toBe(true);
+    expect(vertical.every((text) => text.getAttribute("x") === "1")).toBe(true);
+  });
+
+  it("applies TextObject CTM as an SVG transform with boundary-relative coordinates", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "Doc_0/Pages/Page_0/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Area>
+          <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+        </ofd:Area>
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:TextObject Boundary="30 40 60 8" Size="4" CTM="0 1 -1 0 0 0">
+              <ofd:TextCode X="1" Y="4">竖排水印</ofd:TextCode>
+            </ofd:TextObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "ctm-text.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-ofd-pages svg")));
+
+    const text = container.querySelector(".ofv-ofd-page text");
+    expect(text?.getAttribute("transform")).toBe("translate(30 40) matrix(0 1 -1 0 0 0)");
+    expect(text?.getAttribute("x")).toBe("1");
+    expect(text?.getAttribute("y")).toBe("4");
   });
 
   it("renders signature stamp annotations on the referenced page", async () => {

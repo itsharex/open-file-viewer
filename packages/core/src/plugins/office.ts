@@ -362,7 +362,9 @@ function createOfficeZoomController(
   destroy: () => void;
 } | undefined {
   const canZoom = Boolean(
-    panel.querySelector(".ofv-docx-document, .ofv-sheet, .ofv-pptx-viewer > div, .ofv-document, .ofv-text-block, .ofv-slide")
+    panel.querySelector(
+      ".ofv-docx-document, .ofv-sheet, .ofv-pptx-viewer > div, .ofv-document, .ofv-text-block, .ofv-slide, .ofv-msdoc-document"
+    )
   );
   if (!canZoom) {
     return undefined;
@@ -373,8 +375,17 @@ function createOfficeZoomController(
     panel.style.setProperty("--ofv-office-zoom", String(zoom));
     panel.dispatchEvent(new CustomEvent("ofv-office-zoom"));
     for (const slide of panel.querySelectorAll<HTMLElement>(".ofv-pptx-viewer > div[data-slide-index]")) {
-      slide.style.transformOrigin = "top left";
-      slide.style.transform = zoom === 1 ? "" : `scale(${zoom})`;
+      // The slide keeps its natural layout and is scaled via `zoom`, which grows
+      // its layout box too; percentage caps and inner scrolling would fight that.
+      slide.style.transform = "";
+      slide.style.transformOrigin = "";
+      setElementZoom(slide, zoom === 1 ? "" : String(zoom));
+      slide.style.width = zoom === 1 ? "" : "max-content";
+      slide.style.maxWidth = zoom === 1 ? "" : "none";
+      slide.style.overflow = zoom === 1 ? "" : "visible";
+    }
+    for (const scrollBox of panel.querySelectorAll<HTMLElement>(".ofv-table-scroll")) {
+      syncSheetTableZoom(scrollBox, zoom);
     }
     ctx.toolbar?.setZoom(zoom);
   };
@@ -406,6 +417,69 @@ function createOfficeZoomController(
       ctx.toolbar?.setZoom(undefined);
     }
   };
+}
+
+function setElementZoom(element: HTMLElement, value: string): void {
+  (element.style as CSSStyleDeclaration & { zoom: string }).zoom = value;
+}
+
+function getOfficePanelZoom(element: HTMLElement): number {
+  const panel = element.closest<HTMLElement>(".ofv-panel");
+  const parsed = Number.parseFloat(panel?.style.getPropertyValue("--ofv-office-zoom") || "1");
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+// Sheet tables zoom via the CSS `zoom` property so the scaled size participates in
+// layout and .ofv-table-scroll grows real scrollbars. The table's rendered width
+// (including the min-width:100% stretch) is captured once as the base, then locked
+// as an explicit width — otherwise the percentage min-width re-resolves inside the
+// zoomed coordinate space and cancels the scale out.
+function syncSheetTableZoom(scrollBox: HTMLElement, zoom: number): void {
+  const table = scrollBox.querySelector<HTMLTableElement>(":scope > table");
+  if (!table) {
+    return;
+  }
+  if (zoom === 1) {
+    if (table.dataset.ofvZoomBase !== undefined) {
+      table.style.width = table.dataset.ofvZoomNaturalWidth || "";
+      table.style.minWidth = "";
+      setElementZoom(table, "");
+      delete table.dataset.ofvZoomBase;
+      delete table.dataset.ofvZoomNaturalWidth;
+    }
+    return;
+  }
+  if (table.dataset.ofvZoomBase === undefined) {
+    const naturalWidth = table.style.width;
+    setElementZoom(table, "");
+    table.style.minWidth = "";
+    table.style.width = naturalWidth;
+    const measured = table.offsetWidth || Number.parseFloat(naturalWidth) || 0;
+    if (measured <= 0) {
+      return;
+    }
+    table.dataset.ofvZoomBase = String(measured);
+    table.dataset.ofvZoomNaturalWidth = naturalWidth;
+  }
+  table.style.width = `${table.dataset.ofvZoomBase}px`;
+  table.style.minWidth = "0";
+  setElementZoom(table, String(zoom));
+}
+
+// A column resize changes the table's natural width, so the cached zoom base is
+// stale; drop the lock and re-measure at the new width.
+function resetSheetTableZoomLock(table: HTMLElement): void {
+  if (table.dataset.ofvZoomBase === undefined) {
+    return;
+  }
+  table.style.minWidth = "";
+  setElementZoom(table, "");
+  delete table.dataset.ofvZoomBase;
+  delete table.dataset.ofvZoomNaturalWidth;
+  const scrollBox = table.closest<HTMLElement>(".ofv-table-scroll");
+  if (scrollBox) {
+    syncSheetTableZoom(scrollBox, getOfficePanelZoom(table));
+  }
 }
 
 function fileIsDocx(extension: string): boolean {
@@ -1952,6 +2026,7 @@ async function renderSheet(
         )
       );
       windowControls?.update();
+      syncSheetTableZoom(tableWrapper, getOfficePanelZoom(tableWrapper));
     };
 
     content.append(heading, summary);
@@ -2528,6 +2603,7 @@ function renderParsedSheets(panel: HTMLElement, sheets: ParsedSheet[], emptyMess
     const renderTableWindow = () => {
       tableWrapper.replaceChildren(createParsedSheetTable(sheet, sheetIndex, viewport, columnSizing, renderTableWindow));
       windowControls?.update();
+      syncSheetTableZoom(tableWrapper, getOfficePanelZoom(tableWrapper));
     };
 
     content.append(heading, summary);
@@ -3230,10 +3306,13 @@ function appendColumnResizeHandle(
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
-    const startWidth = columnSizing.widths.get(columnIndex) ?? cell.getBoundingClientRect().width;
+    // Pointer deltas are in visual pixels; column widths live in the table's
+    // pre-zoom coordinate space, so divide the delta by the current zoom.
+    const zoom = getOfficePanelZoom(cell);
+    const startWidth = columnSizing.widths.get(columnIndex) ?? cell.getBoundingClientRect().width / zoom;
     handle.setPointerCapture(event.pointerId);
     const onMove = (moveEvent: PointerEvent) => {
-      const nextWidth = Math.max(48, Math.min(720, Math.round(startWidth + moveEvent.clientX - startX)));
+      const nextWidth = Math.max(48, Math.min(720, Math.round(startWidth + (moveEvent.clientX - startX) / zoom)));
       columnSizing.widths.set(columnIndex, nextWidth);
       updateRenderedColumnWidth(cell, columnIndex, nextWidth);
     };
@@ -3268,6 +3347,7 @@ function updateRenderedColumnWidth(cell: HTMLTableCellElement, columnIndex: numb
   }, 0);
   if (tableWidth > 0) {
     table.style.width = `${Math.round(tableWidth)}px`;
+    resetSheetTableZoomLock(table);
   }
 }
 
@@ -3415,23 +3495,20 @@ function readWorkbookColor(color: { rgb?: string; indexed?: number } | undefined
   return /^[\da-f]{6}$/i.test(rgb) ? `#${rgb}` : undefined;
 }
 
-// Cell fills and font colors from the file assume Excel's white canvas. Resolve
-// an ink per cell so the viewer theme can never pair light text with a light
-// fill (or dark text with the dark-theme grid).
+// Cell fills and font colors from the file assume Excel's white canvas. The
+// sheet grid stays on a light surface in both viewer themes (style.css pins
+// it in dark mode), so resolve one theme-independent ink per cell.
 function applyWorkbookCellInk(cell: HTMLTableCellElement, fill: string | undefined, fontColor: string | undefined): void {
   if (fill) {
     // Inline colors: a filled cell is self-contained and theme-independent.
     cell.style.color = fontColor ?? (sheetColorLuminance(fill) < 0.42 ? "#f8fafc" : "#1f2937");
     return;
   }
-  if (!fontColor) {
-    return;
+  if (fontColor) {
+    // No fill: the ink sits on the always-light grid surface; clamp only the
+    // near-white colors that would vanish on it.
+    cell.style.color = readableSheetInk(fontColor);
   }
-  // No fill: the ink sits on the themed grid surface, so expose per-theme
-  // readable variants and let the stylesheet pick by theme.
-  cell.classList.add("ofv-cell-ink");
-  cell.style.setProperty("--ofv-cell-ink-light", readableSheetInk(fontColor, "light"));
-  cell.style.setProperty("--ofv-cell-ink-dark", readableSheetInk(fontColor, "dark"));
 }
 
 function sheetColorLuminance(hex: string): number {
@@ -3442,14 +3519,14 @@ function sheetColorLuminance(hex: string): number {
   return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }
 
-// Keep the hue but clamp lightness so the ink stays legible on the target surface.
-function readableSheetInk(hex: string, surface: "light" | "dark"): string {
+// Keep the hue but clamp lightness so the ink stays legible on the light grid surface.
+function readableSheetInk(hex: string): string {
   const luminance = sheetColorLuminance(hex);
-  if (surface === "light" ? luminance <= 0.62 : luminance >= 0.12) {
+  if (luminance <= 0.62) {
     return hex;
   }
   const [h, s, l] = sheetHexToHsl(hex);
-  return sheetHslToHex(h, s, surface === "light" ? Math.min(l, 0.42) : Math.max(l, 0.68));
+  return sheetHslToHex(h, s, Math.min(l, 0.42));
 }
 
 function sheetHexToHsl(hex: string): [number, number, number] {

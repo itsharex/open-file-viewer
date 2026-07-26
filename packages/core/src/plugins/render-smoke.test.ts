@@ -124,6 +124,13 @@ const msgReaderDataMock = vi.hoisted(() =>
 );
 const msgReaderAttachmentMock = vi.hoisted(() => vi.fn());
 
+vi.mock("mermaid", () => ({
+  default: {
+    initialize: vi.fn(),
+    render: vi.fn(async () => ({ svg: "<svg><g><text>mermaid smoke</text></g></svg>" }))
+  }
+}));
+
 vi.mock("docx-preview", () => ({
   renderAsync: renderDocxAsync
 }));
@@ -1738,6 +1745,8 @@ function textAliasSmokeCases(): SmokeCase[] {
     { extension: "yaml", content: "name: open-file-viewer", text: "open-file-viewer" },
     { extension: "yml", content: "preview:\n  fit: contain", text: "preview" },
     { extension: "markdown", content: "# Open File Viewer", selector: ".ofv-markdown-body", text: "Open File Viewer" },
+    { extension: "mmd", content: "graph TD;\n  A[Start] --> B[End];", selector: ".ofv-mermaid-file", text: "mermaid smoke" },
+    { extension: "mermaid", content: "graph LR;\n  A --> B;", selector: ".ofv-mermaid-file", text: "mermaid smoke" },
     { extension: "toml", content: "name = \"open-file-viewer\"", text: "open-file-viewer" },
     { extension: "ini", content: "[preview]\nfit=contain", text: "preview" },
     { extension: "proto", content: "message Preview { string name = 1; }", text: "Preview" },
@@ -2665,7 +2674,7 @@ function commandPreviewCases(): SmokeCase[] {
       text: "Hello email body",
       afterCommands(container) {
         expect(container.querySelector(".ofv-fallback")).toBeNull();
-        expect(container.querySelector<HTMLElement>(".ofv-email")?.style.getPropertyValue("--ofv-email-zoom")).toBe("1");
+        expect(container.querySelector<HTMLElement>(".ofv-email-content")?.style.zoom ?? "").toBe("");
       }
     },
     {
@@ -2921,7 +2930,7 @@ function commandPreviewCases(): SmokeCase[] {
       selector: ".ofv-email",
       text: "Hello email body",
       afterCommands(container) {
-        expect(container.querySelector<HTMLElement>(".ofv-email")?.style.getPropertyValue("--ofv-email-zoom")).toBe("1");
+        expect(container.querySelector<HTMLElement>(".ofv-email-content")?.style.zoom ?? "").toBe("");
       }
     },
     {
@@ -2932,7 +2941,7 @@ function commandPreviewCases(): SmokeCase[] {
       selector: ".ofv-email-body-iframe",
       text: "HTML email",
       afterCommands(container) {
-        expect(container.querySelector<HTMLElement>(".ofv-email")?.style.getPropertyValue("--ofv-email-zoom")).toBe("1");
+        expect(container.querySelector<HTMLElement>(".ofv-email-content")?.style.zoom ?? "").toBe("");
       }
     },
     {
@@ -3259,9 +3268,7 @@ function rotateLeftCases(): RotateLeftCase[] {
         );
       },
       assertAfterRepeatedReset(container) {
-        expect(container.querySelector<HTMLCanvasElement>(".ofv-psd-canvas")?.style.transform).toBe(
-          "scale(1) rotate(0deg)"
-        );
+        expect(container.querySelector<HTMLCanvasElement>(".ofv-psd-canvas")?.style.transform).toBe("");
       }
     },
     {

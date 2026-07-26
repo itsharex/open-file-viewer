@@ -197,6 +197,129 @@ describe("textPlugin", () => {
     expect(container.querySelector("code.language-mermaid")?.textContent).toContain("not a diagram");
   });
 
+  it("renders standalone mermaid files as diagrams", async () => {
+    mermaidRender.mockResolvedValue({ svg: "<svg><g><text>flow</text></g></svg>" });
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: new Blob(["graph TD;\nA-->B;\n"], { type: "text/vnd.mermaid" }),
+      fileName: "flow.mmd",
+      plugins: [textPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-mermaid-file .ofv-mermaid svg")));
+
+    expect(mermaidRender).toHaveBeenCalledWith(
+      expect.stringContaining("ofv-mermaid-"),
+      expect.stringContaining("graph TD;")
+    );
+    expect(container.querySelector(".ofv-code-container")).toBeNull();
+  });
+
+  it("sanitizes standalone mermaid svg output before inserting it", async () => {
+    mermaidRender.mockResolvedValue({
+      svg: '<svg><g onclick="alert(1)"></g><script>alert(2)</script><text>node label</text></svg>'
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: new Blob(["graph TD;\nA-->B;\n"], { type: "text/vnd.mermaid" }),
+      fileName: "flow.mermaid",
+      plugins: [textPlugin()]
+    });
+
+    const diagram = await waitFor(() => container.querySelector<HTMLElement>(".ofv-mermaid-file .ofv-mermaid"));
+
+    expect(diagram.querySelector("script")).toBeNull();
+    expect(diagram.querySelector("g")?.getAttribute("onclick")).toBeNull();
+    expect(diagram.textContent).toContain("node label");
+  });
+
+  it("falls back to the source view when a standalone mermaid file cannot render", async () => {
+    mermaidRender.mockRejectedValue(new Error("parse error"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: new Blob(["not a diagram"], { type: "text/vnd.mermaid" }),
+      fileName: "broken.mmd",
+      plugins: [textPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-code-container")));
+
+    expect(warn.mock.calls.some((call) => String(call[0]).includes("Mermaid file render failed"))).toBe(true);
+    expect(container.querySelector(".ofv-mermaid")).toBeNull();
+    expect(container.textContent).toContain("not a diagram");
+  });
+
+  it("falls back to the source view for oversized standalone mermaid files", async () => {
+    mermaidRender.mockClear();
+    const container = document.createElement("div");
+    document.body.append(container);
+    const oversized = `graph TD;\nA-->B;\n${"%% padding\n".repeat(5000)}`;
+
+    createViewer({
+      container,
+      file: new Blob([oversized], { type: "text/vnd.mermaid" }),
+      fileName: "huge.mmd",
+      plugins: [textPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-code-container")));
+
+    expect(mermaidRender).not.toHaveBeenCalled();
+    expect(container.querySelector(".ofv-mermaid")).toBeNull();
+  });
+
+  it("keeps oversized mermaid fences as source blocks in markdown", async () => {
+    mermaidRender.mockClear();
+    const container = document.createElement("div");
+    document.body.append(container);
+    const oversized = `graph TD;\nA-->B;\n${"%% padding\n".repeat(5000)}`;
+
+    createViewer({
+      container,
+      file: new Blob([`# Big\n\n\`\`\`mermaid\n${oversized}\`\`\`\n`], { type: "text/markdown" }),
+      fileName: "big.md",
+      plugins: [textPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-markdown-body code.language-mermaid")));
+
+    expect(mermaidRender).not.toHaveBeenCalled();
+    expect(container.querySelector(".ofv-mermaid")).toBeNull();
+  });
+
+  it("supports toolbar zoom for standalone mermaid previews", async () => {
+    mermaidRender.mockResolvedValue({ svg: "<svg><g><text>flow</text></g></svg>" });
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: new Blob(["graph TD;\nA-->B;\n"], { type: "text/vnd.mermaid" }),
+      fileName: "flow.mmd",
+      plugins: [textPlugin()],
+      toolbar: true
+    });
+
+    const view = await waitFor(() => container.querySelector<HTMLElement>(".ofv-mermaid-file"));
+    const zoomIn = await waitFor(() => {
+      const button = findToolbarButton(container, "Zoom in");
+      return button && !button.disabled ? button : false;
+    });
+
+    zoomIn.click();
+    await waitFor(() => view.style.getPropertyValue("--ofv-mermaid-zoom") === "1.15");
+  });
+
   it("shows a local fallback when remote text cannot be fetched", async () => {
     const container = document.createElement("div");
     const onError = vi.fn();

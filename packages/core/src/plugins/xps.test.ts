@@ -77,7 +77,10 @@ describe("xpsPlugin", () => {
     expect(rotate?.disabled).toBe(false);
 
     zoomIn?.click();
-    expect(canvas?.getAttribute("viewBox")).not.toBe(initialViewBox);
+    // The viewBox stays intact (no cropping); zoom grows the layout width instead.
+    expect(canvas?.getAttribute("viewBox")).toBe(initialViewBox);
+    expect(canvas?.style.width).toBe(`${800 * 1.18}px`);
+    expect(canvas?.style.maxWidth).toBe("none");
     expect(zoomReset?.textContent).toBe("118%");
 
     rotate?.click();

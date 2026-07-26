@@ -226,6 +226,12 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
   let rotation = 0;
   let currentPage = 1;
 
+  // The scroller's clientWidth already excludes its (persistent) scrollbars;
+  // sizing pages from the outer viewer width would overflow by the scrollbar
+  // width and show a permanent sliver of horizontal scroll at 100%.
+  const resolveLayoutWidth = (size: PreviewSize) =>
+    scroller.clientWidth > 0 ? scroller.clientWidth : size.width;
+
   const goToPage = (page: number, scroll = true) => {
     currentPage = Math.min(pdfDocument.numPages, Math.max(1, Math.round(page) || 1));
     pageNavigator.setCurrent(currentPage);
@@ -301,7 +307,7 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
       const scale =
         options.fit === "actual"
           ? zoomFactor
-          : Math.max(0.05, Math.min(5, (getPdfAvailableWidth(size.width) / rotatedPdfWidth(meta, rotation)) * zoomFactor));
+          : Math.max(0.05, Math.min(5, (getPdfAvailableWidth(resolveLayoutWidth(size)) / rotatedPdfWidth(meta, rotation)) * zoomFactor));
       const viewport = page.getViewport({ scale, rotation: getPdfRenderRotation(meta, rotation) });
       const outputScale = getPdfOutputScale();
       const cssWidth = Math.floor(viewport.width);
@@ -421,7 +427,7 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
       const scale =
         options.fit === "actual"
           ? zoomFactor
-          : Math.max(0.05, Math.min(5, (getPdfAvailableWidth(size.width) / rotatedWidth) * zoomFactor));
+          : Math.max(0.05, Math.min(5, (getPdfAvailableWidth(resolveLayoutWidth(size)) / rotatedWidth) * zoomFactor));
 
       const w = Math.floor(rotatedWidth * scale);
       const h = Math.floor(rotatedHeight * scale);
@@ -463,6 +469,13 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
 
   renderLayout(options.size);
 
+  // Zooming past the container width anchors the page at its left edge, which
+  // reads as "nothing changed" on overlay-scrollbar platforms. Keep the page
+  // center in view instead, like native PDF viewers do.
+  const centerHorizontalScroll = () => {
+    scroller.scrollLeft = Math.max(0, (scroller.scrollWidth - scroller.clientWidth) / 2);
+  };
+
   let resizeTimer: number | undefined;
   return {
     canCommand(command) {
@@ -478,17 +491,20 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
       if (command === "zoom-in") {
         zoomFactor = Math.min(4, zoomFactor + 0.15);
         renderLayout(currentSize);
+        centerHorizontalScroll();
         return true;
       }
       if (command === "zoom-out") {
         zoomFactor = Math.max(0.25, zoomFactor - 0.15);
         renderLayout(currentSize);
+        centerHorizontalScroll();
         return true;
       }
       if (command === "zoom-reset") {
         zoomFactor = 1;
         rotation = 0;
         renderLayout(currentSize);
+        centerHorizontalScroll();
         return true;
       }
       if (command === "rotate-right" || command === "rotate-left") {
