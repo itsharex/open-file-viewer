@@ -220,18 +220,26 @@ type OfdImageObject = {
   height: number;
   resourceId: string;
   href?: string;
+  transform?: string;
 };
 
 type OfdPagePreview = {
   name: string;
   width: number;
   height: number;
+  objects: OfdPageObject[];
   texts: OfdTextObject[];
   paths: OfdPathObject[];
   lines: OfdLineObject[];
   images: OfdImageObject[];
   stamps: OfdImageObject[];
 };
+
+type OfdPageObject =
+  | { type: "text"; item: OfdTextObject }
+  | { type: "path"; item: OfdPathObject }
+  | { type: "line"; item: OfdLineObject }
+  | { type: "image"; item: OfdImageObject };
 
 type OfdContext = {
   images: Map<string, string>;
@@ -303,7 +311,7 @@ function parseOfdPage(
 ): OfdPagePreview {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.querySelector("parsererror")) {
-    return { name, width: 210, height: 297, texts: [], paths: [], lines: [], images: [], stamps };
+    return { name, width: 210, height: 297, objects: [], texts: [], paths: [], lines: [], images: [], stamps };
   }
   const pageSize = parseOfdPageSize(doc, defaultPageSize);
   const templatePages = templateXmls.map((templateXml) => {
@@ -315,35 +323,49 @@ function parseOfdPage(
   const paths = [...templatePages.flatMap((page) => page.paths), ...pageContent.paths];
   const lines = [...templatePages.flatMap((page) => page.lines), ...pageContent.lines];
   const imageObjects = [...templatePages.flatMap((page) => page.images), ...pageContent.images];
+  const objects = [...templatePages.flatMap((page) => page.objects), ...pageContent.objects];
   if (pageSize.explicit) {
-    return { name, width: pageSize.width, height: pageSize.height, texts, paths, lines, images: imageObjects, stamps };
+    return { name, width: pageSize.width, height: pageSize.height, objects, texts, paths, lines, images: imageObjects, stamps };
   }
   const bounds = createOfdBounds(texts, paths, lines, [...imageObjects, ...stamps]);
   const width = Math.max(pageSize.width, ...bounds.map((item) => item.x + item.width + 12));
   const height = Math.max(pageSize.height, ...bounds.map((item) => item.y + item.height + 12));
-  return { name, width, height, texts, paths, lines, images: imageObjects, stamps };
+  return { name, width, height, objects, texts, paths, lines, images: imageObjects, stamps };
 }
 
 function parseOfdPageContent(
   doc: Document,
   resources: OfdPageResources
 ): Omit<OfdPagePreview, "name" | "width" | "height" | "stamps"> {
-  const textObjects = Array.from(doc.getElementsByTagName("*")).filter((element) => element.localName === "TextObject");
-  const texts = textObjects.flatMap((element) => parseOfdTextObject(element, resources));
-  const paths = Array.from(doc.getElementsByTagName("*"))
-    .filter((element) => element.localName === "PathObject")
-    .flatMap((element) => parseOfdPathObject(element, resources));
-  const lines = Array.from(doc.getElementsByTagName("*"))
-    .filter((element) => element.localName === "LineObject")
-    .flatMap((element) => parseOfdLineObject(element, resources));
-  const imageObjects = Array.from(doc.getElementsByTagName("*"))
-    .filter((element) => element.localName === "ImageObject")
-    .flatMap((element) => parseOfdImageObject(element, resources.images));
-  return { texts, paths, lines, images: imageObjects };
+  const objects: OfdPageObject[] = [];
+  for (const element of Array.from(doc.getElementsByTagName("*"))) {
+    if (element.localName === "TextObject") {
+      objects.push(...parseOfdTextObject(element, resources).map((item): OfdPageObject => ({ type: "text", item })));
+      continue;
+    }
+    if (element.localName === "PathObject") {
+      objects.push(...parseOfdPathObject(element, resources).map((item): OfdPageObject => ({ type: "path", item })));
+      continue;
+    }
+    if (element.localName === "LineObject") {
+      objects.push(...parseOfdLineObject(element, resources).map((item): OfdPageObject => ({ type: "line", item })));
+      continue;
+    }
+    if (element.localName === "ImageObject") {
+      objects.push(...parseOfdImageObject(element, resources.images).map((item): OfdPageObject => ({ type: "image", item })));
+    }
+  }
+  return {
+    objects,
+    texts: objects.filter((object): object is { type: "text"; item: OfdTextObject } => object.type === "text").map((object) => object.item),
+    paths: objects.filter((object): object is { type: "path"; item: OfdPathObject } => object.type === "path").map((object) => object.item),
+    lines: objects.filter((object): object is { type: "line"; item: OfdLineObject } => object.type === "line").map((object) => object.item),
+    images: objects.filter((object): object is { type: "image"; item: OfdImageObject } => object.type === "image").map((object) => object.item)
+  };
 }
 
 function emptyOfdPageContent(): Omit<OfdPagePreview, "name" | "width" | "height" | "stamps"> {
-  return { texts: [], paths: [], lines: [], images: [] };
+  return { objects: [], texts: [], paths: [], lines: [], images: [] };
 }
 
 function createOfdBounds(
@@ -438,9 +460,7 @@ function parseOfdPathObject(element: Element, resources: OfdPageResources): OfdP
   const boundary = parseBoundary(getOfdAttribute(element, "Boundary"));
   const ctm = parseOfdCtm(getOfdAttribute(element, "CTM"));
   const drawParam = resolveOfdDrawParam(element, resources.drawParams);
-  const commands = Array.from(element.getElementsByTagName("*")).filter(
-    (child) => child.localName === "AbbreviatedData" || child.localName === "PathData"
-  );
+  const commands = getDirectOfdChildren(element, "AbbreviatedData", "PathData");
   const raw = commands.map((child) => child.textContent || "").join(" ").trim();
   if (!raw) {
     return [];
@@ -499,15 +519,17 @@ function parseOfdLineObject(element: Element, resources: OfdPageResources): OfdL
 
 function parseOfdImageObject(element: Element, images: Map<string, string>): OfdImageObject[] {
   const boundary = parseBoundary(getOfdAttribute(element, "Boundary"));
+  const ctm = parseOfdCtm(getOfdAttribute(element, "CTM"));
   const resourceId = getOfdAttribute(element, "ResourceID") || getOfdAttribute(element, "ResourceId") || "";
   return [
     {
-      x: boundary.x,
-      y: boundary.y,
-      width: boundary.width || 32,
-      height: boundary.height || 32,
+      x: ctm ? 0 : boundary.x,
+      y: ctm ? 0 : boundary.y,
+      width: ctm ? 1 : boundary.width || 32,
+      height: ctm ? 1 : boundary.height || 32,
       resourceId,
-      href: images.get(resourceId)
+      href: images.get(resourceId),
+      transform: ctm ? createOfdPathTransform(boundary.x, boundary.y, ctm) : undefined
     }
   ];
 }
@@ -530,66 +552,20 @@ function renderOfdPage(page: OfdPagePreview): HTMLElement {
   paper.setAttribute("fill", "white");
   svg.append(paper);
 
-  for (const item of page.images) {
-    appendOfdImage(svg, item);
-  }
-
-  for (const item of page.paths) {
-    const path = document.createElementNS(svg.namespaceURI, "path");
-    path.setAttribute("d", item.d);
-    path.setAttribute("transform", item.transform);
-    path.setAttribute("fill", item.fill);
-    if (item.fillRule) {
-      path.setAttribute("fill-rule", item.fillRule);
+  for (const object of page.objects) {
+    if (object.type === "path") {
+      appendOfdPath(svg, object.item);
+      continue;
     }
-    path.setAttribute("stroke", item.stroke);
-    path.setAttribute("stroke-width", String(item.strokeWidth));
-    svg.append(path);
-  }
-
-  for (const item of page.lines) {
-    const line = document.createElementNS(svg.namespaceURI, "line");
-    line.setAttribute("x1", String(item.x1));
-    line.setAttribute("y1", String(item.y1));
-    line.setAttribute("x2", String(item.x2));
-    line.setAttribute("y2", String(item.y2));
-    line.setAttribute("stroke", item.stroke);
-    line.setAttribute("stroke-width", String(item.strokeWidth));
-    line.setAttribute("stroke-linecap", "round");
-    svg.append(line);
-  }
-
-  for (const item of page.texts) {
-    const text = document.createElementNS(svg.namespaceURI, "text");
-    text.setAttribute("x", String(item.x));
-    text.setAttribute("y", String(item.y));
-    if (item.transform) {
-      text.setAttribute("transform", item.transform);
+    if (object.type === "line") {
+      appendOfdLine(svg, object.item);
+      continue;
     }
-    text.setAttribute("font-size", String(item.size));
-    text.setAttribute("fill", item.color);
-    text.setAttribute("font-weight", item.weight);
-    text.setAttribute("font-family", item.fontFamily);
-    if (item.letterSpacing !== undefined) {
-      text.setAttribute("letter-spacing", String(item.letterSpacing));
+    if (object.type === "text") {
+      appendOfdText(svg, object.item);
+      continue;
     }
-    if (item.deltaX && item.deltaX.length > 0) {
-      const chars = Array.from(item.text);
-      let x = item.x;
-      for (let index = 0; index < chars.length; index += 1) {
-        const span = document.createElementNS(svg.namespaceURI, "tspan");
-        span.setAttribute("x", String(x));
-        span.setAttribute("y", String(item.y));
-        if (index < chars.length - 1) {
-          x += item.deltaX[Math.min(index, item.deltaX.length - 1)] || item.size;
-        }
-        span.textContent = chars[index];
-        text.append(span);
-      }
-    } else {
-      text.textContent = item.text;
-    }
-    svg.append(text);
+    appendOfdImage(svg, object.item);
   }
 
   for (const item of page.stamps) {
@@ -600,6 +576,64 @@ function renderOfdPage(page: OfdPagePreview): HTMLElement {
   return figure;
 }
 
+function appendOfdPath(svg: SVGElement, item: OfdPathObject): void {
+  const path = document.createElementNS(svg.namespaceURI, "path");
+  path.setAttribute("d", item.d);
+  path.setAttribute("transform", item.transform);
+  path.setAttribute("fill", item.fill);
+  if (item.fillRule) {
+    path.setAttribute("fill-rule", item.fillRule);
+  }
+  path.setAttribute("stroke", item.stroke);
+  path.setAttribute("stroke-width", String(item.strokeWidth));
+  svg.append(path);
+}
+
+function appendOfdLine(svg: SVGElement, item: OfdLineObject): void {
+  const line = document.createElementNS(svg.namespaceURI, "line");
+  line.setAttribute("x1", String(item.x1));
+  line.setAttribute("y1", String(item.y1));
+  line.setAttribute("x2", String(item.x2));
+  line.setAttribute("y2", String(item.y2));
+  line.setAttribute("stroke", item.stroke);
+  line.setAttribute("stroke-width", String(item.strokeWidth));
+  line.setAttribute("stroke-linecap", "round");
+  svg.append(line);
+}
+
+function appendOfdText(svg: SVGElement, item: OfdTextObject): void {
+  const text = document.createElementNS(svg.namespaceURI, "text");
+  text.setAttribute("x", String(item.x));
+  text.setAttribute("y", String(item.y));
+  if (item.transform) {
+    text.setAttribute("transform", item.transform);
+  }
+  text.setAttribute("font-size", String(item.size));
+  text.setAttribute("fill", item.color);
+  text.setAttribute("font-weight", item.weight);
+  text.setAttribute("font-family", item.fontFamily);
+  if (item.letterSpacing !== undefined) {
+    text.setAttribute("letter-spacing", String(item.letterSpacing));
+  }
+  if (item.deltaX && item.deltaX.length > 0) {
+    const chars = Array.from(item.text);
+    let x = item.x;
+    for (let index = 0; index < chars.length; index += 1) {
+      const span = document.createElementNS(svg.namespaceURI, "tspan");
+      span.setAttribute("x", String(x));
+      span.setAttribute("y", String(item.y));
+      if (index < chars.length - 1) {
+        x += item.deltaX[Math.min(index, item.deltaX.length - 1)] || item.size;
+      }
+      span.textContent = chars[index];
+      text.append(span);
+    }
+  } else {
+    text.textContent = item.text;
+  }
+  svg.append(text);
+}
+
 function appendOfdImage(svg: SVGElement, item: OfdImageObject): void {
   if (item.href) {
     const image = document.createElementNS(svg.namespaceURI, "image");
@@ -608,6 +642,9 @@ function appendOfdImage(svg: SVGElement, item: OfdImageObject): void {
     image.setAttribute("width", String(item.width));
     image.setAttribute("height", String(item.height));
     image.setAttribute("href", item.href);
+    if (item.transform) {
+      image.setAttribute("transform", item.transform);
+    }
     image.setAttribute("preserveAspectRatio", "xMidYMid meet");
     svg.append(image);
   } else {
@@ -616,6 +653,9 @@ function appendOfdImage(svg: SVGElement, item: OfdImageObject): void {
     placeholder.setAttribute("y", String(item.y));
     placeholder.setAttribute("width", String(item.width));
     placeholder.setAttribute("height", String(item.height));
+    if (item.transform) {
+      placeholder.setAttribute("transform", item.transform);
+    }
     placeholder.setAttribute("fill", "#f8fafc");
     placeholder.setAttribute("stroke", "#94a3b8");
     placeholder.setAttribute("stroke-dasharray", "4 3");
@@ -942,6 +982,11 @@ function parseOfdBoolean(value: string | null): boolean | undefined {
 
 function findOfdChild(element: Element, localName: string): Element | undefined {
   return Array.from(element.children).find((child) => child.localName === localName);
+}
+
+function getDirectOfdChildren(element: Element, ...localNames: string[]): Element[] {
+  const allowed = new Set(localNames);
+  return Array.from(element.children).filter((child) => allowed.has(child.localName));
 }
 
 function parsePoint(value: string | null, fallback: { x: number; y: number }): { x: number; y: number } {

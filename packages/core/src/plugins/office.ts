@@ -541,7 +541,7 @@ async function renderDocx(panel: HTMLElement, arrayBuffer: ArrayBuffer, fit: Pre
       docxRenderTimeoutMs(),
       "DOCX rendering"
     );
-    await normalizeDocxLayout(content, arrayBuffer);
+    await normalizeDocxLayout(content, arrayBuffer, styleContainer);
     const shouldUseTextboxFallback =
       (await docxPreviewLooksBlank(content, arrayBuffer)) ||
       (await docxPreviewMissesRichTextboxContent(content, arrayBuffer)) ||
@@ -1336,8 +1336,9 @@ function looksLikeDocxTextboxHeading(value: string): boolean {
   return text.length > 0 && text.length <= 12 && !/[0-9@.:：]/.test(text);
 }
 
-async function normalizeDocxLayout(container: HTMLElement, arrayBuffer: ArrayBuffer): Promise<void> {
+async function normalizeDocxLayout(container: HTMLElement, arrayBuffer: ArrayBuffer, styleContainer?: HTMLElement): Promise<void> {
   const [hints, charts] = await Promise.all([readDocxLayoutHints(arrayBuffer), readDocxCharts(arrayBuffer)]);
+  normalizeDocxNumberingStyles(styleContainer);
   repairDocxChartPlaceholders(container, charts);
   const pages = container.querySelectorAll<HTMLElement>("section.ofv-docx");
   for (const page of pages) {
@@ -1352,6 +1353,16 @@ async function normalizeDocxLayout(container: HTMLElement, arrayBuffer: ArrayBuf
       }
     }
   }
+}
+
+function normalizeDocxNumberingStyles(styleContainer: HTMLElement | undefined): void {
+  if (!styleContainer?.textContent) {
+    return;
+  }
+  styleContainer.textContent = styleContainer.textContent.replace(
+    /(p\.[\w-]+-num-\d+-\d+:before\s*\{[\s\S]*?content:\s*"[^"\\]*(?:\\.[^"\\]*)*)\\9(";\s*[\s\S]*?\})/g,
+    "$1\\00a0$2"
+  );
 }
 
 type DocxChartPreview = ChartPreview & {

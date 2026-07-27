@@ -603,6 +603,182 @@ describe("ofdPlugin", () => {
     );
   });
 
+  it("does not render clip paths as visible OFD path geometry", async () => {
+    const zip = createBasicOfdZip(
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Area>
+          <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+        </ofd:Area>
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:PathObject Boundary="20 20 40 24" LineWidth="1">
+              <ofd:StrokeColor Value="255 0 0"/>
+              <ofd:Clips>
+                <ofd:Clip>
+                  <ofd:Area>
+                    <ofd:Path Boundary="0 0 40 24" Stroke="false" Fill="true">
+                      <ofd:AbbreviatedData>M 0 0 L 40 0 L 40 24 L 0 24 C</ofd:AbbreviatedData>
+                    </ofd:Path>
+                  </ofd:Area>
+                </ofd:Clip>
+              </ofd:Clips>
+              <ofd:AbbreviatedData>M 2 12 B 2 6 12 2 20 2 B 28 2 38 6 38 12 C</ofd:AbbreviatedData>
+            </ofd:PathObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "clip-path.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-ofd-pages svg")));
+
+    const path = container.querySelector(".ofv-ofd-page path");
+    expect(path?.getAttribute("d")).toBe("M 2 12 C 2 6 12 2 20 2 C 28 2 38 6 38 12 Z");
+    expect(path?.getAttribute("d")).not.toContain("L 40 24");
+  });
+
+  it("applies OFD image CTM without stretching the image to the full page boundary", async () => {
+    const pngBytes = Uint8Array.from(
+      atob(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+      ),
+      (char) => char.charCodeAt(0)
+    );
+    const zip = createBasicOfdZip(
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Area>
+          <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+        </ofd:Area>
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:ImageObject Boundary="0 0 210 140" CTM="4 0 0 5 50 60" ResourceID="100"/>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`,
+      `<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:CommonData>
+          <ofd:PageArea>
+            <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+          </ofd:PageArea>
+          <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>
+        </ofd:CommonData>
+        <ofd:Pages>
+          <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>
+        </ofd:Pages>
+      </ofd:Document>`,
+      `<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">
+        <ofd:MultiMedias>
+          <ofd:MultiMedia ID="100" Type="Image">
+            <ofd:MediaFile>dot.png</ofd:MediaFile>
+          </ofd:MultiMedia>
+        </ofd:MultiMedias>
+      </ofd:Res>`
+    );
+    zip.file("Doc_0/Res/dot.png", pngBytes);
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "image-ctm.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-ofd-page image")));
+
+    const image = container.querySelector(".ofv-ofd-page image");
+    expect(image?.getAttribute("x")).toBe("0");
+    expect(image?.getAttribute("y")).toBe("0");
+    expect(image?.getAttribute("width")).toBe("1");
+    expect(image?.getAttribute("height")).toBe("1");
+    expect(image?.getAttribute("transform")).toBe("translate(0 0) matrix(4 0 0 5 50 60)");
+  });
+
+  it("keeps OFD template backgrounds behind page images and foreground vectors", async () => {
+    const pngBytes = Uint8Array.from(
+      atob(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+      ),
+      (char) => char.charCodeAt(0)
+    );
+    const zip = createBasicOfdZip(
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Template TemplateID="10"/>
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:ImageObject Boundary="30 30 20 20" ResourceID="100"/>
+            <ofd:PathObject Boundary="35 35 10 10" Stroke="false" Fill="true">
+              <ofd:FillColor Value="255 0 0"/>
+              <ofd:AbbreviatedData>M 0 0 L 10 0 L 10 10 L 0 10 C</ofd:AbbreviatedData>
+            </ofd:PathObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`,
+      `<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:CommonData>
+          <ofd:PageArea>
+            <ofd:PhysicalBox>0 0 100 80</ofd:PhysicalBox>
+          </ofd:PageArea>
+          <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>
+          <ofd:TemplatePage ID="10" BaseLoc="Tpls/Tpl_0/Content.xml"/>
+        </ofd:CommonData>
+        <ofd:Pages>
+          <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>
+        </ofd:Pages>
+      </ofd:Document>`,
+      `<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">
+        <ofd:MultiMedias>
+          <ofd:MultiMedia ID="100" Type="Image">
+            <ofd:MediaFile>qr.png</ofd:MediaFile>
+          </ofd:MultiMedia>
+        </ofd:MultiMedias>
+      </ofd:Res>`
+    );
+    zip.file(
+      "Doc_0/Tpls/Tpl_0/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:Content>
+          <ofd:Layer>
+            <ofd:PathObject Boundary="0 0 100 80" Stroke="false" Fill="true">
+              <ofd:FillColor Value="255 255 255"/>
+              <ofd:AbbreviatedData>M 0 0 L 100 0 L 100 80 L 0 80 C</ofd:AbbreviatedData>
+            </ofd:PathObject>
+          </ofd:Layer>
+        </ofd:Content>
+      </ofd:Page>`
+    );
+    zip.file("Doc_0/Res/qr.png", pngBytes);
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: buffer,
+      fileName: "z-order.ofd",
+      plugins: [ofdPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-ofd-page image")));
+
+    const children = Array.from(container.querySelector(".ofv-ofd-page svg")?.children || []);
+    expect(children.map((child) => child.tagName.toLowerCase())).toEqual(["rect", "path", "image", "path"]);
+  });
+
   it("applies layer-level DrawParam colors, widths and Relative inheritance", async () => {
     const zip = new JSZip();
     zip.file(
@@ -978,6 +1154,37 @@ describe("ofdPlugin", () => {
     expect(container.querySelector<HTMLAnchorElement>(".ofv-fallback a")?.href).toBe(objectUrl);
   });
 });
+
+function createBasicOfdZip(pageXml: string, documentXml?: string, documentResXml?: string): JSZip {
+  const zip = new JSZip();
+  zip.file(
+    "OFD.xml",
+    `<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016">
+      <ofd:DocBody>
+        <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>
+      </ofd:DocBody>
+    </ofd:OFD>`
+  );
+  zip.file(
+    "Doc_0/Document.xml",
+    documentXml ||
+      `<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:CommonData>
+          <ofd:PageArea>
+            <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+          </ofd:PageArea>
+        </ofd:CommonData>
+        <ofd:Pages>
+          <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>
+        </ofd:Pages>
+      </ofd:Document>`
+  );
+  if (documentResXml) {
+    zip.file("Doc_0/DocumentRes.xml", documentResXml);
+  }
+  zip.file("Doc_0/Pages/Page_0/Content.xml", pageXml);
+  return zip;
+}
 
 async function waitFor(predicate: () => boolean, timeout = 1000): Promise<void> {
   const start = Date.now();
