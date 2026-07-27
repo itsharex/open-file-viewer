@@ -138,6 +138,10 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-tabs button")).toContain("text-overflow: ellipsis");
     expect(rule(".ofv-table-scroll")).toContain("max-width: 100%");
     expect(rule(".ofv-table-scroll")).toContain("overflow: auto");
+    expect(rule(".ofv-workbook-table")).toContain("font-size: 11px");
+    expect(rule(".ofv-workbook-table td,\n.ofv-workbook-table th")).toContain("padding: 2px 2px 2px 3px");
+    expect(rule(".ofv-workbook-table td,\n.ofv-workbook-table th")).toContain("line-height: 1.25");
+    expect(rule(".ofv-cell-number")).toContain("text-align: right");
     expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("white-space: nowrap");
     expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("overflow-wrap: normal");
     expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("overflow: hidden");
@@ -156,6 +160,9 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-pptx-viewer")).toContain("overflow: auto");
     expect(rule(".ofv-pptx-viewer > div[data-slide-index]")).toContain("max-width: 100%");
     expect(rule(".ofv-pptx-viewer > div[data-slide-index]")).toContain("overflow: auto");
+    expect(rule(".ofv-pptx-circle-callout-text")).toContain("align-items: center");
+    expect(rule(".ofv-pptx-circle-callout-text")).toContain("justify-content: center");
+    expect(rule(".ofv-pptx-circle-callout-text")).toContain("white-space: pre-line");
     expect(rule(".ofv-pptx-viewer svg")).toContain("width: auto");
     expect(rule(".ofv-pptx-viewer svg")).toContain("stroke-width: initial");
     expect(rule(".ofv-parquet-schema")).toContain("max-width: 100%");

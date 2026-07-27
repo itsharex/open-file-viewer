@@ -89,7 +89,72 @@ const openPptx = vi.hoisted(() =>
     inheritedText.style.fontSize = "37.35pt";
     inheritedText.textContent = "2027.11.30";
     inheritedPlaceholder.append(inheritedText);
-    page.append(mirroredTextGroup, inheritedPlaceholder);
+    const circleCallout = document.createElement("div");
+    circleCallout.style.position = "absolute";
+    circleCallout.style.left = "12px";
+    circleCallout.style.top = "140px";
+    circleCallout.style.width = "138px";
+    circleCallout.style.height = "130px";
+    const circleShape = document.createElement("div");
+    circleShape.className = "pptx-circle-shape";
+    const circleText = document.createElement("div");
+    circleText.style.position = "absolute";
+    circleText.style.left = "0px";
+    circleText.style.top = "0px";
+    circleText.style.width = "138px";
+    circleText.style.height = "130px";
+    circleText.textContent = "代表性定义";
+    circleCallout.append(circleShape, circleText);
+    const redCircleCallout = document.createElement("div");
+    redCircleCallout.style.position = "absolute";
+    redCircleCallout.style.left = "12px";
+    redCircleCallout.style.top = "320px";
+    redCircleCallout.style.width = "136px";
+    redCircleCallout.style.height = "130px";
+    const redCircleShape = document.createElement("div");
+    redCircleShape.className = "pptx-circle-shape";
+    const redCircleText = document.createElement("div");
+    redCircleText.style.position = "absolute";
+    redCircleText.style.left = "0px";
+    redCircleText.style.top = "0px";
+    redCircleText.style.width = "136px";
+    redCircleText.style.height = "130px";
+    redCircleText.textContent = "包含的要素";
+    redCircleCallout.append(redCircleShape, redCircleText);
+    const diagramGroup = document.createElement("div");
+    diagramGroup.className = "pptx-diagram-cycle-group";
+    diagramGroup.style.position = "absolute";
+    diagramGroup.style.left = "180px";
+    diagramGroup.style.top = "100px";
+    diagramGroup.style.width = "640px";
+    diagramGroup.style.height = "480px";
+    const diagramTexts = [
+      "①有胜任能力的独立人员",
+      "②对经济活动和事项的认定",
+      "③确定与既定标准的符合程度",
+      "④充分适当的审计证据",
+      "⑤传递给预期使用者的报告",
+      "⑥系统化的过程"
+    ];
+    for (const [index, text] of diagramTexts.entries()) {
+      const box = document.createElement("div");
+      box.style.position = "absolute";
+      box.style.left = `${120 + index * 3}px`;
+      box.style.top = `${40 + index * 2}px`;
+      box.style.width = "433px";
+      box.style.height = "433px";
+      const inner = document.createElement("div");
+      inner.style.position = "absolute";
+      inner.style.left = "0px";
+      inner.style.top = "0px";
+      inner.style.width = "433px";
+      inner.style.height = "433px";
+      inner.style.display = "flex";
+      inner.textContent = text;
+      box.append(inner);
+      diagramGroup.append(box);
+    }
+    page.append(mirroredTextGroup, inheritedPlaceholder, circleCallout, redCircleCallout, diagramGroup);
     viewport.append(page);
     wrapper.append(viewport);
     container.append(wrapper);
@@ -382,11 +447,12 @@ describe("officePlugin", () => {
     const inkCell = container.querySelector<HTMLTableCellElement>('[data-cell="C4"]');
     expect(inkCell?.textContent).toBe("Black ink");
     expect(inkCell?.style.color).toBe("");
+    expect(container.querySelector<HTMLTableCellElement>('[data-cell="C3"]')?.classList.contains("ofv-cell-number")).toBe(true);
     expect(container.querySelector('[data-cell="B1"]')).toBeNull();
     expect(mergedNote?.rowSpan).toBe(2);
     expect(mergedNote?.classList.contains("ofv-cell-multiline")).toBe(true);
     expect(mergedNote?.textContent).toBe("Multiline\nnote");
-    expect(table?.style.width).toBe("395px");
+    expect(table?.style.width).toBe("380px");
     expect(container.querySelector<HTMLTableRowElement>("tr")?.style.height).toBe("21px");
     expect(container.querySelector(".ofv-column-resize-handle")).not.toBeNull();
   });
@@ -404,10 +470,39 @@ describe("officePlugin", () => {
 
     await waitFor(() => Boolean(container.querySelector(".ofv-workbook-table")));
 
-    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="0"]')?.style.width).toBe("565px");
-    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="1"]')?.style.width).toBe("75px");
-    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="2"]')?.style.width).toBe("103px");
-    expect(container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width).toBe("743px");
+    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="0"]')?.style.width).toBe("480px");
+    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="1"]')?.style.width).toBe("60px");
+    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="2"]')?.style.width).toBe("84px");
+    expect(container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width).toBe("624px");
+  });
+
+  it("uses per-column max digit width when converting Excel widths", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: await createVariableMdwColumnWorkbook(),
+      fileName: "variable-mdw-columns.xlsx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-workbook-table")));
+
+    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="0"]')?.style.width).toBe("117px");
+    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="1"]')?.style.width).toBe("623px");
+    expect(container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width).toBe("740px");
+
+    const mdwFourTab = Array.from(container.querySelectorAll<HTMLButtonElement>(".ofv-tabs button")).find(
+      (button) => button.textContent === "MDW Four"
+    );
+    mdwFourTab?.click();
+
+    await waitFor(() => container.querySelector<HTMLTableColElement>('col[data-column-index="0"]')?.style.width === "139px");
+
+    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="0"]')?.style.width).toBe("139px");
+    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="1"]')?.style.width).toBe("331px");
+    expect(container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width).toBe("470px");
   });
 
   it("allows workbook columns to be resized from cell edges", async () => {
@@ -432,9 +527,9 @@ describe("officePlugin", () => {
     handle!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 100, pointerId: 1 }));
     handle!.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 170, pointerId: 1 }));
 
-    await waitFor(() => container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width === "460px");
+    await waitFor(() => container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width === "450px");
 
-    expect(container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width).toBe("460px");
+    expect(container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width).toBe("450px");
     expect(container.querySelector<HTMLTableColElement>('col[data-column-index="0"]')?.style.width).toBe("190px");
   });
 
@@ -1376,6 +1471,17 @@ describe("officePlugin", () => {
     expect(container.querySelector<HTMLElement>(".pptx-rendered")?.style.backgroundColor).toBe("rgb(32, 33, 36)");
     expect(container.querySelector<HTMLElement>(".pptx-mirrored-text-group > div")?.style.transform).toBe("scaleX(-1)");
     expect(container.querySelector<HTMLElement>(".pptx-mirrored-text-group > div")?.dataset.ofvPptxCounterMirror).toBe("x");
+    const cycleTexts = Array.from(container.querySelectorAll<HTMLElement>("[data-ofv-pptx-diagram-cycle-text]"));
+    expect(cycleTexts).toHaveLength(6);
+    expect(new Set(cycleTexts.map((element) => element.style.left)).size).toBeGreaterThan(3);
+    expect(cycleTexts[0]?.style.width).not.toBe("433px");
+    expect(Number.parseFloat(cycleTexts.find((element) => element.dataset.ofvPptxDiagramCycleText === "2")?.style.left || "")).toBeGreaterThan(0);
+    expect(cycleTexts[0]?.parentElement?.className).toBe("pptx-diagram-cycle-group");
+    expect(container.querySelector<HTMLElement>(".pptx-diagram-cycle-group > div")?.style.width).toBe("433px");
+    const circleCallouts = Array.from(container.querySelectorAll<HTMLElement>(".ofv-pptx-circle-callout-text"));
+    expect(circleCallouts.map((element) => element.textContent)).toEqual(["代表性\n定义", "包含的\n要素"]);
+    expect(container.querySelectorAll(".pptx-circle-shape")).toHaveLength(2);
+    expect(container.querySelector<HTMLElement>(".pptx-circle-shape")?.parentElement?.classList.contains("ofv-pptx-circle-callout-text")).toBe(false);
   });
 
   it("responds to shared toolbar zoom for PPTX previews", async () => {
@@ -2316,6 +2422,83 @@ async function createWideColumnWorkbook(): Promise<Blob> {
             <c r="A1" t="inlineStr"><is><t>Very wide note column</t></is></c>
             <c r="B1" t="inlineStr"><is><t>Narrow</t></is></c>
             <c r="C1" t="inlineStr"><is><t>Default</t></is></c>
+          </row>
+        </sheetData>
+      </worksheet>`
+  );
+  return zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+}
+
+async function createVariableMdwColumnWorkbook(): Promise<Blob> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+        <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+        <Default Extension="xml" ContentType="application/xml"/>
+        <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+        <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+        <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+      </Types>`
+  );
+  zip.file(
+    "_rels/.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+      </Relationships>`
+  );
+  zip.file(
+    "xl/_rels/workbook.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+        <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+      </Relationships>`
+  );
+  zip.file(
+    "xl/workbook.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <sheets>
+          <sheet name="MDW Eleven" sheetId="1" r:id="rId1"/>
+          <sheet name="MDW Four" sheetId="2" r:id="rId2"/>
+        </sheets>
+      </workbook>`
+  );
+  zip.file(
+    "xl/worksheets/sheet1.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <cols>
+          <col min="1" max="1" width="10.63" customWidth="1"/>
+          <col min="2" max="2" width="56.63" customWidth="1"/>
+        </cols>
+        <sheetData>
+          <row r="1">
+            <c r="A1" t="inlineStr"><is><t>MDW eleven</t></is></c>
+            <c r="B1" t="inlineStr"><is><t>Wide MDW eleven</t></is></c>
+          </row>
+        </sheetData>
+      </worksheet>`
+  );
+  zip.file(
+    "xl/worksheets/sheet2.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <cols>
+          <col min="1" max="1" width="34.75" customWidth="1"/>
+          <col min="2" max="2" width="82.63" customWidth="1"/>
+        </cols>
+        <sheetData>
+          <row r="1">
+            <c r="A1" t="inlineStr"><is><t>MDW four</t></is></c>
+            <c r="B1" t="inlineStr"><is><t>Wide MDW four</t></is></c>
           </row>
         </sheetData>
       </worksheet>`

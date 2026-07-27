@@ -2279,6 +2279,10 @@
   table-layout: fixed;
 }
 
+.ofv-workbook-table {
+  font-size: 11px;
+}
+
 .ofv-table-scroll td,
 .ofv-table-scroll th {
   position: relative;
@@ -2292,6 +2296,16 @@
   font-size: inherit;
   line-height: 1.45;
   vertical-align: middle;
+}
+
+.ofv-workbook-table td,
+.ofv-workbook-table th {
+  padding: 2px 2px 2px 3px;
+  line-height: 1.25;
+}
+
+.ofv-cell-number {
+  text-align: right;
 }
 
 /* Blank spreadsheet cells have no line box, so an all-blank row collapses to
@@ -2626,6 +2640,25 @@
   min-width: 0;
   overflow: auto;
   overflow-wrap: anywhere;
+}
+
+.ofv-pptx-diagram-cycle-text {
+  box-sizing: border-box;
+  padding: 2px 4px;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.ofv-pptx-circle-callout-text {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: pre-line;
+  word-break: keep-all;
+  overflow-wrap: normal;
 }
 
 .ofv-pptx-viewer svg {

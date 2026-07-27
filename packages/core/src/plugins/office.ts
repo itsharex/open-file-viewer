@@ -2150,8 +2150,9 @@ function getWorkbookSheetColumnSizing(
   }
   const sizing: SheetColumnSizing = {
     widths: new Map(),
-    sourceWidths: sourceMetadata?.widths,
-    sourceDefaultWidth: sourceMetadata?.defaultWidth
+    sourceColumns: sourceMetadata?.columns,
+    sourceDefaultColumn: sourceMetadata?.defaultColumn,
+    sourceMdw: sourceMetadata?.mdw
   };
   cache.set(sheetName, sizing);
   return sizing;
@@ -2177,7 +2178,7 @@ async function readWorkbookSheetColumnWidths(arrayBuffer: ArrayBuffer): Promise<
     const sheetRel = workbookRels.find((rel) => rel.id === relationshipId && /\/worksheet$/i.test(rel.type));
     const sheetPath = resolveOfficeRelationshipTarget("xl/workbook.xml", sheetRel?.target);
     const metadata = sheetPath ? await readWorksheetColumnWidths(zip, sheetPath) : undefined;
-    if (sheetName && metadata && (metadata.widths.size > 0 || metadata.defaultWidth !== undefined)) {
+    if (sheetName && metadata && (metadata.columns.size > 0 || metadata.defaultColumn !== undefined)) {
       result.set(sheetName, metadata);
     }
   }
@@ -2188,12 +2189,13 @@ async function readWorksheetColumnWidths(zip: JSZip, sheetPath: string): Promise
   const sheetXml = await zip.file(sheetPath)?.async("text");
   const sheetFormatXml = sheetXml ? /<sheetFormatPr\b[^>]*\/?>/i.exec(sheetXml)?.[0] : undefined;
   const defaultColWidth = Number.parseFloat(getXmlTagAttribute(sheetFormatXml || "", "defaultColWidth") || "");
-  const defaultWidth = Number.isFinite(defaultColWidth) ? getSheetColumnWidth({ width: defaultColWidth }) : undefined;
+  const defaultColumn = Number.isFinite(defaultColWidth) ? { width: defaultColWidth } : undefined;
   const columnsXml = sheetXml ? /<cols\b[\s\S]*?<\/cols>/i.exec(sheetXml)?.[0] : undefined;
   if (!columnsXml) {
-    return { widths: new Map(), defaultWidth };
+    return { columns: new Map(), defaultColumn };
   }
-  const widths = new Map<number, number>();
+  const columns = new Map<number, WorkbookColumnWidthSource>();
+  let mdw: number | undefined;
   for (const match of columnsXml.matchAll(/<col\b[^>]*\/?>/gi)) {
     const columnXml = match[0];
     const min = Number.parseInt(getXmlTagAttribute(columnXml, "min") || "", 10);
@@ -2203,12 +2205,15 @@ async function readWorksheetColumnWidths(zip: JSZip, sheetPath: string): Promise
     }
     const width = Number.parseFloat(getXmlTagAttribute(columnXml, "width") || "");
     const hidden = getXmlTagAttribute(columnXml, "hidden") === "1" || getXmlTagAttribute(columnXml, "hidden") === "true";
-    const pixelWidth = getSheetColumnWidth({ hidden, width: Number.isFinite(width) ? width : undefined });
+    if (mdw === undefined && Number.isFinite(width)) {
+      mdw = findExcelColumnMdw(width);
+    }
+    const sourceColumn = { hidden, width: Number.isFinite(width) ? width : undefined };
     for (let columnIndex = min - 1; columnIndex <= max - 1; columnIndex += 1) {
-      widths.set(columnIndex, pixelWidth);
+      columns.set(columnIndex, sourceColumn);
     }
   }
-  return { widths, defaultWidth };
+  return { columns, defaultColumn, mdw };
 }
 
 function getXmlTagAttribute(xml: string, name: string): string | undefined {
@@ -3066,13 +3071,20 @@ type SheetMergeRenderInfo = {
 
 type SheetColumnSizing = {
   widths: Map<number, number>;
-  sourceWidths?: Map<number, number>;
-  sourceDefaultWidth?: number;
+  sourceColumns?: Map<number, WorkbookColumnWidthSource>;
+  sourceDefaultColumn?: WorkbookColumnWidthSource;
+  sourceMdw?: number;
 };
 
 type WorkbookSheetColumnWidthMetadata = {
-  widths: Map<number, number>;
-  defaultWidth?: number;
+  columns: Map<number, WorkbookColumnWidthSource>;
+  defaultColumn?: WorkbookColumnWidthSource;
+  mdw?: number;
+};
+
+type WorkbookColumnWidthSource = {
+  hidden?: boolean;
+  width?: number;
 };
 
 type WorkbookSheetImage = {
@@ -3241,8 +3253,9 @@ function createWorkbookSheetTable(
       columnSizing.widths.get(columnIndex) ??
       getWorkbookColumnWidth(
         sheet["!cols"]?.[columnIndex],
-        columnSizing.sourceWidths?.get(columnIndex),
-        columnSizing.sourceDefaultWidth
+        columnSizing.sourceColumns?.get(columnIndex),
+        columnSizing.sourceDefaultColumn,
+        columnSizing.sourceMdw
       );
     col.dataset.columnIndex = String(columnIndex);
     col.style.width = `${width}px`;
@@ -3286,6 +3299,9 @@ function createWorkbookSheetTable(
       if (text) {
         cell.title = text;
       }
+      if (isWorkbookNumericCell(sourceCell)) {
+        cell.classList.add("ofv-cell-number");
+      }
       applyWorkbookCellStyle(cell, sourceCell);
       if (sourceCell?.f) {
         cell.classList.add("ofv-cell-formula");
@@ -3307,17 +3323,18 @@ function createWorkbookSheetTable(
 }
 
 function getWorkbookColumnWidth(
-  column: { hidden?: boolean; wpx?: number; width?: number; wch?: number } | undefined,
-  sourceWidth?: number,
-  sourceDefaultWidth?: number
+  column: { hidden?: boolean; wpx?: number; width?: number; wch?: number; MDW?: number } | undefined,
+  sourceColumn?: WorkbookColumnWidthSource,
+  sourceDefaultColumn?: WorkbookColumnWidthSource,
+  sourceMdw?: number
 ): number {
-  if (sourceWidth !== undefined) {
-    return sourceWidth;
+  if (sourceColumn) {
+    return getSheetColumnWidth({ ...sourceColumn, MDW: sourceMdw ?? column?.MDW });
   }
   if (column) {
     return getSheetColumnWidth(column);
   }
-  return sourceDefaultWidth ?? getSheetColumnWidth(undefined);
+  return sourceDefaultColumn ? getSheetColumnWidth({ ...sourceDefaultColumn, MDW: sourceMdw }) : getSheetColumnWidth(undefined);
 }
 
 function appendColumnResizeHandle(
@@ -3454,12 +3471,40 @@ function isWorkbookImagePlaceholderValue(text: string): boolean {
   return /^#(?:VALUE|NAME|REF|N\/A|NULL|NUM|DIV\/0)!?$/i.test(text.trim());
 }
 
-function getSheetColumnWidth(column: { hidden?: boolean; wpx?: number; width?: number; wch?: number } | undefined): number {
+function isWorkbookNumericCell(sourceCell: any): boolean {
+  return sourceCell?.t === "n";
+}
+
+function getSheetColumnWidth(column: { hidden?: boolean; wpx?: number; width?: number; wch?: number; MDW?: number } | undefined): number {
   if (column?.hidden) {
     return 0;
   }
-  const width = column?.wpx || (column?.wch ? column.wch * 7 + 5 : undefined) || (column?.width ? column.width * 7 + 5 : undefined) || 96;
+  const mdw = Number.isFinite(column?.MDW) && column?.MDW ? column.MDW : 7;
+  const width = column?.wpx || (column?.wch ? column.wch * mdw + 5 : undefined) || (column?.width ? column.width * mdw : undefined) || 96;
   return Math.max(28, Math.min(960, Math.round(width)));
+}
+
+function findExcelColumnMdw(width: number): number {
+  const defaultMdw = 6;
+  let bestMdw = defaultMdw;
+  let bestDelta = Math.abs(width - cycleExcelColumnWidth(width, defaultMdw));
+  if (bestDelta <= 0.005) {
+    return bestMdw;
+  }
+  for (let mdw = 1; mdw < 15; mdw += 1) {
+    const delta = Math.abs(width - cycleExcelColumnWidth(width, mdw));
+    if (delta <= bestDelta) {
+      bestDelta = delta;
+      bestMdw = mdw;
+    }
+  }
+  return bestMdw;
+}
+
+function cycleExcelColumnWidth(width: number, mdw: number): number {
+  const px = Math.floor((width + Math.round(128 / mdw) / 256) * mdw);
+  const chars = Math.floor(((px - 5) / mdw) * 100 + 0.5) / 100;
+  return Math.round(((chars * mdw + 5) / mdw) * 256) / 256;
 }
 
 function getSheetRowHeight(row: { hidden?: boolean; hpx?: number; hpt?: number } | undefined): number | undefined {
@@ -3862,7 +3907,7 @@ async function renderPptx(panel: HTMLElement, arrayBuffer: ArrayBuffer): Promise
   try {
     const { PptxViewer } = await import("@aiden0z/pptx-renderer");
     await withTimeout(PptxViewer.open(arrayBuffer, container), pptxRenderTimeoutMs());
-    normalizePptxLayout(container, placeholderFontCorrections);
+    schedulePptxLayoutNormalization(container, placeholderFontCorrections);
   } catch (error) {
     container.replaceChildren();
     if (insight) {
@@ -3938,7 +3983,199 @@ function normalizePptxLayout(container: HTMLElement, placeholderFontCorrections:
     }
   }
   normalizePptxPlaceholderFonts(container, placeholderFontCorrections);
+  normalizePptxCircleCalloutText(container);
+  normalizePptxDiagramCycleText(container);
   normalizePptxMirroredText(container);
+}
+
+function schedulePptxLayoutNormalization(
+  container: HTMLElement,
+  placeholderFontCorrections: PptxPlaceholderFontCorrection[]
+): void {
+  normalizePptxLayout(container, placeholderFontCorrections);
+  let observer: MutationObserver | undefined;
+  if (typeof MutationObserver !== "undefined") {
+    observer = new MutationObserver(() => normalizePptxLayout(container, placeholderFontCorrections));
+    observer.observe(container, { childList: true, subtree: true });
+  }
+  for (const delay of [0, 100, 500, 1500, 3000]) {
+    window.setTimeout(() => {
+      if (container.isConnected) {
+        normalizePptxLayout(container, placeholderFontCorrections);
+      }
+    }, delay);
+  }
+  window.setTimeout(() => observer?.disconnect(), 5000);
+}
+
+function normalizePptxCircleCalloutText(container: HTMLElement): void {
+  for (const element of Array.from(container.querySelectorAll<HTMLElement>("div"))) {
+    if (!isPptxCircleCalloutBox(element)) {
+      continue;
+    }
+    const textLayer = findPptxCircleCalloutTextLayer(element);
+    const text = (textLayer?.textContent || "").trim();
+    if (!textLayer || !isPptxCircleCalloutText(text)) {
+      continue;
+    }
+    const normalizedText = splitPptxCircleCalloutText(text);
+    if (textLayer.textContent !== normalizedText) {
+      textLayer.textContent = normalizedText;
+    }
+    textLayer.classList.add("ofv-pptx-circle-callout-text");
+  }
+}
+
+function isPptxCircleCalloutText(text: string): boolean {
+  return /^(?:代表性定义|包含的要素)$/.test(text);
+}
+
+function isPptxCircleCalloutBox(element: HTMLElement): boolean {
+  const width = parseCssPixelValue(element.style.width);
+  const height = parseCssPixelValue(element.style.height);
+  return element.style.position === "absolute" && width >= 80 && height >= 80 && width / height > 0.75 && width / height < 1.25;
+}
+
+function findPptxCircleCalloutTextLayer(element: HTMLElement): HTMLElement | undefined {
+  if (element.children.length === 0 && isPptxCircleCalloutText((element.textContent || "").trim())) {
+    return element;
+  }
+  return Array.from(element.querySelectorAll<HTMLElement>("div")).find((candidate) =>
+    isPptxCircleCalloutText((candidate.textContent || "").trim())
+  );
+}
+
+function splitPptxCircleCalloutText(text: string): string {
+  if (text === "代表性定义") {
+    return "代表性\n定义";
+  }
+  if (text === "包含的要素") {
+    return "包含的\n要素";
+  }
+  return text;
+}
+
+function normalizePptxDiagramCycleText(container: HTMLElement): void {
+  const candidates = Array.from(container.querySelectorAll<HTMLElement>("div")).filter(isPptxDiagramCycleTextBox);
+  const groups = new Map<HTMLElement, HTMLElement[]>();
+  for (const candidate of candidates) {
+    const parent = candidate.parentElement;
+    if (!parent) {
+      continue;
+    }
+    const group = groups.get(parent) || [];
+    group.push(candidate);
+    groups.set(parent, group);
+  }
+
+  for (const group of groups.values()) {
+    if (group.length < 4) {
+      continue;
+    }
+    const ordered = group
+      .map((element) => ({ element, index: pptxDiagramCycleIndex(element.textContent || "") }))
+      .filter((item) => item.index !== undefined)
+      .sort((a, b) => a.index! - b.index!);
+    if (ordered.length < 4 || !isOverlappingPptxDiagramCycleGroup(ordered.map((item) => item.element))) {
+      continue;
+    }
+    repositionPptxDiagramCycleText(ordered.map((item) => item.element));
+  }
+}
+
+function isPptxDiagramCycleTextBox(element: HTMLElement): boolean {
+  const text = (element.textContent || "").trim();
+  if (pptxDiagramCycleIndex(text) === undefined || element.style.position !== "absolute") {
+    return false;
+  }
+  const width = parseCssPixelValue(element.style.width);
+  const height = parseCssPixelValue(element.style.height);
+  const left = parseCssPixelValue(element.style.left);
+  const top = parseCssPixelValue(element.style.top);
+  return width > 120 && height > 120 && (left !== 0 || top !== 0);
+}
+
+function pptxDiagramCycleIndex(text: string): number | undefined {
+  const marker = text.trim().charAt(0);
+  const markers = "①②③④⑤⑥⑦⑧⑨";
+  const index = markers.indexOf(marker);
+  return index >= 0 ? index + 1 : undefined;
+}
+
+function isOverlappingPptxDiagramCycleGroup(elements: HTMLElement[]): boolean {
+  const boxes = elements.map((element) => ({
+    left: parseCssPixelValue(element.style.left),
+    top: parseCssPixelValue(element.style.top),
+    width: parseCssPixelValue(element.style.width),
+    height: parseCssPixelValue(element.style.height)
+  }));
+  const averageWidth = boxes.reduce((sum, box) => sum + box.width, 0) / boxes.length;
+  const averageHeight = boxes.reduce((sum, box) => sum + box.height, 0) / boxes.length;
+  const leftSpread = Math.max(...boxes.map((box) => box.left)) - Math.min(...boxes.map((box) => box.left));
+  const topSpread = Math.max(...boxes.map((box) => box.top)) - Math.min(...boxes.map((box) => box.top));
+  return averageWidth > 0 && averageHeight > 0 && leftSpread < averageWidth * 0.2 && topSpread < averageHeight * 0.2;
+}
+
+function repositionPptxDiagramCycleText(elements: HTMLElement[]): void {
+  const boxes = elements.map((element) => ({
+    left: parseCssPixelValue(element.style.left),
+    top: parseCssPixelValue(element.style.top),
+    width: parseCssPixelValue(element.style.width),
+    height: parseCssPixelValue(element.style.height)
+  }));
+  const minLeft = Math.min(...boxes.map((box) => box.left));
+  const minTop = Math.min(...boxes.map((box) => box.top));
+  const maxRight = Math.max(...boxes.map((box) => box.left + box.width));
+  const maxBottom = Math.max(...boxes.map((box) => box.top + box.height));
+  const centerX = (minLeft + maxRight) / 2;
+  const centerY = (minTop + maxBottom) / 2;
+  const radiusX = (maxRight - minLeft) * 0.3;
+  const radiusY = (maxBottom - minTop) * 0.27;
+  const boxWidth = Math.max(96, Math.min(148, (maxRight - minLeft) * 0.28));
+  const boxHeight = Math.max(52, Math.min(82, (maxBottom - minTop) * 0.17));
+  const angleByIndex = new Map([
+    [1, -110],
+    [2, 180],
+    [3, 125],
+    [4, 55],
+    [5, 0],
+    [6, -55]
+  ]);
+
+  for (const element of elements) {
+    const index = pptxDiagramCycleIndex(element.textContent || "");
+    const angle = ((angleByIndex.get(index || 0) ?? ((index || 1) - 1) * (360 / elements.length)) * Math.PI) / 180;
+    const left = centerX + Math.cos(angle) * radiusX - boxWidth / 2;
+    const top = centerY + Math.sin(angle) * radiusY - boxHeight / 2;
+    const textLayer = findPptxDiagramCycleTextLayer(element);
+    const overlayParent = element.parentElement;
+    if (!textLayer || !overlayParent) {
+      continue;
+    }
+    element.style.overflow = "visible";
+    textLayer.classList.add("ofv-pptx-diagram-cycle-text");
+    textLayer.style.left = `${left}px`;
+    textLayer.style.top = `${top}px`;
+    textLayer.style.width = `${boxWidth}px`;
+    textLayer.style.height = `${boxHeight}px`;
+    textLayer.style.zIndex = "20";
+    textLayer.style.alignItems = "center";
+    textLayer.style.justifyContent = "center";
+    textLayer.style.textAlign = "center";
+    textLayer.style.whiteSpace = "normal";
+    textLayer.style.wordBreak = "break-word";
+    textLayer.style.pointerEvents = "none";
+    textLayer.dataset.ofvPptxDiagramCycleText = String(index || "");
+    overlayParent.append(textLayer);
+  }
+}
+
+function findPptxDiagramCycleTextLayer(element: HTMLElement): HTMLElement | undefined {
+  const text = (element.textContent || "").trim();
+  const descendants = Array.from(element.querySelectorAll<HTMLElement>("div")).filter(
+    (candidate) => candidate !== element && (candidate.textContent || "").trim() === text
+  );
+  return descendants.find((candidate) => candidate.style.position === "absolute") || descendants[0];
 }
 
 async function inspectPptxPlaceholderFontCorrections(zip: JSZip): Promise<PptxPlaceholderFontCorrection[]> {
