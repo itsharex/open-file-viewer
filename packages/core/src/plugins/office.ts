@@ -1969,7 +1969,9 @@ async function renderSheet(
   }
   const chartPreviews = await readWorkbookCharts(arrayBuffer).catch(() => []);
   const workbookImages = await readWorkbookSheetImages(arrayBuffer).catch(() => new Map<string, WorkbookSheetImage[]>());
-  const workbookColumnWidths = await readWorkbookSheetColumnWidths(arrayBuffer).catch(() => new Map<string, Map<number, number>>());
+  const workbookColumnWidths = await readWorkbookSheetColumnWidths(arrayBuffer).catch(
+    () => new Map<string, WorkbookSheetColumnWidthMetadata>()
+  );
   const columnSizingBySheet = new Map<string, SheetColumnSizing>();
   const tabs = document.createElement("div");
   tabs.className = "ofv-tabs";
@@ -2140,18 +2142,22 @@ async function readWorkbookSheetImages(arrayBuffer: ArrayBuffer): Promise<Map<st
 function getWorkbookSheetColumnSizing(
   cache: Map<string, SheetColumnSizing>,
   sheetName: string,
-  sourceWidths?: Map<number, number>
+  sourceMetadata?: WorkbookSheetColumnWidthMetadata
 ): SheetColumnSizing {
   const existing = cache.get(sheetName);
   if (existing) {
     return existing;
   }
-  const sizing: SheetColumnSizing = { widths: new Map(), sourceWidths };
+  const sizing: SheetColumnSizing = {
+    widths: new Map(),
+    sourceWidths: sourceMetadata?.widths,
+    sourceDefaultWidth: sourceMetadata?.defaultWidth
+  };
   cache.set(sheetName, sizing);
   return sizing;
 }
 
-async function readWorkbookSheetColumnWidths(arrayBuffer: ArrayBuffer): Promise<Map<string, Map<number, number>>> {
+async function readWorkbookSheetColumnWidths(arrayBuffer: ArrayBuffer): Promise<Map<string, WorkbookSheetColumnWidthMetadata>> {
   const zip = await JSZip.loadAsync(arrayBuffer);
   const workbookXml = await zip.file("xl/workbook.xml")?.async("text");
   if (!workbookXml || typeof DOMParser === "undefined") {
@@ -2163,26 +2169,29 @@ async function readWorkbookSheetColumnWidths(arrayBuffer: ArrayBuffer): Promise<
   }
 
   const workbookRels = await readOfficeRelationships(zip, "xl/workbook.xml");
-  const result = new Map<string, Map<number, number>>();
+  const result = new Map<string, WorkbookSheetColumnWidthMetadata>();
   const sheetElements = Array.from(workbookDoc.getElementsByTagName("*")).filter((element) => element.localName === "sheet");
   for (const sheetElement of sheetElements) {
     const sheetName = sheetElement.getAttribute("name") || "";
     const relationshipId = getXmlAttribute(sheetElement, "id");
     const sheetRel = workbookRels.find((rel) => rel.id === relationshipId && /\/worksheet$/i.test(rel.type));
     const sheetPath = resolveOfficeRelationshipTarget("xl/workbook.xml", sheetRel?.target);
-    const widths = sheetPath ? await readWorksheetColumnWidths(zip, sheetPath) : new Map<number, number>();
-    if (sheetName && widths.size > 0) {
-      result.set(sheetName, widths);
+    const metadata = sheetPath ? await readWorksheetColumnWidths(zip, sheetPath) : undefined;
+    if (sheetName && metadata && (metadata.widths.size > 0 || metadata.defaultWidth !== undefined)) {
+      result.set(sheetName, metadata);
     }
   }
   return result;
 }
 
-async function readWorksheetColumnWidths(zip: JSZip, sheetPath: string): Promise<Map<number, number>> {
+async function readWorksheetColumnWidths(zip: JSZip, sheetPath: string): Promise<WorkbookSheetColumnWidthMetadata> {
   const sheetXml = await zip.file(sheetPath)?.async("text");
+  const sheetFormatXml = sheetXml ? /<sheetFormatPr\b[^>]*\/?>/i.exec(sheetXml)?.[0] : undefined;
+  const defaultColWidth = Number.parseFloat(getXmlTagAttribute(sheetFormatXml || "", "defaultColWidth") || "");
+  const defaultWidth = Number.isFinite(defaultColWidth) ? getSheetColumnWidth({ width: defaultColWidth }) : undefined;
   const columnsXml = sheetXml ? /<cols\b[\s\S]*?<\/cols>/i.exec(sheetXml)?.[0] : undefined;
   if (!columnsXml) {
-    return new Map();
+    return { widths: new Map(), defaultWidth };
   }
   const widths = new Map<number, number>();
   for (const match of columnsXml.matchAll(/<col\b[^>]*\/?>/gi)) {
@@ -2199,7 +2208,7 @@ async function readWorksheetColumnWidths(zip: JSZip, sheetPath: string): Promise
       widths.set(columnIndex, pixelWidth);
     }
   }
-  return widths;
+  return { widths, defaultWidth };
 }
 
 function getXmlTagAttribute(xml: string, name: string): string | undefined {
@@ -3058,6 +3067,12 @@ type SheetMergeRenderInfo = {
 type SheetColumnSizing = {
   widths: Map<number, number>;
   sourceWidths?: Map<number, number>;
+  sourceDefaultWidth?: number;
+};
+
+type WorkbookSheetColumnWidthMetadata = {
+  widths: Map<number, number>;
+  defaultWidth?: number;
 };
 
 type WorkbookSheetImage = {
@@ -3224,7 +3239,11 @@ function createWorkbookSheetTable(
     const col = document.createElement("col");
     const width =
       columnSizing.widths.get(columnIndex) ??
-      getWorkbookColumnWidth(sheet["!cols"]?.[columnIndex], columnSizing.sourceWidths?.get(columnIndex));
+      getWorkbookColumnWidth(
+        sheet["!cols"]?.[columnIndex],
+        columnSizing.sourceWidths?.get(columnIndex),
+        columnSizing.sourceDefaultWidth
+      );
     col.dataset.columnIndex = String(columnIndex);
     col.style.width = `${width}px`;
     tableWidth += width;
@@ -3289,9 +3308,16 @@ function createWorkbookSheetTable(
 
 function getWorkbookColumnWidth(
   column: { hidden?: boolean; wpx?: number; width?: number; wch?: number } | undefined,
-  sourceWidth?: number
+  sourceWidth?: number,
+  sourceDefaultWidth?: number
 ): number {
-  return column ? getSheetColumnWidth(column) : sourceWidth ?? getSheetColumnWidth(undefined);
+  if (sourceWidth !== undefined) {
+    return sourceWidth;
+  }
+  if (column) {
+    return getSheetColumnWidth(column);
+  }
+  return sourceDefaultWidth ?? getSheetColumnWidth(undefined);
 }
 
 function appendColumnResizeHandle(
@@ -3432,7 +3458,7 @@ function getSheetColumnWidth(column: { hidden?: boolean; wpx?: number; width?: n
   if (column?.hidden) {
     return 0;
   }
-  const width = column?.wpx || (column?.wch ? column.wch * 7 + 5 : undefined) || (column?.width ? column.width * 7 : undefined) || 96;
+  const width = column?.wpx || (column?.wch ? column.wch * 7 + 5 : undefined) || (column?.width ? column.width * 7 + 5 : undefined) || 96;
   return Math.max(28, Math.min(960, Math.round(width)));
 }
 

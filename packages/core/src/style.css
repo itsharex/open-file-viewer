@@ -2283,11 +2283,11 @@
 .ofv-table-scroll th {
   position: relative;
   border: 1px solid var(--ofv-border);
-  padding: 5px 24px 5px 8px;
-  white-space: normal;
+  padding: 5px 10px 5px 8px;
+  white-space: nowrap;
   overflow: hidden;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: normal;
+  word-break: normal;
   text-overflow: clip;
   font-size: inherit;
   line-height: 1.45;
@@ -2323,6 +2323,7 @@
 
 .ofv-cell-multiline {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   word-break: break-word;
   overflow: visible;
   text-overflow: clip;

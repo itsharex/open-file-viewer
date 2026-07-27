@@ -386,7 +386,7 @@ describe("officePlugin", () => {
     expect(mergedNote?.rowSpan).toBe(2);
     expect(mergedNote?.classList.contains("ofv-cell-multiline")).toBe(true);
     expect(mergedNote?.textContent).toBe("Multiline\nnote");
-    expect(table?.style.width).toBe("380px");
+    expect(table?.style.width).toBe("395px");
     expect(container.querySelector<HTMLTableRowElement>("tr")?.style.height).toBe("21px");
     expect(container.querySelector(".ofv-column-resize-handle")).not.toBeNull();
   });
@@ -404,9 +404,10 @@ describe("officePlugin", () => {
 
     await waitFor(() => Boolean(container.querySelector(".ofv-workbook-table")));
 
-    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="0"]')?.style.width).toBe("560px");
-    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="1"]')?.style.width).toBe("70px");
-    expect(container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width).toBe("630px");
+    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="0"]')?.style.width).toBe("565px");
+    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="1"]')?.style.width).toBe("75px");
+    expect(container.querySelector<HTMLTableColElement>('col[data-column-index="2"]')?.style.width).toBe("103px");
+    expect(container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width).toBe("743px");
   });
 
   it("allows workbook columns to be resized from cell edges", async () => {
@@ -431,9 +432,9 @@ describe("officePlugin", () => {
     handle!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 100, pointerId: 1 }));
     handle!.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 170, pointerId: 1 }));
 
-    await waitFor(() => container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width === "450px");
+    await waitFor(() => container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width === "460px");
 
-    expect(container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width).toBe("450px");
+    expect(container.querySelector<HTMLTableElement>(".ofv-workbook-table")?.style.width).toBe("460px");
     expect(container.querySelector<HTMLTableColElement>('col[data-column-index="0"]')?.style.width).toBe("190px");
   });
 
@@ -2305,6 +2306,7 @@ async function createWideColumnWorkbook(): Promise<Blob> {
     "xl/worksheets/sheet1.xml",
     `<?xml version="1.0" encoding="UTF-8"?>
       <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <sheetFormatPr defaultColWidth="14" defaultRowHeight="15"/>
         <cols>
           <col min="1" max="1" width="80" customWidth="1"/>
           <col min="2" max="2" width="10" customWidth="1"/>
@@ -2313,6 +2315,7 @@ async function createWideColumnWorkbook(): Promise<Blob> {
           <row r="1">
             <c r="A1" t="inlineStr"><is><t>Very wide note column</t></is></c>
             <c r="B1" t="inlineStr"><is><t>Narrow</t></is></c>
+            <c r="C1" t="inlineStr"><is><t>Default</t></is></c>
           </row>
         </sheetData>
       </worksheet>`

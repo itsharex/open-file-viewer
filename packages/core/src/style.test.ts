@@ -138,9 +138,11 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-tabs button")).toContain("text-overflow: ellipsis");
     expect(rule(".ofv-table-scroll")).toContain("max-width: 100%");
     expect(rule(".ofv-table-scroll")).toContain("overflow: auto");
-    expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("overflow-wrap: anywhere");
+    expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("white-space: nowrap");
+    expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("overflow-wrap: normal");
     expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("overflow: hidden");
     expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("text-overflow: clip");
+    expect(rule(".ofv-cell-multiline")).toContain("overflow-wrap: anywhere");
     expect(rule(".ofv-column-resize-handle")).toContain("right: 0");
     expect(rule(".ofv-sheet-window")).toContain("flex-wrap: wrap");
     expect(rule(".ofv-sheet-window")).toContain("min-width: 0");
