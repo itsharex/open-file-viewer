@@ -262,7 +262,7 @@ describe("ofdPlugin", () => {
     expect(container.querySelector("details.ofv-ofd-details")).toBeNull();
   });
 
-  it("uses the document default page area when a page content box is shorter", async () => {
+  it("uses the page physical box before the document default page area", async () => {
     const zip = new JSZip();
     zip.file(
       "Doc_0/Document.xml",
@@ -303,7 +303,10 @@ describe("ofdPlugin", () => {
 
     await waitFor(() => Boolean(container.querySelector(".ofv-ofd-pages svg")));
 
-    expect(container.querySelector(".ofv-ofd-pages svg")?.getAttribute("viewBox")).toBe("0 0 210 297");
+    expect(container.querySelector(".ofv-ofd-pages svg")?.getAttribute("viewBox")).toBe("0 0 210 195");
+    expect(container.querySelector<HTMLElement>(".ofv-ofd-page")?.style.getPropertyValue("--ofv-ofd-page-height")).toBe(
+      "195mm"
+    );
     expect(container.textContent).toContain("开票人");
   });
 
@@ -700,11 +703,12 @@ describe("ofdPlugin", () => {
     await waitFor(() => Boolean(container.querySelector(".ofv-ofd-page image")));
 
     const image = container.querySelector(".ofv-ofd-page image");
-    expect(image?.getAttribute("x")).toBe("0");
-    expect(image?.getAttribute("y")).toBe("0");
-    expect(image?.getAttribute("width")).toBe("1");
-    expect(image?.getAttribute("height")).toBe("1");
-    expect(image?.getAttribute("transform")).toBe("translate(0 0) matrix(4 0 0 5 50 60)");
+    expect(image?.getAttribute("x")).toBe("50");
+    expect(image?.getAttribute("y")).toBe("60");
+    expect(image?.getAttribute("width")).toBe("4");
+    expect(image?.getAttribute("height")).toBe("5");
+    expect(image?.getAttribute("transform")).toBeNull();
+    expect(image?.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
   });
 
   it("keeps OFD template backgrounds behind page images and foreground vectors", async () => {

@@ -520,18 +520,35 @@ function parseOfdLineObject(element: Element, resources: OfdPageResources): OfdL
 function parseOfdImageObject(element: Element, images: Map<string, string>): OfdImageObject[] {
   const boundary = parseBoundary(getOfdAttribute(element, "Boundary"));
   const ctm = parseOfdCtm(getOfdAttribute(element, "CTM"));
+  const simpleCtmBounds = ctm ? createSimpleOfdImageCtmBounds(boundary, ctm) : undefined;
   const resourceId = getOfdAttribute(element, "ResourceID") || getOfdAttribute(element, "ResourceId") || "";
   return [
     {
-      x: ctm ? 0 : boundary.x,
-      y: ctm ? 0 : boundary.y,
-      width: ctm ? 1 : boundary.width || 32,
-      height: ctm ? 1 : boundary.height || 32,
+      x: simpleCtmBounds?.x ?? (ctm ? 0 : boundary.x),
+      y: simpleCtmBounds?.y ?? (ctm ? 0 : boundary.y),
+      width: simpleCtmBounds?.width ?? (ctm ? 1 : boundary.width || 32),
+      height: simpleCtmBounds?.height ?? (ctm ? 1 : boundary.height || 32),
       resourceId,
       href: images.get(resourceId),
-      transform: ctm ? createOfdPathTransform(boundary.x, boundary.y, ctm) : undefined
+      transform: ctm && !simpleCtmBounds ? createOfdPathTransform(boundary.x, boundary.y, ctm) : undefined
     }
   ];
+}
+
+function createSimpleOfdImageCtmBounds(
+  boundary: { x: number; y: number; width: number; height: number },
+  ctm: [number, number, number, number, number, number]
+): { x: number; y: number; width: number; height: number } | undefined {
+  const [a, b, c, d, e, f] = ctm;
+  if (Math.abs(b) > 1e-6 || Math.abs(c) > 1e-6 || a <= 0 || d <= 0) {
+    return undefined;
+  }
+  return {
+    x: boundary.x + e,
+    y: boundary.y + f,
+    width: a,
+    height: d
+  };
 }
 
 function renderOfdPage(page: OfdPagePreview): HTMLElement {
@@ -929,15 +946,15 @@ async function readOfdDocumentInfo(entries: JSZip.JSZipObject[]): Promise<{
 }
 
 function parseOfdPageSize(doc: Document, defaultPageSize?: { width: number; height: number }): { width: number; height: number; explicit: boolean } {
-  if (defaultPageSize) {
-    return { ...defaultPageSize, explicit: true };
-  }
   const physicalBox = Array.from(doc.getElementsByTagName("*")).find((element) => element.localName === "PhysicalBox");
   if (physicalBox?.textContent) {
     const box = parseBoundary(physicalBox.textContent);
     if (box.width > 0 && box.height > 0) {
       return { width: box.width, height: box.height, explicit: true };
     }
+  }
+  if (defaultPageSize) {
+    return { ...defaultPageSize, explicit: true };
   }
   return { width: 210, height: 297, explicit: false };
 }
