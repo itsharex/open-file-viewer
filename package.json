@@ -14,9 +14,9 @@
     "url": "https://github.com/xushanpei/open-file-viewer/issues"
   },
   "scripts": {
-    "build": "pnpm -r --filter ./packages/** build",
+    "build": "pnpm -r --filter \"./packages/**\" build",
     "build:doc": "pnpm --filter @open-file-viewer/doc build",
-    "build:examples": "pnpm -r --filter ./examples/** build",
+    "build:examples": "pnpm -r --filter \"./examples/**\" build",
     "pack:check": "node scripts/check-package-exports.mjs",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
