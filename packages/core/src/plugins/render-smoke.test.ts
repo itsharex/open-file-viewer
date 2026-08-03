@@ -21,6 +21,7 @@ import { ofdPlugin } from "./ofd";
 import { pdfPlugin } from "./pdf";
 import { textPlugin } from "./text";
 import { __setMpegtsLoaderForTests, videoPlugin } from "./video";
+import { xmindPlugin } from "./xmind";
 import { xpsPlugin } from "./xps";
 
 const nativeFetch = globalThis.fetch;
@@ -623,6 +624,7 @@ describe("default plugin render smoke", () => {
         "STEP CAD",
         "WASM data",
         "WebArchive data",
+        "XMind",
         "XPS pages",
         "archive inner text",
         "audio playback",
@@ -3372,6 +3374,16 @@ function toolbarSupportCases(): ToolbarSupportCase[] {
       disabled: ["Rotate right"]
     },
     {
+      name: "XMind",
+      file: minimalXMind,
+      fileName: "toolbar.xmind",
+      plugins: [xmindPlugin()],
+      selector: ".ofv-xmind-workbook",
+      text: "Open File Viewer",
+      enabled: ["Zoom in", "Zoom out", "Reset zoom"],
+      disabled: ["Rotate right"]
+    },
+    {
       name: "GIS map",
       file: new Blob([JSON.stringify({ type: "FeatureCollection", features: [] })], { type: "application/geo+json" }),
       fileName: "toolbar.geojson",
@@ -5053,6 +5065,24 @@ function minimalFlatOdpXml(text: string): string {
 async function minimalZip(): Promise<ArrayBuffer> {
   const zip = new JSZip();
   zip.file("readme.txt", "Hello archive");
+  return zip.generateAsync({ type: "arraybuffer" });
+}
+
+// 构造包含中心主题和分支的最小 XMind 包，用于渲染与 toolbar smoke 覆盖。
+async function minimalXMind(): Promise<ArrayBuffer> {
+  const zip = new JSZip();
+  zip.file(
+    "content.json",
+    JSON.stringify([
+      {
+        title: "Smoke roadmap",
+        rootTopic: {
+          title: "Open File Viewer",
+          children: { attached: [{ title: "XMind preview" }] }
+        }
+      }
+    ])
+  );
   return zip.generateAsync({ type: "arraybuffer" });
 }
 
