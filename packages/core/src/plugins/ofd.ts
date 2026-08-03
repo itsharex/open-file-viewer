@@ -246,6 +246,7 @@ type OfdContext = {
   templates: Map<string, string>;
   fonts: Map<string, string>;
   drawParams: Map<string, OfdDrawParam>;
+  pageOrder: string[];
   pageSize?: { width: number; height: number };
   stampsByPage: Map<string, OfdImageObject[]>;
 };
@@ -255,9 +256,13 @@ async function readOfdPages(
   context: OfdContext
 ): Promise<OfdPagePreview[]> {
   const pages: OfdPagePreview[] = [];
-  const pageEntries = entries
-    .filter((entry) => /(^|\/)Pages\/Page_[^/]+\/Content\.xml$/i.test(entry.name) || /(^|\/)Page_[^/]+\/Content\.xml$/i.test(entry.name))
-    .slice(0, 80);
+  const discoveredPageEntries = entries.filter(
+    (entry) => /(^|\/)Pages\/Page_[^/]+\/Content\.xml$/i.test(entry.name) || /(^|\/)Page_[^/]+\/Content\.xml$/i.test(entry.name)
+  );
+  const documentPageEntries = context.pageOrder
+    .map((path) => findOfdEntry(discoveredPageEntries, path))
+    .filter((entry): entry is JSZip.JSZipObject => Boolean(entry));
+  const pageEntries = (documentPageEntries.length > 0 ? documentPageEntries : discoveredPageEntries).slice(0, 80);
   for (const entry of pageEntries) {
     const xml = await entry.async("text");
     const templates = await readPageTemplates(xml, context, entries);
@@ -268,15 +273,7 @@ async function readOfdPages(
       drawParams: context.drawParams
     };
     const page = parseOfdPage(entry.name, xml, resources, templates, context.pageSize, stamps);
-    if (
-      page.texts.length > 0 ||
-      page.paths.length > 0 ||
-      page.lines.length > 0 ||
-      page.images.length > 0 ||
-      page.stamps.length > 0
-    ) {
-      pages.push(page);
-    }
+    pages.push(page);
   }
   return pages;
 }
@@ -684,9 +681,9 @@ async function readOfdContext(entries: JSZip.JSZipObject[]): Promise<OfdContext>
   const images = await readOfdImages(entries);
   const fonts = await readOfdFonts(entries);
   const drawParams = await readOfdDrawParams(entries);
-  const { templates, pageSize, pagePaths } = await readOfdDocumentInfo(entries);
+  const { templates, pageOrder, pageSize, pagePaths } = await readOfdDocumentInfo(entries);
   const stampsByPage = await readOfdStamps(entries, pagePaths);
-  return { images, templates, fonts, drawParams, pageSize, stampsByPage };
+  return { images, templates, fonts, drawParams, pageOrder, pageSize, stampsByPage };
 }
 
 async function readOfdDrawParams(entries: JSZip.JSZipObject[]): Promise<Map<string, OfdDrawParam>> {
@@ -784,6 +781,11 @@ async function readOfdStamps(
       const signedValueEntry =
         findOfdEntry(entries, joinOfdPath(signatureDir, signedValueLoc)) || findOfdEntry(entries, signedValueLoc);
       const href = signedValueEntry ? extractOfdStampImage(await signedValueEntry.async("uint8array")) : undefined;
+      // Certificate-only signatures have a placement boundary but no visual
+      // seal payload. Do not turn that boundary into a broken-image box.
+      if (!href) {
+        continue;
+      }
       for (const annot of signatureElements.filter((element) => element.localName === "StampAnnot")) {
         const boundary = parseBoundary(getOfdAttribute(annot, "Boundary"));
         const pageRef = getOfdAttribute(annot, "PageRef");
@@ -903,10 +905,12 @@ async function readOfdImages(entries: JSZip.JSZipObject[]): Promise<Map<string, 
 
 async function readOfdDocumentInfo(entries: JSZip.JSZipObject[]): Promise<{
   templates: Map<string, string>;
+  pageOrder: string[];
   pageSize?: { width: number; height: number };
   pagePaths: Map<string, string>;
 }> {
   const templates = new Map<string, string>();
+  const pageOrder: string[] = [];
   const pagePaths = new Map<string, string>();
   let pageSize: { width: number; height: number } | undefined;
   for (const entry of entries.filter((item) => /(?:^|\/)Document\.xml$/i.test(item.name))) {
@@ -938,11 +942,13 @@ async function readOfdDocumentInfo(entries: JSZip.JSZipObject[]): Promise<{
       const id = getOfdAttribute(pageElement, "ID");
       const baseLoc = getOfdAttribute(pageElement, "BaseLoc");
       if (id && baseLoc) {
-        pagePaths.set(id, joinOfdPath(documentDir, baseLoc));
+        const pagePath = joinOfdPath(documentDir, baseLoc);
+        pagePaths.set(id, pagePath);
+        pageOrder.push(pagePath);
       }
     }
   }
-  return { templates, pageSize, pagePaths };
+  return { templates, pageOrder, pageSize, pagePaths };
 }
 
 function parseOfdPageSize(doc: Document, defaultPageSize?: { width: number; height: number }): { width: number; height: number; explicit: boolean } {

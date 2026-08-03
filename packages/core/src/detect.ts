@@ -174,6 +174,7 @@ const extensionMimeMap: Record<string, string> = {
   shp: "application/octet-stream",
   drawio: "application/vnd.jgraph.mxfile",
   dio: "application/vnd.jgraph.mxfile",
+  xmind: "application/vnd.xmind.workbook",
   excalidraw: "application/vnd.excalidraw+json",
   tldraw: "application/json",
   zip: "application/zip",

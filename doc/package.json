@@ -3,13 +3,19 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "assets:dwg": "node scripts/copy-libredwg-assets.mjs",
+    "predev": "pnpm assets:dwg",
     "dev": "vite --host 0.0.0.0 --config vite.config.ts",
+    "prebuild": "pnpm assets:dwg",
     "build": "vite build --config vite.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@open-file-viewer/core": "workspace:*",
+    "@mlightcad/cad-simple-viewer": "1.5.9",
+    "@mlightcad/data-model": "1.12.3",
     "@mlightcad/libredwg-web": "0.7.4",
+    "lodash-es": "4.17.21",
     "pdfjs-dist": "^4.10.38",
     "prismjs": "^1.30.0"
   },

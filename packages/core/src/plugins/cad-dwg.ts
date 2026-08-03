@@ -60,6 +60,20 @@ export interface LibreDwgPreviewOptions {
    * Example: `/vendor/libredwg-web`
    */
   wasmBaseUrl?: string;
+  /**
+   * Run LibreDWG parsing in a dedicated worker when `workerModuleUrl` or
+   * `workerFactory` is available. Defaults to true.
+   */
+  useWorker?: boolean;
+  /**
+   * Browser-loadable URL for the ESM entry of `@mlightcad/libredwg-web`.
+   * The worker imports this URL without bundling the GPL dependency into core.
+   */
+  workerModuleUrl?: string;
+  /** Create a custom module worker that implements the LibreDWG worker protocol. */
+  workerFactory?: () => Worker;
+  /** Maximum time allowed for worker parsing. Defaults to 120 seconds. */
+  workerTimeoutMs?: number;
 }
 
 type DwgPreviewStats = {
@@ -79,16 +93,24 @@ type DwgSvgBounds = {
   height: number;
 };
 
-type DwgSvgReliability = {
-  isReliable: boolean;
-  reason?: string;
+type DwgParseResult = {
+  svg: string;
+  stats?: DwgPreviewStats;
+  thumbnail?: DwgThumbnail;
+  conversionError?: string;
 };
+
+type DwgWorkerMessage =
+  | { type: "progress"; message: string }
+  | { type: "success"; result: DwgParseResult }
+  | { type: "error"; message: string };
 
 let libreDwgPromise: Promise<LibreDwgModule> | undefined;
 
 const defaultLibreDwgWasmBaseUrl = "/vendor/libredwg-web";
 const minReadableDrawingHeight = 420;
 const libreDwgPackageName = "@mlightcad/libredwg-web";
+const defaultWorkerTimeoutMs = 120_000;
 const svgNumberPattern = /-?\d*\.?\d+(?:e[-+]?\d+)?/gi;
 
 export async function renderLibreDwgPreview(
@@ -108,39 +130,26 @@ export async function renderLibreDwgPreview(
   ctx.panel.append(shell);
 
   try {
-    const { LibreDwg, Dwg_File_Type } = await loadLibreDwg();
-    const libredwg = await LibreDwg.create(options.wasmBaseUrl || defaultLibreDwgWasmBaseUrl);
-    const data = libredwg.dwg_read_data(ctx.arrayBuffer, Dwg_File_Type.DWG);
-    if (!data) {
-      throw new Error("DWG parser did not return drawing data.");
-    }
+    const result = await parseDwg(ctx.arrayBuffer, options, ctx.preview.signal, (message) => {
+      status.textContent = message;
+    });
+    const svg = result.svg;
+    const stats = result.stats;
+    let thumbnailUrl = createDwgThumbnailUrl(result.thumbnail);
 
-    let svg = "";
-    let stats: DwgPreviewStats;
-    let thumbnailUrl: string | undefined;
-    try {
-      thumbnailUrl = createDwgThumbnailUrl(readDwgThumbnail(libredwg, data));
-      try {
-        const result = libredwg.convertEx(data);
-        const database = result.database;
-        stats = createDwgPreviewStats(database, result.stats.unknownEntityCount, Boolean(thumbnailUrl));
-        svg = libredwg.dwg_to_svg(database);
-      } catch (error) {
-        if (thumbnailUrl) {
-          const fallbackThumbnailUrl = thumbnailUrl;
-          status.replaceChildren(createDwgThumbnailFallbackStatus(ctx.fileName, error));
-          shell.append(createDwgThumbnailPreview(fallbackThumbnailUrl, ctx.fileName));
-          return {
-            destroy() {
-              URL.revokeObjectURL(fallbackThumbnailUrl);
-              shell.remove();
-            }
-          };
-        }
-        throw error;
+    if (result.conversionError) {
+      if (thumbnailUrl) {
+        const fallbackThumbnailUrl = thumbnailUrl;
+        status.replaceChildren(createDwgThumbnailFallbackStatus(ctx.fileName, result.conversionError));
+        shell.append(createDwgThumbnailPreview(fallbackThumbnailUrl, ctx.fileName));
+        return {
+          destroy() {
+            URL.revokeObjectURL(fallbackThumbnailUrl);
+            shell.remove();
+          }
+        };
       }
-    } finally {
-      libredwg.dwg_free(data);
+      throw new Error(result.conversionError);
     }
 
     if (!svg || !/<svg[\s>]/i.test(svg)) {
@@ -157,8 +166,11 @@ export async function renderLibreDwgPreview(
       }
       throw new Error("DWG parser finished but did not produce SVG output.");
     }
+    if (!stats) {
+      throw new Error("DWG parser finished without drawing statistics.");
+    }
 
-    const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+    const doc = new DOMParser().parseFromString(sanitizeDwgSvgMarkup(svg), "image/svg+xml");
     const svgElement = doc.documentElement;
     if (!(svgElement instanceof SVGElement) || svgElement.nodeName.toLowerCase() !== "svg" || svgElement.querySelector("parsererror")) {
       throw new Error("DWG SVG output is invalid.");
@@ -167,19 +179,9 @@ export async function renderLibreDwgPreview(
     svgElement.classList.add("ofv-dwg-preview-svg");
     svgElement.setAttribute("role", "img");
     svgElement.setAttribute("aria-label", ctx.fileName);
+    sanitizeDwgSvgElement(svgElement);
     normalizeDwgSvg(svgElement);
-    const reliability = assessDwgSvgReliability(svgElement);
-    status.replaceChildren(createDwgStatusTitle(ctx.fileName, stats, reliability));
-
-    if (!reliability.isReliable && thumbnailUrl) {
-      shell.append(createDwgThumbnailPreview(thumbnailUrl, ctx.fileName));
-      return {
-        destroy() {
-          URL.revokeObjectURL(thumbnailUrl);
-          shell.remove();
-        }
-      };
-    }
+    status.replaceChildren(createDwgStatusTitle(ctx.fileName, stats));
 
     const drawing = createDwgDrawingViewport(svgElement);
     if (thumbnailUrl) {
@@ -217,9 +219,294 @@ export async function renderLibreDwgPreview(
     };
   } catch (error) {
     shell.remove();
-    console.warn("DWG LibreDWG preview failed, falling back to metadata preview:", error);
+    if (!isAbortError(error)) {
+      console.warn("DWG LibreDWG preview failed, falling back to metadata preview:", error);
+    }
     return undefined;
   }
+}
+
+function sanitizeDwgSvgMarkup(svg: string): string {
+  return svg.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[\da-f]+);)/gi, "&amp;");
+}
+
+function sanitizeDwgSvgElement(svgElement: SVGElement): void {
+  svgElement.querySelectorAll("script,style,foreignObject,iframe,object,embed,audio,video").forEach((element) => element.remove());
+  for (const element of [svgElement, ...svgElement.querySelectorAll<SVGElement>("*")]) {
+    for (const attribute of [...element.attributes]) {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value.trim();
+      if (
+        name.startsWith("on") ||
+        ((name === "href" || name === "xlink:href") && value !== "" && !value.startsWith("#")) ||
+        (/url\s*\(/i.test(value) && !/url\s*\(\s*["']?#/i.test(value))
+      ) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+  }
+}
+
+async function parseDwg(
+  arrayBuffer: ArrayBuffer,
+  options: LibreDwgPreviewOptions,
+  signal: AbortSignal | undefined,
+  onProgress: (message: string) => void
+): Promise<DwgParseResult> {
+  const canUseWorker =
+    options.useWorker !== false &&
+    (Boolean(options.workerFactory) || (typeof Worker !== "undefined" && Boolean(options.workerModuleUrl)));
+  if (canUseWorker) {
+    return parseDwgInWorker(arrayBuffer, options, signal, onProgress);
+  }
+  onProgress("Parsing DWG on the main thread...");
+  return parseDwgOnMainThread(arrayBuffer, options.wasmBaseUrl || defaultLibreDwgWasmBaseUrl, signal);
+}
+
+async function parseDwgOnMainThread(
+  arrayBuffer: ArrayBuffer,
+  wasmBaseUrl: string,
+  signal?: AbortSignal
+): Promise<DwgParseResult> {
+  throwIfAborted(signal);
+  const { LibreDwg, Dwg_File_Type } = await loadLibreDwg();
+  throwIfAborted(signal);
+  const libredwg = await LibreDwg.create(wasmBaseUrl);
+  throwIfAborted(signal);
+  const data = libredwg.dwg_read_data(arrayBuffer, Dwg_File_Type.DWG);
+  if (!data) {
+    throw new Error("DWG parser did not return drawing data.");
+  }
+
+  try {
+    const thumbnail = readDwgThumbnail(libredwg, data);
+    try {
+      const result = libredwg.convertEx(data);
+      const database = result.database;
+      return {
+        svg: libredwg.dwg_to_svg(database),
+        stats: createDwgPreviewStats(database, result.stats.unknownEntityCount, Boolean(thumbnail)),
+        thumbnail
+      };
+    } catch (error) {
+      return {
+        svg: "",
+        thumbnail,
+        conversionError: getErrorMessage(error)
+      };
+    }
+  } finally {
+    libredwg.dwg_free(data);
+  }
+}
+
+function parseDwgInWorker(
+  arrayBuffer: ArrayBuffer,
+  options: LibreDwgPreviewOptions,
+  signal: AbortSignal | undefined,
+  onProgress: (message: string) => void
+): Promise<DwgParseResult> {
+  return new Promise((resolve, reject) => {
+    let worker: Worker;
+    try {
+      worker = options.workerFactory?.() ?? createInlineDwgWorker(options.workerModuleUrl!);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    let settled = false;
+    const timeoutMs = Math.max(1, options.workerTimeoutMs ?? defaultWorkerTimeoutMs);
+    const timeoutId = setTimeout(() => {
+      finish(() => reject(new Error(`DWG worker timed out after ${timeoutMs}ms.`)));
+    }, timeoutMs);
+
+    const onAbort = () => {
+      finish(() => reject(createAbortError()));
+    };
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeoutId);
+      signal?.removeEventListener("abort", onAbort);
+      worker.terminate();
+      callback();
+    };
+
+    worker.onmessage = (event: MessageEvent<DwgWorkerMessage>) => {
+      const message = event.data;
+      if (message.type === "progress") {
+        onProgress(message.message);
+        return;
+      }
+      if (message.type === "success") {
+        finish(() => resolve(normalizeWorkerResult(message.result)));
+        return;
+      }
+      finish(() => reject(new Error(message.message)));
+    };
+    worker.onerror = (event) => {
+      finish(() => reject(new Error(event.message || "DWG worker failed.")));
+    };
+
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+    const transferableBuffer = arrayBuffer.slice(0);
+    worker.postMessage(
+      {
+        type: "parse",
+        arrayBuffer: transferableBuffer,
+        moduleUrl: resolveWorkerAssetUrl(options.workerModuleUrl),
+        wasmBaseUrl: resolveWorkerAssetUrl(options.wasmBaseUrl || defaultLibreDwgWasmBaseUrl)
+      },
+      [transferableBuffer]
+    );
+  });
+}
+
+function resolveWorkerAssetUrl(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const baseUrl = typeof document !== "undefined" ? document.baseURI : globalThis.location?.href;
+  return baseUrl ? new URL(value, baseUrl).href : value;
+}
+
+function createInlineDwgWorker(moduleUrl: string): Worker {
+  if (!moduleUrl) {
+    throw new Error("DWG worker requires libreDwg.workerModuleUrl or a custom workerFactory.");
+  }
+  const source = `(${runLibreDwgWorker.toString()})();`;
+  const blobUrl = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+  try {
+    return new Worker(blobUrl, { type: "module", name: "open-file-viewer-dwg" });
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+  }
+}
+
+function runLibreDwgWorker(): void {
+  const scope = self as unknown as {
+    onmessage: ((event: MessageEvent) => void) | null;
+    postMessage: (message: unknown, transfer?: Transferable[]) => void;
+  };
+  const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error || "Unknown DWG error"));
+  const copyThumbnail = (thumbnail: { data?: Uint8Array; type?: number } | null | undefined) => {
+    if (!thumbnail?.data?.length) {
+      return undefined;
+    }
+    const data = thumbnail.data.slice();
+    return { data: data.buffer, type: Number(thumbnail.type || 0) };
+  };
+
+  scope.onmessage = async (event) => {
+    const request = event.data as {
+      type?: string;
+      arrayBuffer?: ArrayBuffer;
+      moduleUrl?: string;
+      wasmBaseUrl?: string;
+    };
+    if (request.type !== "parse" || !request.arrayBuffer || !request.moduleUrl) {
+      scope.postMessage({ type: "error", message: "DWG worker received an invalid parse request." });
+      return;
+    }
+
+    try {
+      scope.postMessage({ type: "progress", message: "Loading DWG rendering engine in worker..." });
+      const importModule = new Function("url", "return import(url)") as (url: string) => Promise<{
+        Dwg_File_Type: { DWG: number };
+        LibreDwg: { create(filepath?: string): Promise<any> };
+      }>;
+      const module = await importModule(request.moduleUrl);
+      const libredwg = await module.LibreDwg.create(request.wasmBaseUrl);
+      scope.postMessage({ type: "progress", message: "Parsing DWG geometry in worker..." });
+      const data = libredwg.dwg_read_data(request.arrayBuffer, module.Dwg_File_Type.DWG);
+      if (!data) {
+        throw new Error("DWG parser did not return drawing data.");
+      }
+
+      try {
+        let thumbnail;
+        try {
+          thumbnail = copyThumbnail(libredwg.dwg_bmp(data));
+        } catch {
+          thumbnail = undefined;
+        }
+        try {
+          const converted = libredwg.convertEx(data);
+          const database = converted.database;
+          const layers = database.tables?.LAYER?.entries ?? [];
+          const entities = database.entities ?? [];
+          const layouts = database.objects?.LAYOUT ?? [];
+          const result = {
+            svg: libredwg.dwg_to_svg(database),
+            stats: {
+              entityCount: entities.length,
+              layerCount: layers.length,
+              layoutCount: layouts.length,
+              unknownEntityCount: Number(converted.stats?.unknownEntityCount || 0),
+              visibleLayerCount: layers.filter((layer: { off?: boolean; frozen?: boolean }) => !layer.off && !layer.frozen).length,
+              paperSpaceEntityCount: entities.filter((entity: { isInPaperSpace?: boolean }) => entity.isInPaperSpace).length,
+              hasThumbnail: Boolean(thumbnail)
+            },
+            thumbnail
+          };
+          const transfer = thumbnail?.data ? [thumbnail.data] : [];
+          scope.postMessage({ type: "success", result }, transfer);
+        } catch (error) {
+          const result = {
+            svg: "",
+            thumbnail,
+            conversionError: errorMessage(error)
+          };
+          const transfer = thumbnail?.data ? [thumbnail.data] : [];
+          scope.postMessage({ type: "success", result }, transfer);
+        }
+      } finally {
+        libredwg.dwg_free(data);
+      }
+    } catch (error) {
+      scope.postMessage({ type: "error", message: errorMessage(error) });
+    }
+  };
+}
+
+function normalizeWorkerResult(result: DwgParseResult): DwgParseResult {
+  const thumbnail = result.thumbnail as DwgThumbnail | { data: ArrayBuffer; type: number } | undefined;
+  return {
+    ...result,
+    thumbnail: thumbnail
+      ? {
+          type: thumbnail.type,
+          data: thumbnail.data instanceof Uint8Array ? thumbnail.data : new Uint8Array(thumbnail.data)
+        }
+      : undefined
+  };
+}
+
+function createAbortError(): Error {
+  const error = new Error("DWG preview was aborted.");
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw createAbortError();
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error || "Unknown DWG error");
 }
 
 function loadLibreDwg(): Promise<LibreDwgModule> {
@@ -231,11 +518,11 @@ function importOptionalModule<T>(packageName: string): Promise<T> {
   return new Function("packageName", "return import(packageName)")(packageName) as Promise<T>;
 }
 
-function createDwgStatusTitle(fileName: string, stats: DwgPreviewStats, reliability: DwgSvgReliability): HTMLElement {
+function createDwgStatusTitle(fileName: string, stats: DwgPreviewStats): HTMLElement {
   const wrapper = document.createElement("span");
   const title = document.createElement("strong");
   const note = document.createElement("small");
-  title.textContent = reliability.isReliable ? `实验性 DWG 模型空间预览 · ${fileName}` : `DWG 内置预览图 · ${fileName}`;
+  title.textContent = `实验性 DWG 模型空间预览 · ${fileName}`;
   note.textContent = [
     `${stats.entityCount.toLocaleString()} 个实体`,
     `${stats.visibleLayerCount}/${stats.layerCount} 个可见图层`,
@@ -245,9 +532,7 @@ function createDwgStatusTitle(fileName: string, stats: DwgPreviewStats, reliabil
     stats.hasThumbnail ? "包含内置缩略图" : "无内置缩略图"
   ].join(" · ");
   const warning = document.createElement("small");
-  warning.textContent = reliability.isReliable
-    ? "当前为 LibreDWG WASM 线稿预览，复杂布局/打印空间/字体/填充与专业 CAD 仍可能存在差异。"
-    : `LibreDWG 线稿检测到异常图元，已优先显示文件内置预览图。${reliability.reason ?? ""}`;
+  warning.textContent = "当前为 LibreDWG WASM 线稿预览，复杂布局/打印空间/字体/填充与专业 CAD 仍可能存在差异。";
   wrapper.append(title, note, warning);
   return wrapper;
 }
@@ -393,78 +678,6 @@ function removeInheritedDwgFills(svgElement: SVGElement): void {
   for (const shape of svgElement.querySelectorAll<SVGElement>(shapeSelector)) {
     shape.setAttribute("fill", "none");
   }
-}
-
-function assessDwgSvgReliability(svgElement: SVGElement): DwgSvgReliability {
-  const bounds = readSvgViewBox(svgElement);
-  if (!bounds) {
-    return { isReliable: true };
-  }
-
-  const largePathCount = countLargeSvgPaths(svgElement, bounds);
-  const totalPathCount = svgElement.querySelectorAll("path").length;
-  if (largePathCount >= 24 && totalPathCount > 0 && largePathCount / totalPathCount > 0.08) {
-    return {
-      isReliable: false,
-      reason: "该文件包含大量超出主体视口的大路径/块参照，线稿模式会明显偏离 CAD 布局。"
-    };
-  }
-
-  return { isReliable: true };
-}
-
-function countLargeSvgPaths(svgElement: SVGElement, bounds: DwgSvgBounds): number {
-  let count = 0;
-  const viewportArea = bounds.width * bounds.height;
-  if (!Number.isFinite(viewportArea) || viewportArea <= 0) {
-    return count;
-  }
-
-  for (const path of svgElement.querySelectorAll<SVGPathElement>("path")) {
-    if (path.closest("defs")) {
-      continue;
-    }
-    const pathBounds = estimatePathBounds(path);
-    if (!pathBounds) {
-      continue;
-    }
-    const pathArea = pathBounds.width * pathBounds.height;
-    const crossesViewport = pathBounds.minX <= bounds.minX + bounds.width * 0.02 || pathBounds.minY <= bounds.minY + bounds.height * 0.02;
-    if (pathArea > viewportArea * 0.28 || (crossesViewport && pathArea > viewportArea * 0.12)) {
-      count += 1;
-    }
-  }
-
-  return count;
-}
-
-function estimatePathBounds(path: SVGPathElement): DwgSvgBounds | undefined {
-  const numbers = readNumbers(path.getAttribute("d") ?? "");
-  if (numbers.length < 4) {
-    return undefined;
-  }
-
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (let index = 0; index + 1 < numbers.length; index += 2) {
-    const x = numbers[index];
-    const y = numbers[index + 1];
-    if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 1_000_000_000 || Math.abs(y) > 1_000_000_000) {
-      continue;
-    }
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
-  }
-
-  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
-    return undefined;
-  }
-
-  return { minX, minY, width: maxX - minX, height: maxY - minY };
 }
 
 function focusDwgSvgOnMainDrawing(svgElement: SVGElement): void {

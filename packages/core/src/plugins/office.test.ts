@@ -443,10 +443,10 @@ describe("officePlugin", () => {
     const darkFillCell = container.querySelector<HTMLTableCellElement>('[data-cell="A4"]');
     expect(darkFillCell?.style.backgroundColor).toBe("rgb(30, 58, 138)");
     expect(darkFillCell?.style.color).toBe("rgb(248, 250, 252)");
-    // SheetJS CE only surfaces fills for xlsx (cell.s = Fills[fillid]), so no inline ink here.
     const inkCell = container.querySelector<HTMLTableCellElement>('[data-cell="C4"]');
     expect(inkCell?.textContent).toBe("Black ink");
-    expect(inkCell?.style.color).toBe("");
+    expect(inkCell?.style.color).toBe("rgb(0, 0, 0)");
+    expect(inkCell?.style.fontWeight).toBe("700");
     expect(container.querySelector<HTMLTableCellElement>('[data-cell="C3"]')?.classList.contains("ofv-cell-number")).toBe(true);
     expect(container.querySelector('[data-cell="B1"]')).toBeNull();
     expect(mergedNote?.rowSpan).toBe(2);
@@ -455,6 +455,38 @@ describe("officePlugin", () => {
     expect(table?.style.width).toBe("380px");
     expect(container.querySelector<HTMLTableRowElement>("tr")?.style.height).toBe("21px");
     expect(container.querySelector(".ofv-column-resize-handle")).not.toBeNull();
+  });
+
+  it("preserves Excel rich text runs inside sheet cells", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: await createRichTextWorkbook(),
+      fileName: "rich-text.xlsx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-workbook-table")));
+
+    const sharedCell = container.querySelector<HTMLTableCellElement>('[data-cell="A1"]');
+    const inlineCell = container.querySelector<HTMLTableCellElement>('[data-cell="B1"]');
+    const sharedRuns = sharedCell?.querySelectorAll<HTMLElement>(".ofv-rich-text-run");
+    const inlineRuns = inlineCell?.querySelectorAll<HTMLElement>(".ofv-rich-text-run");
+
+    expect(sharedCell?.textContent).toBe("Bold red normal");
+    expect(sharedCell?.classList.contains("ofv-cell-rich-text")).toBe(true);
+    expect(sharedRuns?.[0]?.textContent).toBe("Bold red");
+    expect(sharedRuns?.[0]?.style.fontWeight).toBe("700");
+    expect(sharedRuns?.[0]?.style.color).toBe("rgb(255, 0, 0)");
+    expect(sharedRuns?.[1]?.textContent).toBe(" normal");
+    expect(sharedRuns?.[1]?.style.fontWeight).toBe("");
+
+    expect(inlineCell?.textContent).toBe("Italic blue and underlined");
+    expect(inlineRuns?.[0]?.style.fontStyle).toBe("italic");
+    expect(inlineRuns?.[0]?.style.color).toBe("rgb(0, 112, 192)");
+    expect(inlineRuns?.[2]?.style.textDecoration).toContain("underline");
   });
 
   it("preserves wide Excel column widths from worksheet metadata", async () => {
@@ -1042,7 +1074,9 @@ describe("officePlugin", () => {
 
     expect(container.querySelector(".ofv-docx-document")?.textContent).toContain("DOCX layout page");
     expect(container.querySelector(".ofv-docx-document")?.textContent).not.toContain("docx-internal-style");
-    expect(document.head.querySelector(".ofv-docx-style-container")?.textContent).toContain("docx-internal-style");
+    const styleContainer = document.head.querySelector(".ofv-docx-style-container");
+    expect(styleContainer).toBeInstanceOf(HTMLStyleElement);
+    expect(styleContainer?.textContent).toContain("docx-internal-style");
 
     viewer.destroy();
 
@@ -2336,7 +2370,7 @@ async function createStyledWorkbook(): Promise<Blob> {
       <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
         <fonts count="2">
           <font><sz val="11"/><name val="Calibri"/></font>
-          <font><sz val="11"/><color rgb="FF000000"/><name val="Calibri"/></font>
+          <font><b/><sz val="11"/><color rgb="FF000000"/><name val="Calibri"/></font>
         </fonts>
         <fills count="4">
           <fill><patternFill patternType="none"/></fill>
@@ -2388,6 +2422,76 @@ async function createStyledWorkbook(): Promise<Blob> {
           <mergeCell ref="A1:C1"/>
           <mergeCell ref="B2:B3"/>
         </mergeCells>
+      </worksheet>`
+  );
+  return zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+}
+
+async function createRichTextWorkbook(): Promise<Blob> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+        <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+        <Default Extension="xml" ContentType="application/xml"/>
+        <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+        <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+        <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+      </Types>`
+  );
+  zip.file(
+    "_rels/.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+      </Relationships>`
+  );
+  zip.file(
+    "xl/_rels/workbook.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+        <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+      </Relationships>`
+  );
+  zip.file(
+    "xl/workbook.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <sheets><sheet name="Rich Text" sheetId="1" r:id="rId1"/></sheets>
+      </workbook>`
+  );
+  zip.file(
+    "xl/sharedStrings.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1">
+        <si>
+          <r><rPr><b/><color rgb="FFFF0000"/></rPr><t>Bold red</t></r>
+          <r><t xml:space="preserve"> normal</t></r>
+        </si>
+      </sst>`
+  );
+  zip.file(
+    "xl/worksheets/sheet1.xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+      <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <sheetData>
+          <row r="1">
+            <c r="A1" t="s"><v>0</v></c>
+            <c r="B1" t="inlineStr">
+              <is>
+                <r><rPr><i/><color rgb="FF0070C0"/></rPr><t>Italic blue</t></r>
+                <r><t xml:space="preserve"> and </t></r>
+                <r><rPr><u/></rPr><t>underlined</t></r>
+              </is>
+            </c>
+          </row>
+        </sheetData>
       </worksheet>`
   );
   return zip.generateAsync({

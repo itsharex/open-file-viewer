@@ -1,6 +1,6 @@
 import { createObjectUrl, revokeObjectUrl } from "../dom";
 import { defaultMessages, formatPreviewMessage } from "../messages";
-import type { PreviewMessages, PreviewPlugin, PreviewSize } from "../types";
+import type { PreviewFit, PreviewMessages, PreviewPlugin, PreviewSize } from "../types";
 import { createEncryptedFallback, isEncryptedError } from "./encrypted";
 import { getInitialZoom } from "./utils";
 
@@ -34,7 +34,7 @@ export interface PdfDocumentPreviewOptions {
   isExternal?: boolean;
   viewport: HTMLElement;
   size: PreviewSize;
-  fit: string;
+  fit: PreviewFit;
   zoom?: number;
   toolbar?: {
     setZoom(value: number | undefined): void;
@@ -231,6 +231,8 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
   // width and show a permanent sliver of horizontal scroll at 100%.
   const resolveLayoutWidth = (size: PreviewSize) =>
     scroller.clientWidth > 0 ? scroller.clientWidth : size.width;
+  const resolveLayoutHeight = (size: PreviewSize) =>
+    scroller.clientHeight > 0 ? scroller.clientHeight : size.height;
 
   const goToPage = (page: number, scroll = true) => {
     currentPage = Math.min(pdfDocument.numPages, Math.max(1, Math.round(page) || 1));
@@ -304,10 +306,14 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
     try {
       const page = await pdfDocument.getPage(pageIdx + 1);
       const meta = pagesMeta[pageIdx];
-      const scale =
-        options.fit === "actual"
-          ? zoomFactor
-          : Math.max(0.05, Math.min(5, (getPdfAvailableWidth(resolveLayoutWidth(size)) / rotatedPdfWidth(meta, rotation)) * zoomFactor));
+      const scale = resolvePdfPageScale(
+        meta,
+        options.fit,
+        resolveLayoutWidth(size),
+        resolveLayoutHeight(size),
+        zoomFactor,
+        rotation
+      );
       const viewport = page.getViewport({ scale, rotation: getPdfRenderRotation(meta, rotation) });
       const outputScale = getPdfOutputScale();
       const cssWidth = Math.floor(viewport.width);
@@ -424,10 +430,14 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
       const meta = pagesMeta[i];
       const rotatedWidth = rotatedPdfWidth(meta, rotation);
       const rotatedHeight = rotatedPdfHeight(meta, rotation);
-      const scale =
-        options.fit === "actual"
-          ? zoomFactor
-          : Math.max(0.05, Math.min(5, (getPdfAvailableWidth(resolveLayoutWidth(size)) / rotatedWidth) * zoomFactor));
+      const scale = resolvePdfPageScale(
+        meta,
+        options.fit,
+        resolveLayoutWidth(size),
+        resolveLayoutHeight(size),
+        zoomFactor,
+        rotation
+      );
 
       const w = Math.floor(rotatedWidth * scale);
       const h = Math.floor(rotatedHeight * scale);
@@ -577,11 +587,54 @@ function getPdfAvailableWidth(width: number): number {
   return Math.max(1, width - gutter);
 }
 
+function getPdfAvailableHeight(height: number): number {
+  if (!Number.isFinite(height) || height <= 0) {
+    return 1;
+  }
+  const gutter = height < 160 ? 16 : 32;
+  return Math.max(1, height - gutter);
+}
+
+function resolvePdfPageScale(
+  meta: { width: number; height: number },
+  fit: PreviewFit,
+  layoutWidth: number,
+  layoutHeight: number,
+  zoomFactor: number,
+  rotation: number
+): number {
+  const widthScale = getPdfAvailableWidth(layoutWidth) / rotatedPdfWidth(meta, rotation);
+  const heightScale = getPdfAvailableHeight(layoutHeight) / rotatedPdfHeight(meta, rotation);
+  let fitScale: number;
+  switch (fit) {
+    case "actual":
+      fitScale = 1;
+      break;
+    case "width":
+      fitScale = widthScale;
+      break;
+    case "height":
+      fitScale = heightScale;
+      break;
+    case "cover":
+      fitScale = Math.max(widthScale, heightScale);
+      break;
+    case "scale-down":
+      fitScale = Math.min(1, widthScale, heightScale);
+      break;
+    case "contain":
+    default:
+      fitScale = Math.min(widthScale, heightScale);
+      break;
+  }
+  return Math.max(0.05, Math.min(5, fitScale * zoomFactor));
+}
+
 function renderPdfSummary(
   summary: HTMLElement,
   pages: number,
   pagesMeta: Array<{ width: number; height: number }>,
-  fit: string,
+  fit: PreviewFit,
   zoomFactor: number,
   messages: PreviewMessages
 ): void {

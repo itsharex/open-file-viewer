@@ -14,6 +14,7 @@ import {
   pdfPlugin,
   textPlugin,
   videoPlugin,
+  xmindPlugin,
   xpsPlugin
 } from "@open-file-viewer/core";
 import "@open-file-viewer/core/style.css";
@@ -44,6 +45,7 @@ function App() {
       archivePlugin(),
       emailPlugin(),
       drawingPlugin(),
+      xmindPlugin(),
       cadPlugin(),
       model3dPlugin(),
       gisPlugin(),

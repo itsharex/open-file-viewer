@@ -91,6 +91,7 @@ export function createViewer(options: PreviewOptions): FileViewer {
 
   let destroyed = false;
   let renderToken = 0;
+  let renderAbortController: AbortController | undefined;
 
   const setLoading = (loading: boolean) => {
     status.hidden = !loading;
@@ -120,6 +121,9 @@ export function createViewer(options: PreviewOptions): FileViewer {
     }
     destroyPreviewInstance(currentInstance);
     currentInstance = undefined;
+    renderAbortController?.abort();
+    const abortController = new AbortController();
+    renderAbortController = abortController;
     viewport.replaceChildren();
     setLoading(true);
     toolbar?.update(file, currentIndex, queue.length);
@@ -138,12 +142,16 @@ export function createViewer(options: PreviewOptions): FileViewer {
         size: getElementSize(viewport),
         options: normalizedOptions,
         toolbar: toolbar?.getContext(),
+        signal: abortController.signal,
         setLoading,
         setError
       });
       if (destroyed || token !== renderToken) {
         destroyPreviewInstance(nextInstance);
         return;
+      }
+      if (renderAbortController === abortController) {
+        renderAbortController = undefined;
       }
       currentInstance = nextInstance;
       setLoading(false);
@@ -153,6 +161,9 @@ export function createViewer(options: PreviewOptions): FileViewer {
       options.onLoad?.(file);
       resize();
     } catch (error) {
+      if (renderAbortController === abortController) {
+        renderAbortController = undefined;
+      }
       if (destroyed || token !== renderToken) {
         return;
       }
@@ -166,6 +177,8 @@ export function createViewer(options: PreviewOptions): FileViewer {
 
   async function renderQueueItem(index: number) {
     const token = ++renderToken;
+    renderAbortController?.abort();
+    renderAbortController = undefined;
     const item = queue[index];
     const file = await normalizeFile(item.file, item.fileName, item.mimeType);
     if (destroyed || token !== renderToken) {
@@ -201,6 +214,8 @@ export function createViewer(options: PreviewOptions): FileViewer {
     destroy() {
       destroyed = true;
       renderToken += 1;
+      renderAbortController?.abort();
+      renderAbortController = undefined;
       resizeObserver.destroy();
       destroyPreviewInstance(currentInstance);
       toolbar?.destroy();

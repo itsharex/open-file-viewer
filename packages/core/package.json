@@ -38,7 +38,16 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependenciesMeta": {
+    "@mlightcad/cad-simple-viewer": {
+      "optional": true
+    },
+    "@mlightcad/data-model": {
+      "optional": true
+    },
     "@mlightcad/libredwg-web": {
+      "optional": true
+    },
+    "lodash-es": {
       "optional": true
     },
     "pdfjs-dist": {
@@ -46,10 +55,15 @@
     }
   },
   "peerDependencies": {
+    "@mlightcad/cad-simple-viewer": ">=1.5.9",
+    "@mlightcad/data-model": ">=1.12.3",
     "@mlightcad/libredwg-web": ">=0.7.4",
+    "lodash-es": ">=4.17.21",
     "pdfjs-dist": ">=4"
   },
   "devDependencies": {
+    "@mlightcad/cad-simple-viewer": "1.5.9",
+    "@mlightcad/data-model": "1.12.3",
     "@mlightcad/libredwg-web": "0.7.4",
     "@types/leaflet": "^1.9.21",
     "@types/marked": "^6.0.0",
@@ -57,6 +71,7 @@
     "@types/prismjs": "^1.26.6",
     "@types/three": "^0.184.1",
     "@types/topojson-client": "^3.1.5",
+    "lodash-es": "4.17.21",
     "pdfjs-dist": "^4.10.38"
   },
   "dependencies": {
@@ -66,6 +81,7 @@
     "ag-psd": "^30.2.0",
     "docx-preview": "^0.3.7",
     "dompurify": "^3.4.10",
+    "emf-converter": "^2.0.2",
     "heic2any": "^0.0.4",
     "hls.js": "^1.6.16",
     "hyparquet": "^1.26.1",

@@ -429,6 +429,58 @@ describe("pdfPlugin", () => {
     viewer.destroy();
   });
 
+  it("contains PDF pages within both viewport dimensions instead of enlarging them to width", async () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    const container = createSizedContainer({ width: 920, height: 620 });
+    const pdfjs = createPdfJsMock();
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["pdf"], { type: "application/pdf" }),
+      fileName: "small-page.pdf",
+      width: "920px",
+      height: "620px",
+      fit: "contain",
+      plugins: [pdfPlugin({ pdfjs })]
+    });
+    mockViewportSize(container, 920, 620);
+    await viewer.reload();
+
+    await waitFor(() => Boolean(container.querySelector("canvas.ofv-pdf-page")));
+
+    const wrapper = container.querySelector<HTMLElement>(".ofv-pdf-page-wrapper");
+    expect(wrapper?.style.width).toBe("392px");
+    expect(wrapper?.style.height).toBe("588px");
+
+    viewer.destroy();
+  });
+
+  it("does not upscale PDF pages in scale-down mode", async () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    const container = createSizedContainer({ width: 920, height: 920 });
+    const pdfjs = createPdfJsMock();
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["pdf"], { type: "application/pdf" }),
+      fileName: "scale-down.pdf",
+      width: "920px",
+      height: "920px",
+      fit: "scale-down",
+      plugins: [pdfPlugin({ pdfjs })]
+    });
+    mockViewportSize(container, 920, 920);
+    await viewer.reload();
+
+    await waitFor(() => Boolean(container.querySelector("canvas.ofv-pdf-page")));
+
+    const wrapper = container.querySelector<HTMLElement>(".ofv-pdf-page-wrapper");
+    expect(wrapper?.style.width).toBe("400px");
+    expect(wrapper?.style.height).toBe("600px");
+
+    viewer.destroy();
+  });
+
   it("preserves intrinsic PDF page rotation while rendering", async () => {
     vi.stubGlobal("IntersectionObserver", undefined);
     const container = createSizedContainer();

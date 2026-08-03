@@ -15,6 +15,7 @@ import {
   pdfPlugin,
   textPlugin,
   videoPlugin,
+  xmindPlugin,
   type FileViewer,
   type PreviewItem,
   type PreviewFit,
@@ -42,7 +43,8 @@ type CodeTab = "vanilla" | "react" | "vue" | "svelte";
 
 interface DemoFile {
   label: Record<Language, string>;
-  file: File;
+  file: PreviewSource;
+  fileName?: string;
 }
 
 type ZipEntry = {
@@ -687,15 +689,18 @@ EOF`
   },
   {
     label: { zh: "GDSII 版图", en: "GDSII Layout" },
-    file: createGdsSample()
+    file: "./samples/cad/15bias.GDS",
+    fileName: "15bias.GDS"
   },
   {
     label: { zh: "OASIS 版图", en: "OASIS Layout" },
-    file: createOasisSample()
+    file: "./samples/cad/15bias.oas",
+    fileName: "15bias.oas"
   },
   {
     label: { zh: "DWG 图纸", en: "DWG Drawing" },
-    file: createDwgSample()
+    file: "./samples/cad/绘图_翁家翌_2016011446_自63.dwg",
+    fileName: "绘图_翁家翌_2016011446_自63.dwg"
   }
 ];
 
@@ -937,49 +942,6 @@ function createObjSample(): File {
     "sample-model.obj",
     { type: "model/obj" }
   );
-}
-
-function createGdsSample(): File {
-  const records: number[] = [
-    ...gdsRecord(0x0002, [0x00, 0x07]),
-    ...gdsRecord(0x0102, new Array(24).fill(0)),
-    ...gdsRecord(0x0206, [...ascii("OFV_LIB"), 0]),
-    ...gdsRecord(0x0305, new Array(16).fill(0)),
-    ...gdsRecord(0x0502, []),
-    ...gdsRecord(0x0606, [...ascii("TOP"), 0]),
-    ...gdsRecord(0x0800, []),
-    ...gdsRecord(0x0d02, [0x00, 0x01]),
-    ...gdsRecord(0x0e02, [0x00, 0x00]),
-    ...gdsRecord(0x1003, [
-      ...int32Be(0),
-      ...int32Be(0),
-      ...int32Be(1200),
-      ...int32Be(0),
-      ...int32Be(1200),
-      ...int32Be(800),
-      ...int32Be(0),
-      ...int32Be(800),
-      ...int32Be(0),
-      ...int32Be(0)
-    ]),
-    ...gdsRecord(0x1100, []),
-    ...gdsRecord(0x0700, []),
-    ...gdsRecord(0x0400, [])
-  ];
-  return new File([toArrayBuffer(Uint8Array.from(records))], "chip-layout.gds", { type: "application/vnd.gds" });
-}
-
-function createOasisSample(): File {
-  const compressedCellHints = [
-    0x63, 0x66, 0x0e, 0xf1, 0x0f, 0x60, 0xe6, 0x70, 0xf1, 0x74, 0x8d, 0x0f, 0xf6, 0x8c, 0x72, 0x05, 0x00
-  ];
-  const bytes = Uint8Array.from([...ascii("%SEMI-OASIS\r\n"), 0x01, 0x03, ...ascii("1.0"), 0x00, 0x21, ...compressedCellHints, 0x02]);
-  return new File([toArrayBuffer(bytes)], "chip-layout.oas", { type: "application/vnd.oasis.layout" });
-}
-
-function createDwgSample(): File {
-  const bytes = Uint8Array.from(ascii("AC1027\0\0DWGDATA\0LINE\0LAYER A-WALL\0BLOCK Door\0XREF site.dwg\0"));
-  return new File([toArrayBuffer(bytes)], "sample-plan.dwg", { type: "application/acad" });
 }
 
 function createDocxSample(): File {
@@ -1446,18 +1408,6 @@ function ascii(value: string): number[] {
   return [...value].map((char) => char.charCodeAt(0));
 }
 
-function gdsRecord(type: number, payload: number[]): number[] {
-  return [...uint16Be(payload.length + 4), (type >>> 8) & 0xff, type & 0xff, ...payload];
-}
-
-function uint16Be(value: number): number[] {
-  return [(value >>> 8) & 0xff, value & 0xff];
-}
-
-function int32Be(value: number): number[] {
-  return [(value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff];
-}
-
 function setUint16Be(bytes: Uint8Array, offset: number, value: number): void {
   bytes[offset] = (value >>> 8) & 0xff;
   bytes[offset + 1] = value & 0xff;
@@ -1553,7 +1503,16 @@ function createPlugins() {
     archivePlugin(),
     emailPlugin(),
     drawingPlugin(),
-    cadPlugin({ libreDwg: { wasmBaseUrl: "/vendor/libredwg-web" } }),
+    xmindPlugin(),
+    cadPlugin({
+      webglDwg: {
+        workerBaseUrl: "/vendor/cad-engine"
+      },
+      libreDwg: {
+        wasmBaseUrl: "/vendor/libredwg-web/wasm",
+        workerModuleUrl: "/vendor/libredwg-web/dist/libredwg-web.js"
+      }
+    }),
     model3dPlugin(),
     gisPlugin(),
     assetPlugin(),
@@ -1973,7 +1932,7 @@ fileDrop.addEventListener("drop", (event) => {
 sampleInput.addEventListener("change", () => {
   const demo = demoFiles[Number(sampleInput.value)] || demoFiles[0];
   currentFiles = [demo.file];
-  currentFileName = demo.file.name;
+  currentFileName = demo.fileName || inferFileNameFromSource(demo.file);
   fileInput.value = "";
   fileUrlInput.value = "";
   updateFilePickerLabel();

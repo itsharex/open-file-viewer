@@ -15,6 +15,7 @@
     pdfPlugin,
     textPlugin,
     videoPlugin,
+    xmindPlugin,
     xpsPlugin,
     type PreviewTheme
   } from "@open-file-viewer/core";
@@ -41,6 +42,7 @@
     archivePlugin(),
     emailPlugin(),
     drawingPlugin(),
+    xmindPlugin(),
     cadPlugin(),
     model3dPlugin(),
     gisPlugin(),

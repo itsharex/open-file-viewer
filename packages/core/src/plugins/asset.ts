@@ -1,6 +1,6 @@
 import { createObjectUrl, revokeObjectUrl } from "../dom";
 import type { Psd } from "ag-psd";
-import type { PreviewCommand, PreviewInstance, PreviewPlugin, PreviewSize } from "../types";
+import type { PreviewCommand, PreviewFit, PreviewInstance, PreviewPlugin, PreviewSize } from "../types";
 import { renderPdfDocumentPreview } from "./pdf";
 import { appendMeta, createPanel, createSection, readArrayBuffer, resolveFormat } from "./utils";
 
@@ -2986,7 +2986,7 @@ async function createPostScriptPreview(
   url: string,
   fileName: string,
   size: { width: number; height: number },
-  fit: string,
+  fit: PreviewFit,
   toolbar?: { setZoom(value: number | undefined): void }
 ): Promise<{ element: HTMLElement; instance?: PreviewInstance; primaryRendered?: boolean }> {
   const parsed = parsePostScript(bytes);
@@ -3029,7 +3029,7 @@ async function createPdfCompatibleAiPreview(
   url: string,
   fileName: string,
   size: { width: number; height: number },
-  fit: string,
+  fit: PreviewFit,
   toolbar?: { setZoom(value: number | undefined): void },
   pdfOffset = 0,
   zoom = 1

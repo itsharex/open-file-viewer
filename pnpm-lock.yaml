@@ -53,12 +53,21 @@ importers:
 
   doc:
     dependencies:
+      '@mlightcad/cad-simple-viewer':
+        specifier: 1.5.9
+        version: 1.5.9(@mlightcad/data-model@1.12.3)(lodash-es@4.17.21)(three@0.184.0)
+      '@mlightcad/data-model':
+        specifier: 1.12.3
+        version: 1.12.3
       '@mlightcad/libredwg-web':
         specifier: 0.7.4
         version: 0.7.4
       '@open-file-viewer/core':
         specifier: workspace:*
         version: link:../packages/core
+      lodash-es:
+        specifier: 4.17.21
+        version: 4.17.21
       pdfjs-dist:
         specifier: ^4.10.38
         version: 4.10.38
@@ -187,6 +196,9 @@ importers:
       dompurify:
         specifier: ^3.4.10
         version: 3.4.10
+      emf-converter:
+        specifier: ^2.0.2
+        version: 2.0.2
       heic2any:
         specifier: ^0.0.4
         version: 0.0.4
@@ -242,6 +254,12 @@ importers:
         specifier: ^0.2.3
         version: 0.2.3
     devDependencies:
+      '@mlightcad/cad-simple-viewer':
+        specifier: 1.5.9
+        version: 1.5.9(@mlightcad/data-model@1.12.3)(lodash-es@4.17.21)(three@0.184.0)
+      '@mlightcad/data-model':
+        specifier: 1.12.3
+        version: 1.12.3
       '@mlightcad/libredwg-web':
         specifier: 0.7.4
         version: 0.7.4
@@ -263,6 +281,9 @@ importers:
       '@types/topojson-client':
         specifier: ^3.1.5
         version: 3.1.5
+      lodash-es:
+        specifier: 4.17.21
+        version: 4.17.21
       pdfjs-dist:
         specifier: ^4.10.38
         version: 4.10.38
@@ -833,12 +854,40 @@ packages:
     resolution: {integrity: sha512-+iv2rWCGRHmX/3sBwXZzkThEuuywGJjnYsvxj6Kp1L/FDMICQcFrtqN+6MFrnh2d+umtfGtX904wxaYEDZ52MQ==}
     engines: {node: '>= 10'}
 
+  '@lukeed/csprng@1.1.0':
+    resolution: {integrity: sha512-Z7C/xXCiGWsg0KuKsHTKJxbWhpI3Vs5GwLfOean7MGyVFGqdRgBbAjOCh6u4bbjPc/8MJ2pZmK/0DLdCbivLDA==}
+    engines: {node: '>=8'}
+
   '@mapbox/togeojson@0.16.2':
     resolution: {integrity: sha512-DcApudmw4g/grOrpM5gYPZfts6Kr8litBESN6n/27sDsjR2f+iJhx4BA0J2B+XrLlnHyJkKztYApe6oCUZpzFA==}
     hasBin: true
 
   '@mermaid-js/parser@1.2.0':
     resolution: {integrity: sha512-oYPyv8A4As1yH5Bx+04iQEQxXuIQDe0GKCNSRgao6z8AM9jixXIfP0vsppRLvGf+nKIOb9/LdpWA4YuJiVvESA==}
+
+  '@mlightcad/cad-simple-viewer@1.5.9':
+    resolution: {integrity: sha512-EzlvlLQS/3xlhef0aDsxIDfQ78D6OUZICqKBgtLhgpIX6HWHhKJUtvglrTnsEdSzTjhzzZXBS4lzk6ldM3gnVA==}
+    peerDependencies:
+      '@mlightcad/data-model': ^1.12.2
+      lodash-es: 4.17.21
+      three: ^0.172.0
+
+  '@mlightcad/common@1.12.3':
+    resolution: {integrity: sha512-MnhV2r46behFCuYJJ62Ihvdt+4/RW3qx8csZZ8KlZXj2Qm5UWkfT4fYs0+yFyp6fRFhIm+uFxY0BPeVmnCP6XA==}
+
+  '@mlightcad/data-model@1.12.3':
+    resolution: {integrity: sha512-hN6nO24NA3KYtY/DbBrLzhothBg98eNkmg90NB4bllrQR6gR5vncVch8VfiV/KU/DxsR5Fe3f9a6OkB70p+opw==}
+
+  '@mlightcad/geometry-engine@3.12.3':
+    resolution: {integrity: sha512-x5ovTZ/nb8Csy8dAVsROSNikLjLtPqTG0Sgtf5QtUalPKP2FtwDZdYyQM/rN13JZI7mPCwIT9k4tubYq6x2aUw==}
+    peerDependencies:
+      '@mlightcad/common': 1.12.3
+
+  '@mlightcad/graphic-interface@3.12.3':
+    resolution: {integrity: sha512-uhPNvvPidvd11sQoAxqoAccuzBwAphPzZNG/osGNF++OnNIYJqLdGSDRtIStgpEN54AiEL0fI43EsvdfsMbjyw==}
+    peerDependencies:
+      '@mlightcad/common': 1.12.3
+      '@mlightcad/geometry-engine': 3.12.3
 
   '@mlightcad/libredwg-web@0.7.4':
     resolution: {integrity: sha512-l6qHbM6NgyCsI308J4hrfCb97jvsYZkwviPY6ZthQPMXvy2a1DNFb00TlOzwPjhbT1kdsHaJ0EWuN+L0eNfVng==}
@@ -1859,6 +1908,9 @@ packages:
   electron-to-chromium@1.5.364:
     resolution: {integrity: sha512-G/dYE3+AYhyHwzTwg8UbnXf7zqMERYh7l2jJ3QujhFsH8agSYwtnGAR2aZ7f0AakIKJXd5En/Hre4igIUrdlYw==}
 
+  emf-converter@2.0.2:
+    resolution: {integrity: sha512-QLUufb45P3LlOudCoizBtJpO8cBw8LayH0mkvkRvIjvMlb6junwP0EXgUkdDyZUEF2QSEZUPV8rO8DS5rsJmkA==}
+
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
 
@@ -2210,8 +2262,15 @@ packages:
   locate-character@3.0.0:
     resolution: {integrity: sha512-SW13ws7BjaeJ6p7Q6CO2nchbYEc3X3J6WrmTTDto7yMPqVSZTUyY5Tjbid+Ab8gLnATtygYtiDIJGQRRn2ZOiA==}
 
+  lodash-es@4.17.21:
+    resolution: {integrity: sha512-mKnC+QJ9pWVzv+C4/U3rRsHapFfHvQFoFB92e52xeyGMcX6/OlIl78je1u8vePzYZSkkogMPJ2yjxxsb89cxyw==}
+
   lodash-es@4.18.1:
     resolution: {integrity: sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A==}
+
+  loglevel@1.9.2:
+    resolution: {integrity: sha512-HgMmCqIJSAKqo68l0rS2AanEWfkxaZ5wNiEFb5ggm08lDs9Xl2KxBlX3PTcaD2chBM1gXAYf491/M2Rv8Jwayg==}
+    engines: {node: '>= 0.6.0'}
 
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
@@ -2749,6 +2808,10 @@ packages:
 
   ufo@1.6.4:
     resolution: {integrity: sha512-JFNbkD1Svwe0KvGi8GOeLcP4kAWQ609twvCdcHxq1oSL8svv39ZuSvajcD8B+5D0eL4+s1Is2D/O6KN3qcTeRA==}
+
+  uid@2.0.2:
+    resolution: {integrity: sha512-u3xV3X7uzvi5b1MncmZo3i2Aw222Zk1keqLA1YkHldREkAhAqi65wuPfe7lHx8H/Wzy+8CE7S7uS3jekIM5s8g==}
+    engines: {node: '>=8'}
 
   underscore@1.13.8:
     resolution: {integrity: sha512-DXtD3ZtEQzc7M8m4cXotyHR+FAS18C64asBYY5vqZexfYryNNnDc02W4hKg3rdQuqOYas1jkseX0+nZXjTXnvQ==}
@@ -3345,6 +3408,8 @@ snapshots:
       '@kenjiuno/decompressrtf': 0.1.4
       iconv-lite: 0.6.3
 
+  '@lukeed/csprng@1.1.0': {}
+
   '@mapbox/togeojson@0.16.2':
     dependencies:
       '@xmldom/xmldom': 0.8.13
@@ -3354,6 +3419,32 @@ snapshots:
   '@mermaid-js/parser@1.2.0':
     dependencies:
       '@chevrotain/types': 11.1.2
+
+  '@mlightcad/cad-simple-viewer@1.5.9(@mlightcad/data-model@1.12.3)(lodash-es@4.17.21)(three@0.184.0)':
+    dependencies:
+      '@mlightcad/data-model': 1.12.3
+      lodash-es: 4.17.21
+      three: 0.184.0
+
+  '@mlightcad/common@1.12.3':
+    dependencies:
+      loglevel: 1.9.2
+
+  '@mlightcad/data-model@1.12.3':
+    dependencies:
+      '@mlightcad/common': 1.12.3
+      '@mlightcad/geometry-engine': 3.12.3(@mlightcad/common@1.12.3)
+      '@mlightcad/graphic-interface': 3.12.3(@mlightcad/common@1.12.3)(@mlightcad/geometry-engine@3.12.3(@mlightcad/common@1.12.3))
+      uid: 2.0.2
+
+  '@mlightcad/geometry-engine@3.12.3(@mlightcad/common@1.12.3)':
+    dependencies:
+      '@mlightcad/common': 1.12.3
+
+  '@mlightcad/graphic-interface@3.12.3(@mlightcad/common@1.12.3)(@mlightcad/geometry-engine@3.12.3(@mlightcad/common@1.12.3))':
+    dependencies:
+      '@mlightcad/common': 1.12.3
+      '@mlightcad/geometry-engine': 3.12.3(@mlightcad/common@1.12.3)
 
   '@mlightcad/libredwg-web@0.7.4': {}
 
@@ -4373,6 +4464,8 @@ snapshots:
 
   electron-to-chromium@1.5.364: {}
 
+  emf-converter@2.0.2: {}
+
   emoji-regex@8.0.0: {}
 
   emoji-regex@9.2.2: {}
@@ -4756,7 +4849,11 @@ snapshots:
 
   locate-character@3.0.0: {}
 
+  lodash-es@4.17.21: {}
+
   lodash-es@4.18.1: {}
+
+  loglevel@1.9.2: {}
 
   loose-envify@1.4.0:
     dependencies:
@@ -5340,6 +5437,10 @@ snapshots:
   typescript@5.9.3: {}
 
   ufo@1.6.4: {}
+
+  uid@2.0.2:
+    dependencies:
+      '@lukeed/csprng': 1.1.0
 
   underscore@1.13.8: {}
 

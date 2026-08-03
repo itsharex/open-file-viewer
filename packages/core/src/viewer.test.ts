@@ -46,6 +46,47 @@ describe("createViewer", () => {
     expect(container.childElementCount).toBe(0);
   });
 
+  it("aborts an in-flight plugin render when the viewer is destroyed", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const onAbort = vi.fn();
+    const destroy = vi.fn();
+    const renderStarted = vi.fn();
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["slow"], { type: "text/plain" }),
+      fileName: "slow.txt",
+      plugins: [
+        {
+          name: "abortable",
+          match: () => true,
+          render(ctx) {
+            renderStarted();
+            return new Promise((resolve) => {
+              ctx.signal?.addEventListener(
+                "abort",
+                () => {
+                  onAbort();
+                  resolve({ destroy });
+                },
+                { once: true }
+              );
+            });
+          }
+        }
+      ]
+    });
+
+    await waitFor(() => renderStarted.mock.calls.length === 1);
+    viewer.destroy();
+    await waitFor(() => onAbort.mock.calls.length === 1);
+
+    expect(onAbort).toHaveBeenCalledTimes(1);
+    await waitFor(() => destroy.mock.calls.length === 1);
+    expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
   it("supports multiple className tokens on the viewer container", async () => {
     const container = document.createElement("div");
     document.body.append(container);

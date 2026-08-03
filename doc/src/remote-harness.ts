@@ -15,6 +15,7 @@ import {
   pdfPlugin,
   textPlugin,
   videoPlugin,
+  xmindPlugin,
   type FileViewer,
   xpsPlugin
 } from "@open-file-viewer/core";
@@ -853,6 +854,7 @@ const plugins = [
   archivePlugin(),
   emailPlugin(),
   drawingPlugin(),
+  xmindPlugin(),
   cadPlugin(),
   model3dPlugin(),
   gisPlugin(),

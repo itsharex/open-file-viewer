@@ -109,6 +109,7 @@ import {
   archivePlugin,
   emailPlugin,
   drawingPlugin,
+  xmindPlugin,
   cadPlugin,
   model3dPlugin,
   gisPlugin,
@@ -136,6 +137,7 @@ const viewer = createViewer({
     archivePlugin(),
     emailPlugin(),
     drawingPlugin(),
+    xmindPlugin(),
     cadPlugin(),
     model3dPlugin(),
     gisPlugin(),
@@ -295,11 +297,12 @@ const plugins = [
 | Audio | `audioPlugin()` | `mp3`, `wav`, `ogg`, `aac`, `m4a`, `flac`, `opus`, `mid`, `wma` |
 | Text / code | `textPlugin()` | `txt`, `md`, `json`, `yaml`, `xml`, `csv`, `js`, `ts`, `tsx`, `vue`, `html`, `css`, `py`, `go`, `rs`, `sql`, `sh` |
 | PDF / ebooks | `pdfPlugin()`, `epubPlugin()`, `xpsPlugin()` | `pdf`, `epub`, `xps`, `oxps` |
-| Office | `officePlugin()` | `doc`, `docx`, `docm`, `dot`, `rtf`, `odt`, `xls`, `xlsx`, `xlsm`, `xlsb`, `csv`, `pptx`, `pptm`, `odp`, `wps`, `et`, `dps` |
+| Office | `officePlugin()` | `doc`, `docx`, `docm`, `dot`, `rtf`, `odt`, `xls`, `xlsx`, `xlsm`, `xlsb`, `csv`, `ppt`, `pps`, `pptx`, `pptm`, `odp`, `wps`, `et`, `dps` |
 | OFD | `ofdPlugin()` | `ofd` |
 | Archives | `archivePlugin()` | `zip`, `rar`, `7z`, `tar`, `gz`, `tgz`, `bz2`, `xz` |
 | Email | `emailPlugin()` | `eml`, `msg`, `mbox` |
 | Drawing / whiteboard | `drawingPlugin()` | `drawio`, `dio`, `excalidraw`, `tldraw` |
+| Mind maps | `xmindPlugin()` | `xmind` |
 | CAD / engineering / chip layout | `cadPlugin()` | `dxf`, `dwg`, `dwf`, `step`, `stp`, `iges`, `igs`, `ifc`, `skp`, `sldprt`, `gds`, `gdsii`, `oas`, `oasis` |
 | 3D models | `model3dPlugin()` | `gltf`, `glb`, `obj`, `stl`, `fbx`, `dae`, `ply`, `3mf`, `usd`, `usdz` |
 | GIS | `gisPlugin()` | `geojson`, `topojson`, `kml`, `kmz`, `gpx`, `shp` |
@@ -307,25 +310,135 @@ const plugins = [
 
 Preview quality for complex formats depends on browser capabilities, file structure, and the parser used by each plugin. The current version focuses on making every format enter a controlled preview path inside the container. High-fidelity Office, CAD, design, and proprietary binary formats can continue to integrate dedicated engines or server-side conversion.
 
+Legacy `ppt` / `pps` files use a local OLE and PowerPoint Binary File Format preview path. It restores slide geometry, positioned text, master bitmap artwork, JPEG/PNG/TIFF assets, and common compressed EMF/WMF graphics without uploading the file. Unsupported drawing records fall back gracefully; use `officePlugin({ convert })` when pixel-identical Office rendering is required.
+
 Plugin order matters because the first matching plugin renders the file. For example, `csv` and `tsv` can match both `textPlugin()` and `officePlugin()`; place `officePlugin()` earlier if you want spreadsheet-style table preview.
 
-### DWG / DWF Two-Layer Preview Model
+### DWG / DWF Preview Model
 
-DWG is AutoCAD's proprietary binary format. `cadPlugin()` uses a two-layer design: the default built-in path tries local preview first, while the external enhancement path lets applications provide high-fidelity rendering.
+DWG is AutoCAD's proprietary binary format. `cadPlugin()` can use a high-fidelity WebGL scene, the lightweight built-in SVG path, or an application-provided renderer.
 
+- **High-fidelity WebGL path**: configure `webglDwg` to parse DWG in a Worker and draw layers, blocks, hatches, line styles, and text in an interactive CAD canvas. Once configured, errors are surfaced instead of silently switching to SVG.
 - **Default built-in path**: `cadPlugin()` automatically tries LibreDWG WASM for DWG model-space linework. If the linework looks unreliable but the file contains an embedded thumbnail, it shows the DWG thumbnail. If LibreDWG is not installed, the WASM path is not configured, or parsing fails, it falls back to DWG/DWF metadata, version hints, structure probes, and conversion guidance.
 - **External enhancement path**: use `cadPlugin({ binaryRenderer })` to integrate your own frontend engine, CADViewer, MxCAD, or a backend service that converts to PNG/PDF/SVG/DXF. `binaryRenderer` has the highest priority and fully takes over DWG/DWF preview when it returns an instance.
 - **High-fidelity commercial route**: for complex fonts, external references, paper-space layouts, large drawings, and professional CAD fidelity, integrate a mature CAD SDK or server-side conversion pipeline.
 
-To enable the default LibreDWG linework path, place the WASM file in a public static directory:
+Recommended high-fidelity setup:
+
+```bash
+npm install @mlightcad/cad-simple-viewer@1.5.9 @mlightcad/data-model@1.12.3 lodash-es@4.17.21
+```
+
+Copy `libredwg-parser-worker.js` and `mtext-renderer-worker.js` from the installed
+`@mlightcad/cad-simple-viewer/dist/` directory into a public static directory,
+then configure that directory:
+
+```ts
+cadPlugin({
+  webglDwg: {
+    workerBaseUrl: "/vendor/cad-engine"
+  }
+});
+```
+
+The WebGL package is MIT licensed. Its published DWG parser Worker is based on
+LibreDWG, so applications should also review the Worker's license requirements.
+CAD font resources may be configured with `webglDwg.baseUrl`; only self-host
+font files that your application is licensed to distribute.
+
+Lightweight LibreDWG SVG setup:
+
+1. Install the optional dependency. Pinning the version keeps the copied browser
+   assets reproducible.
+
+```bash
+npm install @mlightcad/libredwg-web@0.7.4
+```
+
+2. Add `scripts/copy-libredwg-assets.mjs` to the host application. This example
+   targets the conventional `public/` directory used by Vite and Next.js; change
+   `targetRoot` if your framework uses a different static directory.
+
+```js
+import { cp, mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const moduleEntry = fileURLToPath(import.meta.resolve("@mlightcad/libredwg-web"));
+const packageRoot = dirname(dirname(moduleEntry));
+const targetRoot = fileURLToPath(
+  new URL("../public/vendor/libredwg-web/", import.meta.url)
+);
+
+await mkdir(targetRoot, { recursive: true });
+await Promise.all([
+  cp(join(packageRoot, "dist"), join(targetRoot, "dist"), {
+    recursive: true,
+    force: true
+  }),
+  cp(join(packageRoot, "wasm"), join(targetRoot, "wasm"), {
+    recursive: true,
+    force: true
+  })
+]);
+```
+
+3. Run the copy step before local development and production builds:
+
+```json
+{
+  "scripts": {
+    "assets:dwg": "node scripts/copy-libredwg-assets.mjs",
+    "predev": "npm run assets:dwg",
+    "prebuild": "npm run assets:dwg"
+  }
+}
+```
+
+If the project already defines `predev` or `prebuild`, append the asset command
+to the existing script instead of replacing it.
+
+4. Keep LibreDWG's published `dist/` and `wasm/` directory layout and configure
+   the browser-loadable ESM entry:
 
 ```ts
 cadPlugin({
   libreDwg: {
-    wasmBaseUrl: "/vendor/libredwg-web"
+    wasmBaseUrl: "/vendor/libredwg-web/wasm",
+    workerModuleUrl: "/vendor/libredwg-web/dist/libredwg-web.js",
+    workerTimeoutMs: 120_000
   }
 });
 ```
+
+After starting the application, verify that both URLs return `200`:
+
+```text
+/vendor/libredwg-web/dist/libredwg-web.js
+/vendor/libredwg-web/wasm/libredwg-web.wasm
+```
+
+For applications deployed below a URL prefix, prepend the application's public
+base path to both configuration URLs. Serve `.wasm` as `application/wasm`.
+
+These are self-hosted static assets, not files loaded from an external CDN.
+The documentation app runs `doc/scripts/copy-libredwg-assets.mjs` during
+`predev` and `prebuild`, copying the pinned npm package's `dist/` and `wasm/`
+directories into `doc/public/vendor/libredwg-web/`. Those generated directories
+are ignored by Git because they are reproducible and include a roughly 6 MB
+WASM binary. Host applications should add an equivalent copy step to their own
+build or deployment pipeline. If the deployment platform cannot run that step,
+publish the copied directories as static assets instead.
+
+`@mlightcad/libredwg-web` is an optional GPL-3.0 dependency; it is intentionally
+not bundled into the MIT-licensed core package. Applications that enable it
+should review the upstream license requirements for their distribution model.
+
+The viewer transfers a DWG buffer copy to a dedicated module worker and
+terminates it when the file changes, the viewer is destroyed, or parsing times
+out. The ESM/WASM assets must be same-origin or CORS-enabled, and CSP must allow
+module workers plus `blob:` in `worker-src`. Without a worker URL, the existing
+main-thread SVG/thumbnail fallback remains active.
 
 ```ts
 cadPlugin({

@@ -76,7 +76,13 @@ const zhTranslations: Record<string, string> = {
   "api.optional.pdf":
     "<code>pdfPlugin()</code> 需要业务项目提供 <code>pdfjs-dist</code> worker 地址，适合 Vite、Webpack、Next.js 等不同构建环境自行处理 worker 资源。",
   "api.optional.dwg":
-    "<code>cadPlugin()</code> 默认会尝试 LibreDWG WASM。需要 DWG 线稿预览时安装 <code>@mlightcad/libredwg-web</code> 并配置 <code>wasmBaseUrl</code>。",
+    "<code>cadPlugin({ webglDwg })</code> 会用 Worker 解析复杂 DWG，并交给 WebGL CAD 场景绘制。业务需要把解析与 MTEXT Worker 复制到公开静态目录；未配置时仍可使用轻量 LibreDWG SVG 链路。",
+  "api.optional.dwgSetupTitle": "DWG 推荐接入步骤",
+  "api.optional.dwgSetupBody":
+    "安装固定版本的可选依赖，把下面的复制脚本放到业务项目 <code>scripts/</code> 目录，并在 <code>predev</code>/<code>prebuild</code> 中执行。示例输出到常见的 <code>public/</code> 静态目录；其他目录结构请修改目标路径。启动后确认两个 CAD Worker 以及轻量 SVG 的 JS、WASM 资源均返回 200。",
+  "api.optional.dwgDeployTitle": "DWG 部署检查",
+  "api.optional.dwgDeployBody":
+    "必须能访问 <code>/vendor/cad-engine/</code> 下的两个 Worker 和轻量 SVG 引擎资源。二级路径部署时需要加上应用公共基础路径，WASM 应返回 <code>application/wasm</code>，CSP 需要允许 Worker。",
   "api.optional.video":
     "<code>videoPlugin()</code> 对 MP4、WebM、MOV 等原生格式不需要额外依赖；FLV、MPEG-TS/M2TS 需要业务项目安装 <code>mpegts.js</code>，未安装时展示下载 fallback。",
   "api.optional.pnpmTitle": "pnpm 11 / blockExoticSubdeps 说明",
@@ -141,7 +147,7 @@ const zhTranslations: Record<string, string> = {
   "api.builtIn.gis": "geojson、kml、kmz、gpx、topojson、shp 等地图数据。",
   "api.builtIn.model3d": "gltf、glb、obj、stl、fbx、dae、3mf、usdz 等 3D 模型。",
   "api.builtIn.cad":
-    "dxf、step、ifc、gds、oas 等工程图纸与芯片版图预览；DWG 默认尝试 LibreDWG WASM，失败回缩略图或元信息，也可通过 <code>binaryRenderer</code> 接入 CADViewer、MxCAD 或转换服务。",
+    "dxf、dwg、step、ifc、gds、oas 等工程图纸与芯片版图预览；复杂 DWG 可使用 Worker + WebGL CAD 场景，轻量 SVG 与自定义渲染器链路仍然保留。",
   "api.builtIn.email": "eml、msg、mbox 邮件正文、头部信息和附件结构。",
   "api.faq.title": "常见问题",
   "api.faq.remoteTitle": "远程 URL 预览为什么失败？",

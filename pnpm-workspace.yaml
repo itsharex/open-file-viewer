@@ -4,3 +4,8 @@ packages:
   - "examples/*"
 allowBuilds:
   esbuild: true
+minimumReleaseAgeExclude:
+  - '@mlightcad/common@1.12.3'
+  - '@mlightcad/data-model@1.12.3'
+  - '@mlightcad/geometry-engine@3.12.3'
+  - '@mlightcad/graphic-interface@3.12.3'

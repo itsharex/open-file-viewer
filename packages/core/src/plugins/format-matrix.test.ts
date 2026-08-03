@@ -18,6 +18,7 @@ import { ofdPlugin } from "./ofd";
 import { pdfPlugin } from "./pdf";
 import { textPlugin } from "./text";
 import { videoPlugin } from "./video";
+import { xmindPlugin } from "./xmind";
 import { xpsPlugin } from "./xps";
 
 type FormatCase = {
@@ -222,6 +223,11 @@ const matrix: FormatCase[] = [
     plugin: drawingPlugin(),
     extensions: ["drawio", "dio", "excalidraw", "tldraw"],
     mimeType: "application/vnd.jgraph.mxfile"
+  },
+  {
+    plugin: xmindPlugin(),
+    extensions: ["xmind"],
+    mimeType: "application/vnd.xmind.workbook"
   },
   { plugin: gisPlugin(), extensions: ["geojson", "topojson", "kml", "kmz", "gpx", "shp"], mimeType: "application/geo+json" },
   {
@@ -475,6 +481,7 @@ function defaultOrderPlugins(): PreviewPlugin[] {
     archivePlugin(),
     emailPlugin(),
     drawingPlugin(),
+    xmindPlugin(),
     cadPlugin(),
     model3dPlugin(),
     gisPlugin(),
@@ -620,6 +627,7 @@ function routingCases(): Array<{ extension: string; mimeType: string; expected: 
     ...casesFor("archive", ["zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz"], "application/zip"),
     ...casesFor("email", ["eml", "msg", "mbox"], "message/rfc822"),
     ...casesFor("drawing", ["drawio", "dio", "excalidraw", "tldraw"], "application/vnd.jgraph.mxfile"),
+    { extension: "xmind", mimeType: "application/vnd.xmind.workbook", expected: "xmind" },
     { extension: "dxf", mimeType: "image/vnd.dxf", expected: "cad" },
     { extension: "dwg", mimeType: "application/acad", expected: "cad" },
     { extension: "dwf", mimeType: "model/vnd.dwf", expected: "cad" },
@@ -845,6 +853,8 @@ function mimeOnlyRoutingCases(): Array<{ mimeType: string; expected: string }> {
     { mimeType: "application/ply", expected: "model3d" },
     { mimeType: "application/vnd.autodesk.fbx", expected: "model3d" },
     { mimeType: "model/gltf+json", expected: "model3d" },
+    { mimeType: "application/vnd.xmind.workbook", expected: "xmind" },
+    { mimeType: "application/x-xmind", expected: "xmind" },
     { mimeType: "model/step", expected: "cad" },
     { mimeType: "application/acad", expected: "cad" },
     { mimeType: "application/dxf", expected: "cad" },
@@ -1019,7 +1029,8 @@ function readPluginDeclaredExtensions(): string[] {
     { file: "email.ts", sets: ["emailExtensions"] },
     { file: "image.ts", sets: ["imageExtensions", "nonRasterImageExtensions"] },
     { file: "model3d.ts", sets: ["modelExtensions"] },
-    { file: "office.ts", sets: ["wordExtensions", "sheetExtensions", "presentationExtensions"] }
+    { file: "office.ts", sets: ["wordExtensions", "sheetExtensions", "presentationExtensions"] },
+    { file: "xmind.ts", sets: ["xmindExtensions"] }
   ];
   const extensions = new Set<string>();
 

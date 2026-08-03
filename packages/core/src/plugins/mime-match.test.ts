@@ -11,6 +11,7 @@ import { model3dPlugin } from "./model3d";
 import { officePlugin } from "./office";
 import { ofdPlugin } from "./ofd";
 import { videoPlugin } from "./video";
+import { xmindPlugin } from "./xmind";
 import { xpsPlugin } from "./xps";
 
 describe("plugin MIME matching", () => {
@@ -40,6 +41,8 @@ describe("plugin MIME matching", () => {
     expect(await cadPlugin().match(file("application/vnd.oasis.layout"))).toBe(true);
     expect(await drawingPlugin().match(file("application/vnd.jgraph.mxfile"))).toBe(true);
     expect(await drawingPlugin().match(file("application/vnd.excalidraw+json"))).toBe(true);
+    expect(await xmindPlugin().match(file("application/vnd.xmind.workbook"))).toBe(true);
+    expect(await xmindPlugin().match(file("application/x-xmind"))).toBe(true);
     expect(await model3dPlugin().match(file("model/gltf-binary"))).toBe(true);
     expect(await model3dPlugin().match(file("model/3mf"))).toBe(true);
     expect(await model3dPlugin().match(file("application/ply"))).toBe(true);

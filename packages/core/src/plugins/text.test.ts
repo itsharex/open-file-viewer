@@ -63,6 +63,39 @@ describe("textPlugin", () => {
     expect(links[2].getAttribute("href")).toBe("mailto:test@example.com");
   });
 
+  it("adds heading anchors and scrolls markdown table-of-contents links inside the preview", async () => {
+    const scrollIntoView = vi.fn();
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    try {
+      createViewer({
+        container,
+        file: new Blob(["# 文档标题\n\n- [跳到章节](#章节一)\n\n## 章节一\n\n正文"], { type: "text/markdown" }),
+        fileName: "toc.md",
+        plugins: [textPlugin()]
+      });
+
+      await waitFor(() => Boolean(container.querySelector(".ofv-markdown-body")));
+
+      const heading = container.querySelector<HTMLElement>(".ofv-markdown-body h2");
+      const link = Array.from(container.querySelectorAll<HTMLAnchorElement>(".ofv-markdown-body a")).find(
+        (anchor) => anchor.textContent === "跳到章节"
+      );
+      expect(heading?.id).toBe("章节一");
+      expect(link).toBeTruthy();
+
+      link?.click();
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", inline: "nearest" });
+      expect(document.activeElement).toBe(heading);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }
+  });
+
   it("renders extensionless Markdown MIME blobs as markdown", async () => {
     const container = document.createElement("div");
     document.body.append(container);

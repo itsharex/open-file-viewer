@@ -1,6 +1,8 @@
 import pako from "pako";
 import type { PreviewContext, PreviewInstance, PreviewPlugin } from "../types";
 import { renderLibreDwgPreview, type LibreDwgPreviewOptions } from "./cad-dwg";
+import { renderWebglDwgPreview, type WebglDwgPreviewOptions } from "./cad-webgl";
+import { parseBinaryOasis } from "./oasis-binary";
 import { createPanel, createSection, readArrayBuffer, readTextFile, resolveFormat } from "./utils";
 
 export interface CadBinaryPreviewContext {
@@ -20,6 +22,13 @@ export interface CadPluginOptions {
    * Use it for custom front-end engines or server-side CAD conversion services.
    */
   binaryRenderer?: (ctx: CadBinaryPreviewContext) => Promise<PreviewInstance | void> | PreviewInstance | void;
+  /**
+   * High-fidelity WebGL DWG rendering with layers, blocks, hatches and text.
+   *
+   * The two worker bundles must be copied to `workerBaseUrl` by the host app.
+   * Rendering errors are surfaced to the host instead of switching renderers.
+   */
+  webglDwg?: false | WebglDwgPreviewOptions;
   /**
    * Built-in best-effort DWG preview powered by LibreDWG WASM.
    *
@@ -135,59 +144,31 @@ export function cadPlugin(options: CadPluginOptions = {}): PreviewPlugin {
       if (extension === "dwg" || extension === "dwf") {
         const arrayBuffer = await readArrayBuffer(ctx.file);
         const bytes = new Uint8Array(arrayBuffer);
-        const enhancedInstance = await options.binaryRenderer?.({
+        const binaryContext: CadBinaryPreviewContext = {
           panel,
           fileName: ctx.file.name,
           extension,
           arrayBuffer,
           bytes,
           preview: ctx
+        };
+        const enhancedInstance = await options.binaryRenderer?.({
+          ...binaryContext
         });
         if (enhancedInstance) {
-          return {
-            resize(size) {
-              enhancedInstance.resize?.(size);
-            },
-            canCommand(command) {
-              return enhancedInstance.canCommand?.(command) ?? false;
-            },
-            command(command) {
-              return enhancedInstance.command?.(command);
-            },
-            destroy() {
-              enhancedInstance.destroy();
-              panel.remove();
-            }
-          };
+          return wrapCadPreviewInstance(panel, enhancedInstance);
+        }
+        if (extension === "dwg" && typeof options.webglDwg === "object") {
+          const webglInstance = await renderWebglDwgPreview(binaryContext, options.webglDwg);
+          return wrapCadPreviewInstance(panel, webglInstance);
         }
         if (extension === "dwg" && options.libreDwg !== false) {
           const libreDwgInstance = await renderLibreDwgPreview(
-            {
-              panel,
-              fileName: ctx.file.name,
-              extension,
-              arrayBuffer,
-              bytes,
-              preview: ctx
-            },
+            binaryContext,
             typeof options.libreDwg === "object" ? options.libreDwg : undefined
           );
           if (libreDwgInstance) {
-            return {
-              resize(size) {
-                libreDwgInstance.resize?.(size);
-              },
-              canCommand(command) {
-                return libreDwgInstance.canCommand?.(command) ?? false;
-              },
-              command(command) {
-                return libreDwgInstance.command?.(command);
-              },
-              destroy() {
-                libreDwgInstance.destroy();
-                panel.remove();
-              }
-            };
+            return wrapCadPreviewInstance(panel, libreDwgInstance);
           }
         }
         renderBinaryCad(panel, bytes, extension, ctx.file.name);
@@ -242,6 +223,24 @@ export function cadPlugin(options: CadPluginOptions = {}): PreviewPlugin {
           panel.remove();
         }
       };
+    }
+  };
+}
+
+function wrapCadPreviewInstance(panel: HTMLElement, instance: PreviewInstance): PreviewInstance {
+  return {
+    resize(size) {
+      instance.resize?.(size);
+    },
+    canCommand(command) {
+      return instance.canCommand?.(command) ?? false;
+    },
+    command(command) {
+      return instance.command?.(command);
+    },
+    destroy() {
+      instance.destroy();
+      panel.remove();
     }
   };
 }
@@ -645,26 +644,27 @@ const oasisRecordNames: Record<number, string> = {
   11: "LAYERNAME",
   12: "LAYERNAME-REF",
   13: "CELL",
-  14: "XYABSOLUTE",
-  15: "XYRELATIVE",
-  16: "PLACEMENT",
+  14: "CELL",
+  15: "XYABSOLUTE",
+  16: "XYRELATIVE",
   17: "PLACEMENT",
-  18: "TEXT",
-  19: "RECTANGLE",
-  20: "POLYGON",
-  21: "PATH",
-  22: "TRAPEZOID",
+  18: "PLACEMENT",
+  19: "TEXT",
+  20: "RECTANGLE",
+  21: "POLYGON",
+  22: "PATH",
   23: "TRAPEZOID",
   24: "TRAPEZOID",
-  25: "CTRAPEZOID",
-  26: "CIRCLE",
-  27: "PROPERTY",
+  25: "TRAPEZOID",
+  26: "CTRAPEZOID",
+  27: "CIRCLE",
   28: "PROPERTY",
-  29: "XNAME",
-  30: "XNAME-REF",
-  31: "XELEMENT",
-  32: "XGEOMETRY",
-  33: "CBLOCK"
+  29: "PROPERTY",
+  30: "XNAME",
+  31: "XNAME-REF",
+  32: "XELEMENT",
+  33: "XGEOMETRY",
+  34: "CBLOCK"
 };
 
 function renderLayoutPreview(
@@ -717,10 +717,15 @@ function renderLayoutPreview(
   const bounds = computeLayoutBounds(data.shapes, data.labels, data.references);
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("class", "ofv-svg-stage ofv-layout-stage");
+  const webgl = shouldUseWebglLayoutPreview(data) ? createLayoutWebglPreview(data.shapes, data.layers) : undefined;
   let currentViewBox = { x: bounds.minX, y: bounds.minY, width: bounds.width, height: bounds.height };
   const initialViewBox = { ...currentViewBox };
   const applyViewBox = () => {
-    svg.setAttribute("viewBox", `${currentViewBox.x} ${currentViewBox.y} ${currentViewBox.width} ${currentViewBox.height}`);
+    if (webgl) {
+      webgl.render(currentViewBox);
+    } else {
+      svg.setAttribute("viewBox", `${currentViewBox.x} ${currentViewBox.y} ${currentViewBox.width} ${currentViewBox.height}`);
+    }
   };
   applyViewBox();
 
@@ -735,33 +740,35 @@ function renderLayoutPreview(
     svg.append(empty);
   }
 
-  const layerIndex = new Map([...data.layers.keys()].sort((a, b) => a.localeCompare(b)).map((layer, index) => [layer, index]));
-  for (const shape of data.shapes.slice(0, 6000)) {
-    const color = layoutPalette[(layerIndex.get(shape.layer) || 0) % layoutPalette.length];
-    if (shape.kind === "path") {
-      const polyline = document.createElementNS(svg.namespaceURI, "polyline");
-      polyline.setAttribute("points", shape.points.map(([x, y]) => `${x},${-y}`).join(" "));
-      polyline.setAttribute("fill", "none");
-      polyline.setAttribute("stroke", color);
-      polyline.setAttribute("stroke-width", String(Math.max(bounds.stroke, Math.abs(shape.width || 0))));
-      polyline.setAttribute("stroke-linecap", "round");
-      polyline.setAttribute("stroke-linejoin", "round");
-      applyLayer(polyline, shape.layer);
-      svg.append(polyline);
-      continue;
+  if (!webgl) {
+    const layerIndex = new Map([...data.layers.keys()].sort((a, b) => a.localeCompare(b)).map((layer, index) => [layer, index]));
+    for (const shape of data.shapes.slice(0, 6000)) {
+      const color = layoutPalette[(layerIndex.get(shape.layer) || 0) % layoutPalette.length];
+      if (shape.kind === "path") {
+        const polyline = document.createElementNS(svg.namespaceURI, "polyline");
+        polyline.setAttribute("points", shape.points.map(([x, y]) => `${x},${-y}`).join(" "));
+        polyline.setAttribute("fill", "none");
+        polyline.setAttribute("stroke", color);
+        polyline.setAttribute("stroke-width", String(Math.max(bounds.stroke, Math.abs(shape.width || 0))));
+        polyline.setAttribute("stroke-linecap", "round");
+        polyline.setAttribute("stroke-linejoin", "round");
+        applyLayer(polyline, shape.layer);
+        svg.append(polyline);
+        continue;
+      }
+      const polygon = document.createElementNS(svg.namespaceURI, "polygon");
+      polygon.setAttribute("points", shape.points.map(([x, y]) => `${x},${-y}`).join(" "));
+      polygon.setAttribute("fill", color);
+      polygon.setAttribute("fill-opacity", "0.3");
+      polygon.setAttribute("stroke", color);
+      polygon.setAttribute("stroke-width", String(bounds.stroke));
+      polygon.setAttribute("vector-effect", "non-scaling-stroke");
+      applyLayer(polygon, shape.layer);
+      svg.append(polygon);
     }
-    const polygon = document.createElementNS(svg.namespaceURI, "polygon");
-    polygon.setAttribute("points", shape.points.map(([x, y]) => `${x},${-y}`).join(" "));
-    polygon.setAttribute("fill", color);
-    polygon.setAttribute("fill-opacity", "0.3");
-    polygon.setAttribute("stroke", color);
-    polygon.setAttribute("stroke-width", String(bounds.stroke));
-    polygon.setAttribute("vector-effect", "non-scaling-stroke");
-    applyLayer(polygon, shape.layer);
-    svg.append(polygon);
   }
 
-  for (const label of data.labels.slice(0, 400)) {
+  for (const label of webgl ? [] : data.labels.slice(0, 400)) {
     const text = document.createElementNS(svg.namespaceURI, "text");
     text.setAttribute("x", String(label.x));
     text.setAttribute("y", String(-label.y));
@@ -774,13 +781,15 @@ function renderLayoutPreview(
 
   const layers = [...data.layers.keys()].sort((a, b) => a.localeCompare(b));
   if (layers.length > 0) {
-    const layerControls = createLayoutLayerControls(svg, layers, data.layers);
+    const layerControls = createLayoutLayerControls(webgl ? undefined : svg, layers, data.layers, (layer, visible) => {
+      webgl?.setLayerVisible(layer, visible);
+    });
     if (hasDrawableLayout(data)) {
       hideSupplementalInfo(layerControls);
     }
     section.append(layerControls);
   }
-  section.append(svg);
+  section.append(webgl?.canvas || svg);
   if (data.cells.length > 0) {
     section.append(createLayoutCellList(data.cells, data.references, hasDrawableLayout(data)));
   }
@@ -815,9 +824,186 @@ function renderLayoutPreview(
       return false;
     },
     destroy() {
+      webgl?.destroy();
       ctx.toolbar?.setZoom(undefined);
     }
   };
+}
+
+type LayoutWebglPreview = {
+  canvas: HTMLCanvasElement;
+  render: (viewBox: { x: number; y: number; width: number; height: number }) => void;
+  setLayerVisible: (layer: string, visible: boolean) => void;
+  destroy: () => void;
+};
+
+function shouldUseWebglLayoutPreview(data: LayoutPreviewData): boolean {
+  if (data.labels.length > 0) return false;
+  if (data.shapes.length < 360 && data.shapes.reduce((sum, shape) => sum + shape.points.length, 0) < 1800) {
+    return false;
+  }
+  return typeof WebGLRenderingContext !== "undefined";
+}
+
+function createLayoutWebglPreview(shapes: LayoutShape[], layerCounts: Map<string, number>): LayoutWebglPreview | undefined {
+  const canvas = document.createElement("canvas");
+  canvas.className = "ofv-svg-stage ofv-layout-stage ofv-layout-webgl-stage";
+  canvas.width = 1440;
+  canvas.height = 864;
+  canvas.dataset.renderer = "webgl";
+  let gl: WebGLRenderingContext | null;
+  try {
+    gl = canvas.getContext("webgl", { alpha: false, antialias: true });
+  } catch {
+    return undefined;
+  }
+  if (!gl) return undefined;
+
+  const vertexShader = compileLayoutShader(
+    gl,
+    gl.VERTEX_SHADER,
+    "attribute vec2 a_position; uniform vec4 u_viewBox; void main() { float x = (a_position.x - u_viewBox.x) / u_viewBox.z * 2.0 - 1.0; float y = 1.0 - (a_position.y - u_viewBox.y) / u_viewBox.w * 2.0; gl_Position = vec4(x, y, 0.0, 1.0); }"
+  );
+  const fragmentShader = compileLayoutShader(
+    gl,
+    gl.FRAGMENT_SHADER,
+    "precision mediump float; uniform vec4 u_color; void main() { gl_FragColor = u_color; }"
+  );
+  if (!vertexShader || !fragmentShader) return undefined;
+  const program = gl.createProgram();
+  if (!program) return undefined;
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    gl.deleteProgram(program);
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
+    return undefined;
+  }
+  const buffer = gl.createBuffer();
+  const position = gl.getAttribLocation(program, "a_position");
+  const viewBoxUniform = gl.getUniformLocation(program, "u_viewBox");
+  const colorUniform = gl.getUniformLocation(program, "u_color");
+  if (!buffer || position < 0 || !viewBoxUniform || !colorUniform) {
+    gl.deleteProgram(program);
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
+    return undefined;
+  }
+
+  const layers = [...layerCounts.keys()].sort((a, b) => a.localeCompare(b));
+  const layerIndex = new Map(layers.map((layer, index) => [layer, index]));
+  const geometry = new Map<string, { fill: Float32Array; lines: Float32Array; color: [number, number, number] }>();
+  for (const layer of layers) {
+    const fill: number[] = [];
+    const lines: number[] = [];
+    for (const shape of shapes) {
+      if (shape.layer !== layer) continue;
+      const points = shape.points.map(([x, y]) => [x, -y] as LayoutPoint);
+      if (points.length > 1 && pointsEqual(points[0], points[points.length - 1])) points.pop();
+      if (shape.kind !== "path" && points.length >= 3) {
+        for (let index = 1; index < points.length - 1; index += 1) {
+          fill.push(...points[0], ...points[index], ...points[index + 1]);
+        }
+      }
+      for (let index = 0; index < points.length - 1; index += 1) {
+        lines.push(...points[index], ...points[index + 1]);
+      }
+      if (shape.kind !== "path" && points.length > 2) lines.push(...points[points.length - 1], ...points[0]);
+    }
+    geometry.set(layer, {
+      fill: new Float32Array(fill),
+      lines: new Float32Array(lines),
+      color: parseLayoutColor(layoutPalette[(layerIndex.get(layer) || 0) % layoutPalette.length])
+    });
+  }
+
+  const visibleLayers = new Set(layers);
+  let currentViewBox = { x: 0, y: 0, width: 1, height: 1 };
+  const render = (viewBox: { x: number; y: number; width: number; height: number }) => {
+    currentViewBox = { ...viewBox };
+    const fitted = fitLayoutViewBox(viewBox, canvas.width / canvas.height);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clearColor(16 / 255, 20 / 255, 28 / 255, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.enableVertexAttribArray(position);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform4f(viewBoxUniform, fitted.x, fitted.y, fitted.width, fitted.height);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    for (const layer of layers) {
+      if (!visibleLayers.has(layer)) continue;
+      const item = geometry.get(layer);
+      if (!item) continue;
+      if (item.fill.length) {
+        gl.bufferData(gl.ARRAY_BUFFER, item.fill, gl.STATIC_DRAW);
+        gl.uniform4f(colorUniform, ...item.color, 0.3);
+        gl.drawArrays(gl.TRIANGLES, 0, item.fill.length / 2);
+      }
+      if (item.lines.length) {
+        gl.bufferData(gl.ARRAY_BUFFER, item.lines, gl.STATIC_DRAW);
+        gl.uniform4f(colorUniform, ...item.color, 0.95);
+        gl.drawArrays(gl.LINES, 0, item.lines.length / 2);
+      }
+    }
+  };
+
+  return {
+    canvas,
+    render,
+    setLayerVisible(layer, visible) {
+      if (visible) visibleLayers.add(layer);
+      else visibleLayers.delete(layer);
+      render(currentViewBox);
+    },
+    destroy() {
+      gl.deleteBuffer(buffer);
+      gl.deleteProgram(program);
+      gl.deleteShader(vertexShader);
+      gl.deleteShader(fragmentShader);
+    }
+  };
+}
+
+function compileLayoutShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | undefined {
+  const shader = gl.createShader(type);
+  if (!shader) return undefined;
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    gl.deleteShader(shader);
+    return undefined;
+  }
+  return shader;
+}
+
+function pointsEqual(left: LayoutPoint, right: LayoutPoint): boolean {
+  return left[0] === right[0] && left[1] === right[1];
+}
+
+function parseLayoutColor(color: string): [number, number, number] {
+  return [1, 3, 5].map((offset) => Number.parseInt(color.slice(offset, offset + 2), 16) / 255) as [number, number, number];
+}
+
+function fitLayoutViewBox(
+  viewBox: { x: number; y: number; width: number; height: number },
+  aspect: number
+): { x: number; y: number; width: number; height: number } {
+  const result = { ...viewBox };
+  const viewAspect = result.width / result.height;
+  if (viewAspect > aspect) {
+    const height = result.width / aspect;
+    result.y -= (height - result.height) / 2;
+    result.height = height;
+  } else {
+    const width = result.height * aspect;
+    result.x -= (width - result.width) / 2;
+    result.width = width;
+  }
+  return result;
 }
 
 function parseGdsLayout(bytes: Uint8Array, fileName: string): LayoutPreviewData {
@@ -1084,6 +1270,32 @@ function layoutLabelKey(label: LayoutLabel): string {
 }
 
 function parseOasisLayout(bytes: Uint8Array, fileName: string): LayoutPreviewData {
+  const binary = parseBinaryOasis(bytes);
+  if (binary) {
+    const layers = countLayoutLayers(binary.shapes, binary.labels);
+    return {
+      format: "OASIS",
+      fileName,
+      version: binary.version ? `OASIS ${binary.version}` : "OASIS",
+      unit: binary.unit ? `1 / ${binary.unit}` : undefined,
+      cells: binary.cells,
+      shapes: binary.shapes,
+      labels: binary.labels,
+      references: binary.references,
+      layers,
+      metadata: [
+        ["大小", formatBytes(bytes.byteLength)],
+        ["CBLOCK", binary.compressedBlockCount],
+        ["记录", binary.recordCount],
+        ["解析几何", binary.shapes.length]
+      ],
+      notes: [
+        `已从标准二进制 OASIS 记录中解析 ${binary.shapes.length} 个几何、${binary.placementRecordCount} 个 cell 放置记录和 ${binary.labels.length} 段文字。`
+      ],
+      warnings: binary.warnings
+    };
+  }
+
   const chunks = extractOasisCblocks(bytes);
   const expanded = chunks.flatMap((chunk) => [...chunk.bytes]);
   const cellNames = uniqueHints([...extractAsciiRuns(bytes), ...chunks.flatMap((chunk) => extractAsciiRuns(chunk.bytes))])
@@ -1157,9 +1369,11 @@ function computeLayoutBounds(shapes: LayoutShape[], labels: LayoutLabel[], refer
     xs.push(label.x, label.x + label.text.length * 12);
     ys.push(-label.y, -label.y - 16);
   }
-  for (const reference of references) {
-    xs.push(reference.x);
-    ys.push(-reference.y);
+  if (shapes.length === 0 && labels.length === 0) {
+    for (const reference of references) {
+      xs.push(reference.x);
+      ys.push(-reference.y);
+    }
   }
   const minX = Math.min(...xs, 0);
   const maxX = Math.max(...xs, 100);
@@ -1177,7 +1391,12 @@ function computeLayoutBounds(shapes: LayoutShape[], labels: LayoutLabel[], refer
   };
 }
 
-function createLayoutLayerControls(svg: SVGSVGElement, layers: string[], counts: Map<string, number>): HTMLElement {
+function createLayoutLayerControls(
+  svg: SVGSVGElement | undefined,
+  layers: string[],
+  counts: Map<string, number>,
+  onChange?: (layer: string, visible: boolean) => void
+): HTMLElement {
   const controls = document.createElement("div");
   controls.className = "ofv-cad-layers ofv-layout-layers";
   const title = document.createElement("strong");
@@ -1190,9 +1409,10 @@ function createLayoutLayerControls(svg: SVGSVGElement, layers: string[], counts:
     checkbox.type = "checkbox";
     checkbox.checked = true;
     checkbox.addEventListener("change", () => {
-      for (const element of svg.querySelectorAll<SVGElement>(`[data-layer="${escapeCssAttribute(layer)}"]`)) {
+      for (const element of svg?.querySelectorAll<SVGElement>(`[data-layer="${escapeCssAttribute(layer)}"]`) || []) {
         element.style.display = checkbox.checked ? "" : "none";
       }
+      onChange?.(layer, checkbox.checked);
     });
     const name = document.createElement("span");
     name.textContent = `${layer} (${counts.get(layer) || 0})`;

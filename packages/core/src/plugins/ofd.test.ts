@@ -53,6 +53,48 @@ describe("ofdPlugin", () => {
     expect(container.querySelector(".ofv-ofd-page figcaption")).toBeNull();
   });
 
+  it("uses Document.xml page order and preserves blank pages", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "Doc_0/Pages/Page_2/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016"><ofd:Content><ofd:Layer>
+        <ofd:TextObject Boundary="20 30 120 16" Size="12"><ofd:TextCode X="0" Y="12">第三页</ofd:TextCode></ofd:TextObject>
+      </ofd:Layer></ofd:Content></ofd:Page>`
+    );
+    zip.file(
+      "Doc_0/Pages/Page_0/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016"><ofd:Content><ofd:Layer>
+        <ofd:TextObject Boundary="20 30 120 16" Size="12"><ofd:TextCode X="0" Y="12">第一页</ofd:TextCode></ofd:TextObject>
+      </ofd:Layer></ofd:Content></ofd:Page>`
+    );
+    zip.file(
+      "Doc_0/Pages/Page_1/Content.xml",
+      `<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016"><ofd:Content><ofd:Layer/></ofd:Content></ofd:Page>`
+    );
+    zip.file(
+      "Doc_0/Document.xml",
+      `<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:CommonData><ofd:PageArea><ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox></ofd:PageArea></ofd:CommonData>
+        <ofd:Pages>
+          <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>
+          <ofd:Page ID="2" BaseLoc="Pages/Page_1/Content.xml"/>
+          <ofd:Page ID="3" BaseLoc="Pages/Page_2/Content.xml"/>
+        </ofd:Pages>
+      </ofd:Document>`
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({ container, file: buffer, fileName: "ordered.ofd", plugins: [ofdPlugin()] });
+
+    await waitFor(() => container.querySelectorAll(".ofv-ofd-page").length === 3);
+    const pages = container.querySelectorAll(".ofv-ofd-page");
+    expect(pages[0]?.textContent).toContain("第一页");
+    expect(pages[1]?.querySelector("text")).toBeNull();
+    expect(pages[2]?.textContent).toContain("第三页");
+  });
+
   it("renders lightweight OFD vector layout with paths, lines, images and text styles", async () => {
     const zip = new JSZip();
     zip.file(
@@ -1074,8 +1116,9 @@ describe("ofdPlugin", () => {
     zip.file(
       "Doc_0/Signs/Signatures.xml",
       `<ofd:Signatures xmlns:ofd="http://www.ofdspec.org/2016">
-        <ofd:MaxSignId>1</ofd:MaxSignId>
+        <ofd:MaxSignId>2</ofd:MaxSignId>
         <ofd:Signature ID="1" Type="Seal" BaseLoc="Sign_0/Signature.xml"/>
+        <ofd:Signature ID="2" Type="Seal" BaseLoc="Sign_1/Signature.xml"/>
       </ofd:Signatures>`
     );
     zip.file(
@@ -1088,6 +1131,16 @@ describe("ofdPlugin", () => {
       </ofd:Signature>`
     );
     zip.file("Doc_0/Signs/Sign_0/SignedValue.dat", signedValue);
+    zip.file(
+      "Doc_0/Signs/Sign_1/Signature.xml",
+      `<ofd:Signature xmlns:ofd="http://www.ofdspec.org/2016">
+        <ofd:SignedInfo>
+          <ofd:StampAnnot PageRef="124" ID="2" Boundary="20 120 80 20"/>
+        </ofd:SignedInfo>
+        <ofd:SignedValue>SignedValue.dat</ofd:SignedValue>
+      </ofd:Signature>`
+    );
+    zip.file("Doc_0/Signs/Sign_1/SignedValue.dat", Uint8Array.from([0x30, 0x03, 0x02, 0x01, 0x01]));
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
     const container = document.createElement("div");
@@ -1105,6 +1158,8 @@ describe("ofdPlugin", () => {
     const pages = container.querySelectorAll(".ofv-ofd-page");
     expect(pages[0]?.querySelector("image")).toBeNull();
     const stamp = pages[1]?.querySelector("image");
+    expect(pages[1]?.querySelectorAll("image")).toHaveLength(1);
+    expect(pages[1]?.querySelector("rect[stroke-dasharray]")).toBeNull();
     expect(stamp).not.toBeNull();
     expect(stamp?.getAttribute("href")).toContain("data:image/png;base64,");
     expect(stamp?.getAttribute("x")).toBe("120.499");

@@ -133,6 +133,7 @@ import {
   archivePlugin,
   emailPlugin,
   drawingPlugin,
+  xmindPlugin,
   cadPlugin,
   model3dPlugin,
   gisPlugin,
@@ -160,6 +161,7 @@ const viewer = createViewer({
     archivePlugin(),
     emailPlugin(),
     drawingPlugin(),
+    xmindPlugin(),
     cadPlugin(),
     model3dPlugin(),
     gisPlugin(),
@@ -349,18 +351,21 @@ const plugins = [
 | 音频 | `audioPlugin()` | `mp3`, `wav`, `ogg`, `aac`, `m4a`, `flac`, `opus`, `mid`, `wma` |
 | 文本 / 代码 | `textPlugin()` | `txt`, `md`, `json`, `yaml`, `xml`, `csv`, `js`, `ts`, `tsx`, `vue`, `html`, `css`, `py`, `go`, `rs`, `sql`, `sh` |
 | PDF / 电子书 | `pdfPlugin()`, `epubPlugin()`, `xpsPlugin()` | `pdf`, `epub`, `xps`, `oxps` |
-| Office | `officePlugin()` | `doc`, `docx`, `docm`, `dot`, `rtf`, `odt`, `xls`, `xlsx`, `xlsm`, `xlsb`, `csv`, `pptx`, `pptm`, `odp`, `wps`, `et`, `dps` |
+| Office | `officePlugin()` | `doc`, `docx`, `docm`, `dot`, `rtf`, `odt`, `xls`, `xlsx`, `xlsm`, `xlsb`, `csv`, `ppt`, `pps`, `pptx`, `pptm`, `odp`, `wps`, `et`, `dps` |
 | OFD | `ofdPlugin()` | `ofd` |
 | 压缩包 | `archivePlugin()` | `zip`, `rar`, `7z`, `tar`, `gz`, `tgz`, `bz2`, `xz` |
 | 数据 / 资产 | `assetPlugin()` | `sqlite`, `db`, `parquet`, `avro`, `wasm`, `psd`, `psb`, `ai`, `eps`, `ps`, `webarchive`, `ttf`, `otf`, `woff`, `woff2` |
 | 邮件 | `emailPlugin()` | `eml`, `msg`, `mbox` |
 | 绘图 / 白板 | `drawingPlugin()` | `drawio`, `dio`, `excalidraw`, `tldraw` |
+| 思维导图 | `xmindPlugin()` | `xmind` |
 | CAD / 工程 / 芯片版图 | `cadPlugin()` | `dxf`, `dwg`, `dwf`, `step`, `stp`, `iges`, `igs`, `ifc`, `skp`, `sldprt`, `gds`, `gdsii`, `oas`, `oasis` |
 | 3D 模型 | `model3dPlugin()` | `gltf`, `glb`, `obj`, `stl`, `fbx`, `dae`, `ply`, `3mf`, `usd`, `usdz` |
 | GIS | `gisPlugin()` | `geojson`, `topojson`, `kml`, `kmz`, `gpx`, `shp` |
 | 资产识别 | `assetPlugin()` | `ttf`, `woff2`, `psd`, `ai`, `eps`, `sqlite`, `wasm`, `parquet`, `avro` |
 
 复杂格式的预览质量会受浏览器能力、文件结构和依赖解析器影响。当前版本优先保证所有格式都在容器内走可控预览路径；高保真 Office、CAD、设计稿和专有二进制格式可以继续接入专用引擎或服务端转换。
+
+旧版 `ppt` / `pps` 默认走本地 OLE 与 PowerPoint 二进制格式解析，可还原幻灯片尺寸、定位文本、母版位图、JPEG/PNG/TIFF 图片以及常见的压缩 EMF/WMF 图形，文件不会被自动上传。不支持的绘图记录会安全降级；如果业务要求与 Office 像素级一致，仍建议配置 `officePlugin({ convert })`。
 
 ### 高保真 Office 转 PDF
 
@@ -412,23 +417,126 @@ officePlugin({
 }
 ```
 
-### DWG / DWF 两层预览模型
+### DWG / DWF 预览模型
 
-DWG 是 AutoCAD 专有二进制格式，`cadPlugin()` 采用“两层能力”设计：默认内置能力负责尽可能本地预览，外部增强能力负责业务高保真渲染。
+DWG 是 AutoCAD 专有二进制格式，`cadPlugin()` 可以使用高保真 WebGL 场景、内置轻量 SVG 链路或业务自定义渲染器。
 
+- **高保真 WebGL 能力**：配置 `webglDwg` 后，DWG 会在 Worker 中解析，并在可交互 CAD Canvas 中绘制图层、块、填充、线型和文字。配置后若渲染失败会直接抛出错误，不会静默切回 SVG。
 - **默认内置能力**：`cadPlugin()` 会自动尝试 LibreDWG WASM 渲染 DWG 模型空间线稿；如果线稿不可靠但文件包含内置缩略图，会展示 DWG 缩略图；如果 LibreDWG 未安装、WASM 未配置或解析失败，则展示 DWG/DWF 元信息、版本、结构线索和转换建议。
 - **外部增强能力**：通过 `cadPlugin({ binaryRenderer })` 接入自己的前端引擎、CADViewer、MxCAD、后端转换 PNG/PDF/SVG/DXF 等。`binaryRenderer` 优先级最高，返回实例后会完全接管 DWG/DWF 预览。
 - **高保真商用链路**：复杂字体、外部参照、布局/打印空间、大图纸和专业 CAD 效果，建议接入成熟 CAD SDK 或服务端转换。
 
-启用默认 LibreDWG 线稿预览时，将 WASM 放到公开静态目录：
+推荐按下面的方式接入高保真渲染：
+
+```bash
+npm install @mlightcad/cad-simple-viewer@1.5.9 @mlightcad/data-model@1.12.3 lodash-es@4.17.21
+```
+
+将已安装的 `@mlightcad/cad-simple-viewer/dist/` 目录中的
+`libredwg-parser-worker.js` 和 `mtext-renderer-worker.js` 复制到业务的公开静态目录，
+然后配置对应目录：
+
+```ts
+cadPlugin({
+  webglDwg: {
+    workerBaseUrl: "/vendor/cad-engine"
+  }
+});
+```
+
+WebGL 包使用 MIT 许可；其发布的 DWG 解析 Worker 基于 LibreDWG，业务仍需检查该
+Worker 的许可证要求。可通过 `webglDwg.baseUrl` 配置 CAD 字体资源，只有确认拥有
+分发权的字体才应自行托管。
+
+轻量 LibreDWG SVG 链路可按下面方式接入：
+
+1. 安装可选依赖。固定版本可以保证每次复制出的浏览器资源一致。
+
+```bash
+npm install @mlightcad/libredwg-web@0.7.4
+```
+
+2. 在业务项目中新增 `scripts/copy-libredwg-assets.mjs`。下面以 Vite、Next.js
+   常用的 `public/` 静态目录为例；其他框架只需修改 `targetRoot`。
+
+```js
+import { cp, mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const moduleEntry = fileURLToPath(import.meta.resolve("@mlightcad/libredwg-web"));
+const packageRoot = dirname(dirname(moduleEntry));
+const targetRoot = fileURLToPath(
+  new URL("../public/vendor/libredwg-web/", import.meta.url)
+);
+
+await mkdir(targetRoot, { recursive: true });
+await Promise.all([
+  cp(join(packageRoot, "dist"), join(targetRoot, "dist"), {
+    recursive: true,
+    force: true
+  }),
+  cp(join(packageRoot, "wasm"), join(targetRoot, "wasm"), {
+    recursive: true,
+    force: true
+  })
+]);
+```
+
+3. 在本地开发和生产构建之前执行复制脚本：
+
+```json
+{
+  "scripts": {
+    "assets:dwg": "node scripts/copy-libredwg-assets.mjs",
+    "predev": "npm run assets:dwg",
+    "prebuild": "npm run assets:dwg"
+  }
+}
+```
+
+如果项目已经有 `predev` 或 `prebuild`，把资源复制命令追加到原脚本中，不要直接
+覆盖原有命令。
+
+4. 保留 LibreDWG 包内的 `dist/`、`wasm/` 目录结构，并配置浏览器可直接加载的
+   ESM 入口。推荐开启 Worker，避免大 DWG 在主线程解析时卡住界面：
 
 ```ts
 cadPlugin({
   libreDwg: {
-    wasmBaseUrl: "/vendor/libredwg-web"
+    wasmBaseUrl: "/vendor/libredwg-web/wasm",
+    workerModuleUrl: "/vendor/libredwg-web/dist/libredwg-web.js",
+    workerTimeoutMs: 120_000
   }
 });
 ```
+
+启动项目后，确认下面两个地址都能返回 `200`：
+
+```text
+/vendor/libredwg-web/dist/libredwg-web.js
+/vendor/libredwg-web/wasm/libredwg-web.wasm
+```
+
+如果应用部署在二级路径下，需要给两个配置地址都加上应用的公共基础路径；服务器
+应使用 `application/wasm` 作为 `.wasm` 文件的 MIME 类型。
+
+这里配置的是业务自行托管的静态资源，并不是运行时从外部 CDN 加载。文档站会在
+`predev` 和 `prebuild` 阶段执行 `doc/scripts/copy-libredwg-assets.mjs`，把锁定版本
+的 npm 包中的 `dist/`、`wasm/` 复制到
+`doc/public/vendor/libredwg-web/`。这两个目录可以由依赖稳定重建，并且包含约 6 MB
+的 WASM 文件，因此仓库通过 `.gitignore` 排除生成结果。业务项目也应在自己的构建
+或部署流程中增加同等的复制步骤；如果部署平台无法执行构建脚本，则需要预先发布
+复制后的静态资源。
+
+`@mlightcad/libredwg-web` 是可选的 GPL-3.0 依赖，因此不会直接打包进 MIT 许可的
+core 包。启用该能力的业务需要结合自己的分发方式确认上游许可证要求。
+
+配置后，DWG 副本会作为 transferable 传入独立 Worker；切换文件、销毁 viewer
+或解析超时都会终止该 Worker。ESM 与 WASM 需要同源部署，或者返回正确的 CORS
+响应头；CSP 还需要在 `worker-src` 中允许模块 Worker 与 `blob:`。不能允许
+`blob:` 时可通过 `workerFactory` 提供自托管 Worker。未配置 Worker 地址或显式
+设置 `useWorker: false` 时，会保留原来的主线程 SVG/缩略图回退链路。
 
 ```ts
 cadPlugin({

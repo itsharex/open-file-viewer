@@ -222,6 +222,8 @@ export function textPlugin(): PreviewPlugin {
         });
         container.append(markdownContent);
         secureMarkdownLinks(container);
+        assignMarkdownHeadingAnchors(markdownContent);
+        const destroyMarkdownAnchorNavigation = enableMarkdownAnchorNavigation(container);
         ctx.viewport.appendChild(container);
 
         // Render mermaid code fences as diagrams
@@ -265,6 +267,7 @@ export function textPlugin(): PreviewPlugin {
             return markdownZoom.command(command);
           },
           destroy() {
+            destroyMarkdownAnchorNavigation();
             container.remove();
           }
         };
@@ -725,6 +728,98 @@ function secureMarkdownLinks(container: HTMLElement): void {
       link.rel = "noopener noreferrer";
     }
   }
+}
+
+function assignMarkdownHeadingAnchors(container: HTMLElement): void {
+  const usedIds = new Set<string>(
+    Array.from(container.querySelectorAll<HTMLElement>("[id]"))
+      .map((element) => element.id)
+      .filter(Boolean)
+  );
+  let fallbackIndex = 0;
+  for (const heading of container.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6")) {
+    if (heading.id) {
+      continue;
+    }
+    const baseId = createMarkdownAnchorId(heading.textContent || "") || `heading-${++fallbackIndex}`;
+    heading.id = uniquifyMarkdownAnchorId(baseId, usedIds);
+  }
+}
+
+function enableMarkdownAnchorNavigation(container: HTMLElement): () => void {
+  const onClick = (event: MouseEvent) => {
+    const link = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+    if (!link || !container.contains(link)) {
+      return;
+    }
+    const href = link.getAttribute("href") || "";
+    if (!href.startsWith("#") || href === "#") {
+      return;
+    }
+    const target = findMarkdownAnchorTarget(container, href.slice(1));
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView?.({ block: "start", inline: "nearest" });
+    if (!target.hasAttribute("tabindex")) {
+      target.setAttribute("tabindex", "-1");
+    }
+    target.focus?.({ preventScroll: true });
+  };
+  container.addEventListener("click", onClick);
+  return () => container.removeEventListener("click", onClick);
+}
+
+function findMarkdownAnchorTarget(container: HTMLElement, rawAnchor: string): HTMLElement | null {
+  const anchor = decodeMarkdownAnchor(rawAnchor);
+  const byId = container.querySelector<HTMLElement>(`#${escapeCssIdentifier(anchor)}`);
+  if (byId) {
+    return byId;
+  }
+  const normalizedAnchor = createMarkdownAnchorId(anchor);
+  return (
+    Array.from(container.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6")).find((heading) => {
+      const text = heading.textContent || "";
+      return text === anchor || createMarkdownAnchorId(text) === normalizedAnchor;
+    }) || null
+  );
+}
+
+function createMarkdownAnchorId(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/<[^>]*>/g, "")
+    .replace(/[`~!@#$%^&*()+=[\]{}\\|;:'",.<>/?，。！？、；：“”‘’（）【】《》]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function uniquifyMarkdownAnchorId(baseId: string, usedIds: Set<string>): string {
+  let id = baseId;
+  let index = 1;
+  while (usedIds.has(id)) {
+    id = `${baseId}-${index++}`;
+  }
+  usedIds.add(id);
+  return id;
+}
+
+function decodeMarkdownAnchor(anchor: string): string {
+  try {
+    return decodeURIComponent(anchor);
+  } catch {
+    return anchor;
+  }
+}
+
+function escapeCssIdentifier(value: string): string {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(value);
+  }
+  return value.replace(/["\\#.;,[\]()>/+~*^$|=!:\s]/g, "\\$&");
 }
 
 function isSafeMarkdownHref(href: string): boolean {

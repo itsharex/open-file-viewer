@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import pako from "pako";
 import { createViewer } from "../viewer";
 import { renderLibreDwgPreview } from "./cad-dwg";
+import { renderWebglDwgPreview } from "./cad-webgl";
 import { cadPlugin } from "./cad";
 
 vi.mock("./cad-dwg", () => ({
   renderLibreDwgPreview: vi.fn()
+}));
+
+vi.mock("./cad-webgl", () => ({
+  renderWebglDwgPreview: vi.fn()
 }));
 
 describe("cadPlugin", () => {
@@ -199,6 +205,37 @@ describe("cadPlugin", () => {
     expect(vi.mocked(renderLibreDwgPreview).mock.calls[0]?.[1]).toBeUndefined();
     expect(container.textContent).toContain("DWG 文件预览");
     expect(container.textContent).toContain("binaryRenderer");
+  });
+
+  it("uses the configured WebGL engine before the SVG DWG renderer", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const bytes = new Uint8Array([..."AC1027\0\0DWGDATA"].map((char) => char.charCodeAt(0)));
+    const destroy = vi.fn();
+    vi.mocked(renderWebglDwgPreview).mockImplementationOnce(async ({ panel }) => {
+      const canvas = document.createElement("canvas");
+      canvas.className = "webgl-dwg-stage";
+      panel.append(canvas);
+      return { destroy };
+    });
+
+    const viewer = createViewer({
+      container,
+      file: bytes.buffer,
+      fileName: "complex.dwg",
+      plugins: [cadPlugin({ webglDwg: { workerBaseUrl: "/vendor/cad-engine" } })]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".webgl-dwg-stage")));
+
+    expect(renderWebglDwgPreview).toHaveBeenCalledWith(
+      expect.objectContaining({ fileName: "complex.dwg", extension: "dwg" }),
+      { workerBaseUrl: "/vendor/cad-engine" }
+    );
+    expect(renderLibreDwgPreview).not.toHaveBeenCalled();
+
+    viewer.destroy();
+    expect(destroy).toHaveBeenCalledTimes(1);
   });
 
   it("renders DWG metadata and conversion guidance when LibreDWG is disabled", async () => {
@@ -500,6 +537,28 @@ describe("cadPlugin", () => {
     expect(visibleText(container)).not.toContain("OASIS 是高压缩芯片版图格式");
     expect(visibleText(container)).not.toContain("Cell 结构");
     expect(container.querySelector(".ofv-layout-stage polygon")).not.toBeNull();
+  });
+
+  it("renders geometry from standard binary OASIS records", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    createViewer({
+      container,
+      file: sampleBinaryOasis(),
+      fileName: "layout.oas",
+      plugins: [cadPlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-layout-stage")));
+
+    expect(container.textContent).toContain("OASIS 1.0");
+    expect(container.textContent).toContain("TOP");
+    expect(container.textContent).toContain("几何1");
+    expect(container.textContent).toContain("解析几何1");
+    expect(container.querySelectorAll(".ofv-layout-stage polygon")).toHaveLength(1);
+    expect(container.querySelector(".ofv-layout-stage polygon")?.getAttribute("points")).toContain("10,-20");
+    expect(visibleText(container)).not.toContain("轻量结构示意");
   });
 
   it("routes unsupported mechanical CAD files to a dedicated CAD guidance panel", async () => {
@@ -875,6 +934,51 @@ function sampleOasis(): ArrayBuffer {
   const compressed = new Uint8Array([0x63, 0x66, 0x0e, 0xf1, 0x0f, 0x60, 0xe6, 0x70, 0xf1, 0x74, 0x8d, 0x0f, 0xf6, 0x8c, 0x72, 0x05, 0x00]);
   const prefix = [..."%SEMI-OASIS\r\n"].map((char) => char.charCodeAt(0));
   return new Uint8Array([...prefix, 0x01, 0x03, 0x31, 0x2e, 0x30, 0x00, 0x21, ...compressed, 0x02]).buffer;
+}
+
+function sampleBinaryOasis(): ArrayBuffer {
+  const unsigned = (value: number) => {
+    const result: number[] = [];
+    let current = value;
+    do {
+      const byte = current & 0x7f;
+      current = Math.floor(current / 128);
+      result.push(current > 0 ? byte | 0x80 : byte);
+    } while (current > 0);
+    return result;
+  };
+  const signed = (value: number) => unsigned(Math.abs(value) * 2 + (value < 0 ? 1 : 0));
+  const text = (value: string) => [value.length, ...[...value].map((char) => char.charCodeAt(0))];
+  const records = new Uint8Array([
+    3,
+    ...text("TOP"),
+    13,
+    ...unsigned(0),
+    20,
+    0x7b,
+    ...unsigned(1),
+    ...unsigned(0),
+    ...unsigned(100),
+    ...unsigned(50),
+    ...signed(10),
+    ...signed(20)
+  ]);
+  const compressed = pako.deflateRaw(records);
+  const prefix = [..."%SEMI-OASIS\r\n"].map((char) => char.charCodeAt(0));
+  return new Uint8Array([
+    ...prefix,
+    1,
+    ...text("1.0"),
+    0,
+    ...unsigned(1000),
+    1,
+    34,
+    0,
+    ...unsigned(records.byteLength),
+    ...unsigned(compressed.byteLength),
+    ...compressed,
+    2
+  ]).buffer;
 }
 
 async function waitFor(predicate: () => boolean, timeout = 1000): Promise<void> {

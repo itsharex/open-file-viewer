@@ -48,6 +48,7 @@
 .ofv-root .ofv-pdf-summary[aria-hidden="true"],
 .ofv-root .ofv-sheet-summary[aria-hidden="true"],
 .ofv-root .ofv-presentation-summary[aria-hidden="true"],
+.ofv-root .ofv-xmind-summary[aria-hidden="true"],
 .ofv-root .ofv-media-info[aria-hidden="true"],
 .ofv-root .ofv-image-info[aria-hidden="true"],
 .ofv-root .ofv-drawing-summary[aria-hidden="true"],
@@ -2343,6 +2344,10 @@
   text-overflow: clip;
 }
 
+.ofv-cell-rich-text .ofv-rich-text-run {
+  white-space: inherit;
+}
+
 .ofv-cell-image {
   padding: 6px;
   vertical-align: middle;
@@ -2640,6 +2645,139 @@
   min-width: 0;
   overflow: auto;
   overflow-wrap: anywhere;
+}
+
+.ofv-ppt-binary-viewer {
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 20px;
+  background: color-mix(in srgb, var(--ofv-bg) 92%, #000);
+}
+
+.ofv-ppt-binary-slide {
+  position: relative;
+  box-sizing: border-box;
+  width: min(960px, 100%);
+  min-width: 320px;
+  aspect-ratio: var(--ofv-ppt-aspect, 4 / 3);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ofv-border) 72%, transparent);
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+  container-type: size;
+  transform-origin: top center;
+}
+
+.ofv-ppt-binary-canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.ofv-ppt-binary-shape {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  min-width: 1px;
+  min-height: 1px;
+  overflow: hidden;
+}
+
+.ofv-ppt-binary-master-shape {
+  z-index: 0;
+}
+
+.ofv-ppt-binary-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  user-select: none;
+}
+
+.ofv-ppt-binary-text {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #202124;
+  font-family: Arial, "Helvetica Neue", sans-serif;
+  font-size: clamp(7px, 1.65cqw, 18px);
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.ofv-ppt-binary-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1.5cqw;
+  text-align: center;
+  font-size: clamp(13px, 3.2cqw, 34px);
+  font-weight: 600;
+  line-height: 1.12;
+}
+
+.ofv-ppt-binary-body-text {
+  padding-top: 15cqh;
+}
+
+.ofv-ppt-binary-table-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3cqh 0.5cqw;
+  border: 1px solid rgb(86 138 42 / 55%);
+  background: rgb(183 226 135 / 88%);
+  color: #26351b;
+  font-size: clamp(7px, 1.45cqw, 16px);
+  font-weight: 600;
+  text-align: center;
+}
+
+.ofv-ppt-binary-has-master-background .ofv-ppt-binary-title {
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 24%);
+}
+
+.ofv-ppt-binary-slide-number {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  z-index: 5;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 48%);
+  color: #fff;
+  font: 500 10px/1.4 ui-sans-serif, system-ui, sans-serif;
+  pointer-events: none;
+}
+
+.ofv-ppt-binary-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: #64748b;
+  font: 500 clamp(14px, 3cqw, 28px)/1.4 ui-sans-serif, system-ui, sans-serif;
+}
+
+@media (max-width: 640px) {
+  .ofv-ppt-binary-viewer {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .ofv-ppt-binary-slide {
+    min-width: 260px;
+  }
 }
 
 .ofv-pptx-diagram-cycle-text {
@@ -3135,6 +3273,12 @@
   color: #e2e8f0;
 }
 
+.ofv-layout-webgl-stage {
+  height: auto;
+  aspect-ratio: 5 / 3;
+  max-height: 70vh;
+}
+
 .ofv-drawing-summary {
   display: flex;
   flex-wrap: wrap;
@@ -3159,6 +3303,251 @@
   color: var(--ofv-text);
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.ofv-xmind {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.ofv-xmind-workbook {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 520px;
+  overflow: hidden;
+  border: 1px solid var(--ofv-border);
+  border-radius: 10px;
+  background: var(--ofv-surface);
+}
+
+.ofv-xmind-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--ofv-border);
+  background: var(--ofv-surface);
+}
+
+.ofv-xmind-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.ofv-xmind-tab,
+.ofv-xmind-fit {
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ofv-text-muted);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ofv-xmind-tab:hover,
+.ofv-xmind-fit:hover {
+  background: var(--ofv-button-hover);
+  color: var(--ofv-text);
+}
+
+.ofv-xmind-tab.is-active {
+  border-color: color-mix(in srgb, var(--ofv-accent) 38%, transparent);
+  background: var(--ofv-accent-soft);
+  color: var(--ofv-accent);
+  font-weight: 600;
+}
+
+.ofv-xmind-fit {
+  flex: 0 0 auto;
+  border-color: var(--ofv-border);
+  background: var(--ofv-surface-muted);
+}
+
+.ofv-xmind-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 460px;
+  overflow: hidden;
+  outline: none;
+  cursor: grab;
+  touch-action: none;
+  background-color: var(--ofv-bg);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--ofv-text-muted) 18%, transparent) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.ofv-xmind-stage:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ofv-accent);
+}
+
+.ofv-xmind-stage.is-panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.ofv-xmind-surface {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.ofv-xmind-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.ofv-xmind-edges path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ofv-accent) 62%, var(--ofv-border));
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.ofv-xmind-edges .ofv-xmind-edge-detached {
+  stroke-dasharray: 6 5;
+}
+
+.ofv-xmind-edges .ofv-xmind-edge-summary,
+.ofv-xmind-edges .ofv-xmind-edge-callout {
+  stroke: #f59e0b;
+}
+
+.ofv-xmind-topic {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 160px;
+  margin: 0;
+  padding: 12px 14px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ofv-accent) 28%, var(--ofv-border));
+  border-left: 4px solid var(--ofv-accent);
+  border-radius: 10px;
+  background: var(--ofv-surface);
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.08);
+  overflow-wrap: anywhere;
+}
+
+.ofv-xmind-topic-title {
+  display: block;
+  overflow: hidden;
+  color: var(--ofv-text);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+a.ofv-xmind-topic-title:hover {
+  color: var(--ofv-accent);
+  text-decoration: underline;
+}
+
+.ofv-xmind-topic-depth-0 {
+  border: 0;
+  background: linear-gradient(135deg, #4f6bf6, #7c3aed);
+  box-shadow: 0 10px 28px rgba(79, 107, 246, 0.28);
+}
+
+.ofv-xmind-topic-depth-0 .ofv-xmind-topic-title,
+.ofv-xmind-topic-depth-0 .ofv-xmind-topic-notes {
+  color: #fff;
+}
+
+.ofv-xmind-topic-summary,
+.ofv-xmind-topic-callout {
+  border-left-color: #f59e0b;
+  background: color-mix(in srgb, #f59e0b 8%, var(--ofv-surface));
+}
+
+.ofv-xmind-topic-detached {
+  border-style: dashed;
+}
+
+.ofv-xmind-topic-image {
+  width: 100%;
+  max-height: 92px;
+  margin-top: 8px;
+  object-fit: contain;
+  border-radius: 5px;
+}
+
+.ofv-xmind-topic-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  color: var(--ofv-text-muted);
+  font-size: 10px;
+}
+
+.ofv-xmind-topic-meta span {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 5px;
+  border: 1px solid var(--ofv-border);
+  border-radius: 999px;
+  background: var(--ofv-surface-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ofv-xmind-topic-depth-0 .ofv-xmind-topic-meta span {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ofv-xmind-topic-notes {
+  display: -webkit-box;
+  margin: 7px 0 0;
+  overflow: hidden;
+  color: var(--ofv-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.ofv-xmind-fallback small {
+  color: var(--ofv-text-muted);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .ofv-xmind-workbook {
+    min-height: 440px;
+  }
+
+  .ofv-xmind-stage {
+    min-height: 390px;
+  }
+
+  .ofv-xmind-fit {
+    display: none;
+  }
 }
 
 .ofv-cad-layers {
@@ -3261,6 +3650,52 @@
 
 .ofv-cad-entities {
   margin-top: 12px;
+}
+
+.ofv-dwg-webgl-preview {
+  position: relative;
+  width: 100%;
+  height: clamp(520px, 70vh, 760px);
+  min-height: 520px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  background: #05070d;
+}
+
+.ofv-dwg-webgl-stage {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ofv-dwg-webgl-stage canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.ofv-dwg-webgl-status {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  max-width: calc(100% - 32px);
+  padding: 10px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #e5e7eb;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.34);
+}
+
+.ofv-dwg-webgl-status[hidden] {
+  display: none;
 }
 
 .ofv-dwg-preview {

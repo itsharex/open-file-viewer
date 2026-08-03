@@ -209,6 +209,8 @@ export interface PreviewContext {
   size: PreviewSize;
   options: Omit<PreviewOptions, "messages"> & Required<Pick<PreviewOptions, "fit" | "fallback" | "zoom">> & { messages: PreviewMessages };
   toolbar?: PreviewToolbarRenderContext;
+  /** Aborted when this render is superseded or the viewer is destroyed. */
+  signal?: AbortSignal;
   setLoading: (loading: boolean) => void;
   setError: (error: Error | string) => void;
 }

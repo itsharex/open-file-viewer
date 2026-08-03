@@ -7,6 +7,12 @@ import type { PreviewCommand, PreviewContext, PreviewFit, PreviewInstance, Previ
 import { createPanel, createSection, decodeTextBuffer, getInitialZoom, readArrayBuffer, resolveFormat } from "./utils";
 import { renderPdfDocumentPreview, type PdfPluginOptions } from "./pdf";
 import { parseLegacyWordDocument, renderLegacyWordDocument } from "./msdoc";
+import {
+  parseLegacyPowerPoint,
+  type LegacyPowerPointImage,
+  type LegacyPowerPointPresentation,
+  type LegacyPowerPointShape
+} from "./msppt";
 
 const wordExtensions = new Set(["docx", "docm", "doc", "dotx", "dotm", "dot", "rtf", "odt", "fodt", "wps"]);
 const sheetExtensions = new Set(["xlsx", "xls", "xlsm", "xlsb", "xlt", "xltx", "xltm", "csv", "tsv", "ods", "fods", "numbers", "et"]);
@@ -171,6 +177,7 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
       const arrayBuffer = await readArrayBuffer(ctx.file);
       const packageFormat = shouldSniffPackagedOffice(extension) ? await detectPackagedOfficeFormat(arrayBuffer) : undefined;
       let disposeDocxFit: (() => void) | undefined;
+      let disposeLegacyPresentation: (() => void) | undefined;
       let delegatedInstance: PreviewInstance | undefined;
 
       const conversionContext = await createOfficeConversionContext(ctx, arrayBuffer, extension, packageFormat);
@@ -207,6 +214,18 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
         renderOpenDocumentPresentationXml(panel, await readTextFromBuffer(arrayBuffer));
       } else if (extension === "doc" || extension === "dot") {
         renderLegacyWordBinary(panel, extension, arrayBuffer, ctx.options.messages);
+      } else if (extension === "ppt" || extension === "pps") {
+        try {
+          disposeLegacyPresentation = await renderLegacyPowerPoint(panel, arrayBuffer);
+        } catch (error) {
+          renderLegacyOfficeBinary(
+            panel,
+            extension,
+            arrayBuffer,
+            ctx.options.messages,
+            normalizeOfficeError(error, ctx.options.messages)
+          );
+        }
       } else if (isLegacyOfficeBinary(extension)) {
         renderLegacyOfficeBinary(panel, extension, arrayBuffer, ctx.options.messages);
       } else {
@@ -227,6 +246,7 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
           delegatedInstance?.destroy();
           controller?.destroy();
           disposeDocxFit?.();
+          disposeLegacyPresentation?.();
           panel.remove();
         }
       };
@@ -363,7 +383,7 @@ function createOfficeZoomController(
 } | undefined {
   const canZoom = Boolean(
     panel.querySelector(
-      ".ofv-docx-document, .ofv-sheet, .ofv-pptx-viewer > div, .ofv-document, .ofv-text-block, .ofv-slide, .ofv-msdoc-document"
+      ".ofv-docx-document, .ofv-sheet, .ofv-pptx-viewer > div, .ofv-ppt-binary-slide, .ofv-document, .ofv-text-block, .ofv-slide, .ofv-msdoc-document"
     )
   );
   if (!canZoom) {
@@ -383,6 +403,9 @@ function createOfficeZoomController(
       slide.style.width = zoom === 1 ? "" : "max-content";
       slide.style.maxWidth = zoom === 1 ? "" : "none";
       slide.style.overflow = zoom === 1 ? "" : "visible";
+    }
+    for (const slide of panel.querySelectorAll<HTMLElement>(".ofv-ppt-binary-slide")) {
+      setElementZoom(slide, zoom === 1 ? "" : String(zoom));
     }
     for (const scrollBox of panel.querySelectorAll<HTMLElement>(".ofv-table-scroll")) {
       syncSheetTableZoom(scrollBox, zoom);
@@ -513,7 +536,7 @@ async function detectPackagedOfficeFormat(arrayBuffer: ArrayBuffer): Promise<"do
 async function renderDocx(panel: HTMLElement, arrayBuffer: ArrayBuffer, fit: PreviewFit): Promise<() => void> {
   const content = document.createElement("div");
   content.className = "ofv-docx-document";
-  const styleContainer = document.createElement("div");
+  const styleContainer = document.createElement("style");
   styleContainer.className = "ofv-docx-style-container";
   document.head.append(styleContainer);
   let disposeFit: (() => void) | undefined;
@@ -1980,6 +2003,10 @@ async function renderSheet(
   }
   const chartPreviews = await readWorkbookCharts(arrayBuffer).catch(() => []);
   const workbookImages = await readWorkbookSheetImages(arrayBuffer).catch(() => new Map<string, WorkbookSheetImage[]>());
+  const workbookRichText = await readWorkbookRichText(arrayBuffer).catch(() => new Map<string, Map<string, WorkbookRichTextRun[]>>());
+  const workbookCellStyles = await readWorkbookCellStyles(arrayBuffer).catch(
+    () => new Map<string, Map<string, WorkbookCellStyleMetadata>>()
+  );
   const workbookColumnWidths = await readWorkbookSheetColumnWidths(arrayBuffer).catch(
     () => new Map<string, WorkbookSheetColumnWidthMetadata>()
   );
@@ -2005,6 +2032,8 @@ async function renderSheet(
     heading.textContent = sheetName;
     const sheet = workbook.Sheets[sheetName];
     const sheetImages = workbookImages.get(sheetName) || [];
+    const sheetRichText = workbookRichText.get(sheetName) || new Map<string, WorkbookRichTextRun[]>();
+    const sheetCellStyles = workbookCellStyles.get(sheetName) || new Map<string, WorkbookCellStyleMetadata>();
     const columnSizing = getWorkbookSheetColumnSizing(columnSizingBySheet, sheetName, workbookColumnWidths.get(sheetName));
     const range = trimWorkbookSheetRange(sheet, xlsx.utils.decode_range(sheet["!ref"] || "A1:A1"), xlsx.utils.decode_cell, sheetImages);
     const rowCount = range.e.r - range.s.r + 1;
@@ -2035,7 +2064,9 @@ async function renderSheet(
           xlsx.utils.format_cell,
           columnSizing,
           renderTableWindow,
-          sheetImages
+          sheetImages,
+          sheetRichText,
+          sheetCellStyles
         )
       );
       windowControls?.update();
@@ -2194,6 +2225,254 @@ async function readWorkbookSheetColumnWidths(arrayBuffer: ArrayBuffer): Promise<
     }
   }
   return result;
+}
+
+async function readWorkbookRichText(arrayBuffer: ArrayBuffer): Promise<Map<string, Map<string, WorkbookRichTextRun[]>>> {
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const workbookXml = await zip.file("xl/workbook.xml")?.async("text");
+  if (!workbookXml || typeof DOMParser === "undefined") {
+    return new Map();
+  }
+  const workbookDoc = parseOfficeXml(workbookXml);
+  if (!workbookDoc) {
+    return new Map();
+  }
+
+  const sharedStrings = await readWorkbookSharedStringRichText(zip);
+  const workbookRels = await readOfficeRelationships(zip, "xl/workbook.xml");
+  const result = new Map<string, Map<string, WorkbookRichTextRun[]>>();
+  const sheetElements = Array.from(workbookDoc.getElementsByTagName("*")).filter((element) => element.localName === "sheet");
+  for (const sheetElement of sheetElements) {
+    const sheetName = sheetElement.getAttribute("name") || "";
+    const relationshipId = getXmlAttribute(sheetElement, "id");
+    const sheetRel = workbookRels.find((rel) => rel.id === relationshipId && /\/worksheet$/i.test(rel.type));
+    const sheetPath = resolveOfficeRelationshipTarget("xl/workbook.xml", sheetRel?.target);
+    const richText = sheetPath ? await readWorksheetRichText(zip, sheetPath, sharedStrings) : undefined;
+    if (sheetName && richText && richText.size > 0) {
+      result.set(sheetName, richText);
+    }
+  }
+  return result;
+}
+
+async function readWorkbookCellStyles(arrayBuffer: ArrayBuffer): Promise<Map<string, Map<string, WorkbookCellStyleMetadata>>> {
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const stylesXml = await zip.file("xl/styles.xml")?.async("text");
+  const workbookXml = await zip.file("xl/workbook.xml")?.async("text");
+  if (!stylesXml || !workbookXml || typeof DOMParser === "undefined") {
+    return new Map();
+  }
+  const stylesDoc = parseOfficeXml(stylesXml);
+  const workbookDoc = parseOfficeXml(workbookXml);
+  if (!stylesDoc || !workbookDoc) {
+    return new Map();
+  }
+
+  const fonts = readWorkbookStyleFonts(stylesDoc);
+  const cellStyleByIndex = readWorkbookCellStyleIndex(stylesDoc, fonts);
+  if (cellStyleByIndex.size === 0) {
+    return new Map();
+  }
+
+  const workbookRels = await readOfficeRelationships(zip, "xl/workbook.xml");
+  const result = new Map<string, Map<string, WorkbookCellStyleMetadata>>();
+  const sheetElements = Array.from(workbookDoc.getElementsByTagName("*")).filter((element) => element.localName === "sheet");
+  for (const sheetElement of sheetElements) {
+    const sheetName = sheetElement.getAttribute("name") || "";
+    const relationshipId = getXmlAttribute(sheetElement, "id");
+    const sheetRel = workbookRels.find((rel) => rel.id === relationshipId && /\/worksheet$/i.test(rel.type));
+    const sheetPath = resolveOfficeRelationshipTarget("xl/workbook.xml", sheetRel?.target);
+    const cellStyles = sheetPath ? await readWorksheetCellStyles(zip, sheetPath, cellStyleByIndex) : undefined;
+    if (sheetName && cellStyles && cellStyles.size > 0) {
+      result.set(sheetName, cellStyles);
+    }
+  }
+  return result;
+}
+
+function readWorkbookStyleFonts(stylesDoc: Document): Map<number, WorkbookCellFontStyle> {
+  const result = new Map<number, WorkbookCellFontStyle>();
+  const fontsElement = Array.from(stylesDoc.getElementsByTagName("*")).find((element) => element.localName === "fonts");
+  const fontElements = Array.from(fontsElement?.children || []).filter((element) => element.localName === "font");
+  fontElements.forEach((fontElement, index) => {
+    const size = Number.parseFloat(firstDirectOfficeChild(fontElement, "sz")?.getAttribute("val") || "");
+    const color = firstDirectOfficeChild(fontElement, "color");
+    const font: WorkbookCellFontStyle = {
+      bold: readWorkbookBooleanFlag(fontElement, "b"),
+      italic: readWorkbookBooleanFlag(fontElement, "i"),
+      underline: readWorkbookBooleanFlag(fontElement, "u"),
+      strike: readWorkbookBooleanFlag(fontElement, "strike"),
+      sz: Number.isFinite(size) ? size : undefined,
+      color: color ? { rgb: color.getAttribute("rgb") || undefined, indexed: parseOptionalInteger(color.getAttribute("indexed")) } : undefined
+    };
+    if (isMeaningfulWorkbookCellFontStyle(font)) {
+      result.set(index, font);
+    }
+  });
+  return result;
+}
+
+function readWorkbookCellStyleIndex(
+  stylesDoc: Document,
+  fonts: Map<number, WorkbookCellFontStyle>
+): Map<number, WorkbookCellStyleMetadata> {
+  const result = new Map<number, WorkbookCellStyleMetadata>();
+  const cellXfsElement = Array.from(stylesDoc.getElementsByTagName("*")).find((element) => element.localName === "cellXfs");
+  const xfElements = Array.from(cellXfsElement?.children || []).filter((element) => element.localName === "xf");
+  xfElements.forEach((xfElement, index) => {
+    const fontId = parseOptionalInteger(xfElement.getAttribute("fontId"));
+    const font = fontId === undefined ? undefined : fonts.get(fontId);
+    if (font) {
+      result.set(index, { font });
+    }
+  });
+  return result;
+}
+
+async function readWorksheetCellStyles(
+  zip: JSZip,
+  sheetPath: string,
+  styleByIndex: Map<number, WorkbookCellStyleMetadata>
+): Promise<Map<string, WorkbookCellStyleMetadata>> {
+  const result = new Map<string, WorkbookCellStyleMetadata>();
+  const sheetXml = await zip.file(sheetPath)?.async("text");
+  if (!sheetXml || !/\bs="\d+"/i.test(sheetXml)) {
+    return result;
+  }
+  for (const match of sheetXml.matchAll(/<c\b[^>]*>/gi)) {
+    const cellTag = match[0];
+    const address = getXmlTagAttribute(cellTag, "r");
+    const styleIndex = parseOptionalInteger(getXmlTagAttribute(cellTag, "s"));
+    const style = styleIndex === undefined ? undefined : styleByIndex.get(styleIndex);
+    if (address && style) {
+      result.set(address, style);
+    }
+  }
+  return result;
+}
+
+function readWorkbookBooleanFlag(element: Element, localName: string): boolean | undefined {
+  const flag = firstDirectOfficeChild(element, localName);
+  if (!flag) {
+    return undefined;
+  }
+  const value = flag.getAttribute("val");
+  if (value === "0" || value === "false") {
+    return undefined;
+  }
+  return true;
+}
+
+function isMeaningfulWorkbookCellFontStyle(font: WorkbookCellFontStyle): boolean {
+  return Boolean(font.bold || font.italic || font.underline || font.strike || font.color?.rgb || font.sz);
+}
+
+async function readWorkbookSharedStringRichText(zip: JSZip): Promise<Map<number, WorkbookRichTextRun[]>> {
+  const result = new Map<number, WorkbookRichTextRun[]>();
+  const sharedStringsXml = await zip.file("xl/sharedStrings.xml")?.async("text");
+  if (!sharedStringsXml || !/<rPr\b/i.test(sharedStringsXml)) {
+    return result;
+  }
+  const sharedStringsDoc = sharedStringsXml ? parseOfficeXml(sharedStringsXml) : undefined;
+  if (!sharedStringsDoc) {
+    return result;
+  }
+  const items = Array.from(sharedStringsDoc.documentElement.children).filter((element) => element.localName === "si");
+  items.forEach((item, index) => {
+    const runs = parseWorkbookRichTextRuns(item);
+    if (runs.length > 0 && runs.some((run) => isStyledWorkbookRichTextRun(run))) {
+      result.set(index, runs);
+    }
+  });
+  return result;
+}
+
+async function readWorksheetRichText(
+  zip: JSZip,
+  sheetPath: string,
+  sharedStrings: Map<number, WorkbookRichTextRun[]>
+): Promise<Map<string, WorkbookRichTextRun[]>> {
+  const result = new Map<string, WorkbookRichTextRun[]>();
+  const sheetXml = await zip.file(sheetPath)?.async("text");
+  if (!sheetXml || (sharedStrings.size === 0 && !/<rPr\b/i.test(sheetXml))) {
+    return result;
+  }
+  const sheetDoc = sheetXml ? parseOfficeXml(sheetXml) : undefined;
+  if (!sheetDoc) {
+    return result;
+  }
+  const cells = Array.from(sheetDoc.getElementsByTagName("*")).filter((element) => element.localName === "c");
+  for (const cell of cells) {
+    const address = cell.getAttribute("r") || "";
+    if (!address) {
+      continue;
+    }
+    const type = cell.getAttribute("t") || "";
+    if (type === "s") {
+      const sharedStringIndex = Number.parseInt(firstDirectOfficeChild(cell, "v")?.textContent || "", 10);
+      const runs = sharedStrings.get(sharedStringIndex);
+      if (runs?.length) {
+        result.set(address, runs);
+      }
+      continue;
+    }
+    if (type === "inlineStr") {
+      const inlineString = firstDirectOfficeChild(cell, "is");
+      const runs = inlineString ? parseWorkbookRichTextRuns(inlineString) : [];
+      if (runs.length > 0 && runs.some((run) => isStyledWorkbookRichTextRun(run))) {
+        result.set(address, runs);
+      }
+    }
+  }
+  return result;
+}
+
+function parseWorkbookRichTextRuns(container: Element): WorkbookRichTextRun[] {
+  const richRuns = Array.from(container.children).filter((element) => element.localName === "r");
+  if (richRuns.length > 0) {
+    return richRuns
+      .map((run) => {
+        const properties = firstDirectOfficeChild(run, "rPr");
+        return {
+          ...parseWorkbookRichTextRunStyle(properties),
+          text: readWorkbookRichTextNodeText(run)
+        };
+      })
+      .filter((run) => run.text.length > 0);
+  }
+  const text = firstDirectOfficeChild(container, "t")?.textContent || "";
+  return text ? [{ text }] : [];
+}
+
+function parseWorkbookRichTextRunStyle(properties: Element | undefined): Omit<WorkbookRichTextRun, "text"> {
+  if (!properties) {
+    return {};
+  }
+  const color = firstDirectOfficeChild(properties, "color");
+  const size = Number.parseFloat(firstDirectOfficeChild(properties, "sz")?.getAttribute("val") || "");
+  return {
+    bold: Boolean(firstDirectOfficeChild(properties, "b")),
+    italic: Boolean(firstDirectOfficeChild(properties, "i")),
+    underline: Boolean(firstDirectOfficeChild(properties, "u")),
+    strike: Boolean(firstDirectOfficeChild(properties, "strike")),
+    color: readWorkbookColor(color ? { rgb: color.getAttribute("rgb") || undefined } : undefined),
+    fontSize: Number.isFinite(size) ? size : undefined
+  };
+}
+
+function readWorkbookRichTextNodeText(run: Element): string {
+  return Array.from(run.children)
+    .filter((element) => element.localName === "t")
+    .map((element) => element.textContent || "")
+    .join("");
+}
+
+function isStyledWorkbookRichTextRun(run: WorkbookRichTextRun): boolean {
+  return Boolean(run.bold || run.italic || run.underline || run.strike || run.color || run.fontSize);
+}
+
+function firstDirectOfficeChild(element: Element, localName: string): Element | undefined {
+  return Array.from(element.children).find((child) => child.localName === localName);
 }
 
 async function readWorksheetColumnWidths(zip: JSZip, sheetPath: string): Promise<WorkbookSheetColumnWidthMetadata> {
@@ -3109,6 +3388,34 @@ type WorkbookSheetImage = {
   title?: string;
 };
 
+type WorkbookRichTextRun = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  color?: string;
+  fontSize?: number;
+};
+
+type WorkbookCellStyleMetadata = {
+  font?: WorkbookCellFontStyle;
+};
+
+type WorkbookCellFontStyle = {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  sz?: number;
+  color?: WorkbookColorSource;
+};
+
+type WorkbookColorSource = {
+  rgb?: string;
+  indexed?: number;
+};
+
 function trimWorkbookSheetRange(
   sheet: Record<string, any>,
   range: SheetRange,
@@ -3244,7 +3551,9 @@ function createWorkbookSheetTable(
   formatCell: (cell: any) => string,
   columnSizing: SheetColumnSizing,
   rerender: () => void,
-  images: WorkbookSheetImage[] = []
+  images: WorkbookSheetImage[] = [],
+  richTextByCell: Map<string, WorkbookRichTextRun[]> = new Map(),
+  cellStylesByCell: Map<string, WorkbookCellStyleMetadata> = new Map()
 ): HTMLTableElement {
   const table = document.createElement("table");
   table.id = `ofv-sheet-${sheetIndex + 1}`;
@@ -3291,6 +3600,7 @@ function createWorkbookSheetTable(
       const merge = mergePlan.anchors.get(coordinateKey);
       const sourceAddress = merge ? encodeCell({ r: merge.sourceRow, c: merge.sourceColumn }) : address;
       const sourceCell = sheet[sourceAddress];
+      const sourceStyle = sourceAddress ? cellStylesByCell.get(sourceAddress) : undefined;
       const cell = document.createElement(rowIndex === range.s.r ? "th" : "td");
       cell.dataset.cell = address;
       if (sourceAddress !== address) {
@@ -3306,14 +3616,21 @@ function createWorkbookSheetTable(
         }
       }
       const text = sourceCell ? formatCell(sourceCell) : "";
-      cell.textContent = text;
+      const richText = sourceAddress ? richTextByCell.get(sourceAddress) : undefined;
+      if (richText?.length) {
+        appendWorkbookCellRichText(cell, richText);
+      } else if (hasWorkbookCellHtmlRichText(sourceCell)) {
+        appendWorkbookCellHtmlRichText(cell, sourceCell.h);
+      } else {
+        cell.textContent = text;
+      }
       if (text) {
         cell.title = text;
       }
       if (isWorkbookNumericCell(sourceCell)) {
         cell.classList.add("ofv-cell-number");
       }
-      applyWorkbookCellStyle(cell, sourceCell);
+      applyWorkbookCellStyle(cell, sourceCell, sourceStyle);
       if (sourceCell?.f) {
         cell.classList.add("ofv-cell-formula");
         cell.title = `=${sourceCell.f}`;
@@ -3457,6 +3774,62 @@ function groupWorkbookImagesByCell(images: WorkbookSheetImage[]): Map<string, Wo
   return grouped;
 }
 
+function hasWorkbookCellHtmlRichText(sourceCell: any): sourceCell is { h: string } {
+  return typeof sourceCell?.h === "string" && /<(?:span|b|strong|i|em|u|s|font)\b/i.test(sourceCell.h);
+}
+
+function appendWorkbookCellHtmlRichText(cell: HTMLTableCellElement, html: string): void {
+  cell.classList.add("ofv-cell-rich-text");
+  cell.innerHTML = sanitizeWorkbookCellHtmlRichText(html);
+  normalizeWorkbookCellHtmlRichText(cell);
+}
+
+function sanitizeWorkbookCellHtmlRichText(html: string): string {
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    ALLOWED_TAGS: ["span", "b", "strong", "i", "em", "u", "s", "font", "br"],
+    ALLOWED_ATTR: ["style", "color"],
+    ALLOW_DATA_ATTR: false
+  });
+}
+
+function normalizeWorkbookCellHtmlRichText(cell: HTMLTableCellElement): void {
+  for (const element of Array.from(cell.querySelectorAll<HTMLElement>("span, b, strong, i, em, u, s, font"))) {
+    element.classList.add("ofv-rich-text-run");
+    if (element instanceof HTMLFontElement && element.color) {
+      element.style.color = element.color;
+      element.removeAttribute("color");
+    }
+  }
+}
+
+function appendWorkbookCellRichText(cell: HTMLTableCellElement, runs: WorkbookRichTextRun[]): void {
+  cell.classList.add("ofv-cell-rich-text");
+  for (const run of runs) {
+    const span = document.createElement("span");
+    span.className = "ofv-rich-text-run";
+    span.textContent = run.text;
+    if (run.bold) {
+      span.style.fontWeight = "700";
+    }
+    if (run.italic) {
+      span.style.fontStyle = "italic";
+    }
+    if (run.underline || run.strike) {
+      span.style.textDecoration = [run.underline ? "underline" : "", run.strike ? "line-through" : ""]
+        .filter(Boolean)
+        .join(" ");
+    }
+    if (run.color) {
+      span.style.color = readableSheetInk(run.color);
+    }
+    if (run.fontSize) {
+      span.style.fontSize = `${Math.max(9, Math.min(24, run.fontSize))}pt`;
+    }
+    cell.append(span);
+  }
+}
+
 function appendWorkbookCellImages(cell: HTMLTableCellElement, images: WorkbookSheetImage[] | undefined, text: string): void {
   if (!images?.length) {
     return;
@@ -3526,34 +3899,43 @@ function getSheetRowHeight(row: { hidden?: boolean; hpx?: number; hpt?: number }
   return height ? Math.max(18, Math.min(260, Math.round(height))) : undefined;
 }
 
-function applyWorkbookCellStyle(cell: HTMLTableCellElement, sourceCell: any): void {
+function applyWorkbookCellStyle(
+  cell: HTMLTableCellElement,
+  sourceCell: any,
+  sourceStyleMetadata?: WorkbookCellStyleMetadata
+): void {
   const style = sourceCell?.s;
-  if (!style) {
+  const sourceFont = sourceStyleMetadata?.font || style?.font;
+  if (!style && !sourceFont) {
     return;
   }
 
-  const parsedFill = readWorkbookColor(style.fgColor || style.fill?.fgColor);
-  const fill = style.patternType === "none" ? undefined : parsedFill;
+  const parsedFill = readWorkbookColor(style?.fgColor || style?.fill?.fgColor);
+  const fill = style?.patternType === "none" ? undefined : parsedFill;
   if (fill) {
     cell.style.backgroundColor = fill;
   }
 
-  const font = style.font;
-  const fontColor = font ? readWorkbookColor(font.color) : undefined;
-  if (font) {
-    if (font.bold) {
+  const fontColor = sourceFont ? readWorkbookColor(sourceFont.color) : undefined;
+  if (sourceFont) {
+    if (sourceFont.bold) {
       cell.style.fontWeight = "700";
     }
-    if (font.italic) {
+    if (sourceFont.italic) {
       cell.style.fontStyle = "italic";
     }
-    if (font.sz) {
-      cell.style.fontSize = `${Math.max(9, Math.min(24, Number(font.sz)))}pt`;
+    if (sourceFont.underline || sourceFont.strike) {
+      cell.style.textDecoration = [sourceFont.underline ? "underline" : "", sourceFont.strike ? "line-through" : ""]
+        .filter(Boolean)
+        .join(" ");
+    }
+    if (sourceFont.sz) {
+      cell.style.fontSize = `${Math.max(9, Math.min(24, Number(sourceFont.sz)))}pt`;
     }
   }
   applyWorkbookCellInk(cell, fill, fontColor);
 
-  const alignment = style.alignment;
+  const alignment = style?.alignment;
   if (alignment) {
     const horizontal = normalizeSheetHorizontalAlign(alignment.horizontal);
     if (horizontal) {
@@ -3575,6 +3957,11 @@ function readWorkbookColor(color: { rgb?: string; indexed?: number } | undefined
   }
   const rgb = color.rgb.length === 8 ? color.rgb.slice(2) : color.rgb;
   return /^[\da-f]{6}$/i.test(rgb) ? `#${rgb}` : undefined;
+}
+
+function parseOptionalInteger(value: string | null | undefined): number | undefined {
+  const parsed = Number.parseInt(value || "", 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 // Cell fills and font colors from the file assume Excel's white canvas. The
@@ -4987,6 +5374,192 @@ function legacyOfficeFormatLabel(extension: string): string {
     return "WPS Presentation legacy format";
   }
   return "PowerPoint Binary File Format";
+}
+
+type LegacyPresentationImageSource = {
+  src: string;
+  revoke: boolean;
+};
+
+async function renderLegacyPowerPoint(panel: HTMLElement, arrayBuffer: ArrayBuffer): Promise<() => void> {
+  const presentation = await parseLegacyPowerPoint(arrayBuffer);
+  const imageSources = await prepareLegacyPowerPointImages(presentation.images);
+  const viewer = document.createElement("div");
+  viewer.className = "ofv-ppt-binary-viewer";
+  viewer.style.setProperty("--ofv-ppt-aspect", `${presentation.width} / ${presentation.height}`);
+  const hasMasterBackground = presentation.masterShapes.some(
+    (shape) =>
+      shape.imageIndices.some((index) => imageSources.has(index)) &&
+      shape.left <= presentation.width * 0.02 &&
+      shape.top <= presentation.height * 0.02 &&
+      shape.width >= presentation.width * 0.9 &&
+      shape.height >= presentation.height * 0.9
+  );
+
+  for (const [slideIndex, slide] of presentation.slides.entries()) {
+    const article = document.createElement("article");
+    article.className = `ofv-ppt-binary-slide${hasMasterBackground ? " ofv-ppt-binary-has-master-background" : ""}`;
+    article.dataset.slideIndex = String(slideIndex);
+    article.setAttribute("aria-label", `Slide ${slideIndex + 1}`);
+
+    const canvas = document.createElement("div");
+    canvas.className = "ofv-ppt-binary-canvas";
+    const tableCells = findLegacyPowerPointTableCells(slide.shapes);
+    for (const shape of presentation.masterShapes) {
+      renderLegacyPowerPointShape(canvas, shape, presentation, imageSources, true);
+    }
+    for (const shape of slide.shapes) {
+      renderLegacyPowerPointShape(canvas, shape, presentation, imageSources, false, tableCells.has(shape));
+    }
+    if (!canvas.hasChildNodes()) {
+      const empty = document.createElement("p");
+      empty.className = "ofv-ppt-binary-empty";
+      empty.textContent = `Slide ${slideIndex + 1}`;
+      canvas.append(empty);
+    }
+
+    const number = document.createElement("span");
+    number.className = "ofv-ppt-binary-slide-number";
+    number.textContent = String(slideIndex + 1);
+    article.append(canvas, number);
+    viewer.append(article);
+  }
+
+  panel.replaceChildren(viewer);
+  return () => {
+    for (const source of imageSources.values()) {
+      if (source.revoke) {
+        URL.revokeObjectURL(source.src);
+      }
+    }
+  };
+}
+
+async function prepareLegacyPowerPointImages(
+  images: LegacyPowerPointImage[]
+): Promise<Map<number, LegacyPresentationImageSource>> {
+  const sources = new Map<number, LegacyPresentationImageSource>();
+  const metafiles = images.filter((image) => image.kind !== "bitmap");
+  let converter: typeof import("emf-converter") | undefined;
+  if (metafiles.length > 0) {
+    try {
+      converter = await import("emf-converter");
+    } catch (error) {
+      console.warn("Presentation metafile renderer could not be loaded:", error);
+    }
+  }
+
+  for (const image of images) {
+    if (image.kind === "bitmap") {
+      const url = URL.createObjectURL(new Blob([toStandaloneArrayBuffer(image.bytes)], { type: image.mimeType }));
+      sources.set(image.index, { src: url, revoke: true });
+      continue;
+    }
+    if (!converter) {
+      continue;
+    }
+    try {
+      const buffer = toStandaloneArrayBuffer(image.bytes);
+      const dataUrl =
+        image.kind === "emf"
+          ? await converter.convertEmfToDataUrl(buffer, { maxWidth: 1600, maxHeight: 1200, dpiScale: 1.5 })
+          : await converter.convertWmfToDataUrl(buffer, { maxWidth: 1600, maxHeight: 1200, dpiScale: 1.5 });
+      if (dataUrl) {
+        sources.set(image.index, { src: dataUrl, revoke: false });
+      }
+    } catch (error) {
+      console.warn(`Presentation ${image.kind.toUpperCase()} image could not be rendered:`, error);
+    }
+  }
+  return sources;
+}
+
+function renderLegacyPowerPointShape(
+  canvas: HTMLElement,
+  shape: LegacyPowerPointShape,
+  presentation: LegacyPowerPointPresentation,
+  imageSources: Map<number, LegacyPresentationImageSource>,
+  master: boolean,
+  tableCell = false
+): void {
+  const usableImages = shape.imageIndices
+    .map((index) => imageSources.get(index))
+    .filter((source): source is LegacyPresentationImageSource => Boolean(source));
+  const texts = master ? [] : shape.texts;
+  if (usableImages.length === 0 && texts.length === 0) {
+    return;
+  }
+
+  const element = document.createElement("div");
+  element.className = `ofv-ppt-binary-shape${master ? " ofv-ppt-binary-master-shape" : ""}`;
+  const left = clampPresentationRatio(shape.left / presentation.width);
+  const top = clampPresentationRatio(shape.top / presentation.height);
+  const width = clampPresentationRatio(shape.width / presentation.width, 0.001);
+  const height = clampPresentationRatio(shape.height / presentation.height, 0.001);
+  element.style.left = `${left * 100}%`;
+  element.style.top = `${top * 100}%`;
+  element.style.width = `${Math.min(width, 1 - left) * 100}%`;
+  element.style.height = `${Math.min(height, 1 - top) * 100}%`;
+
+  for (const source of usableImages) {
+    const image = document.createElement("img");
+    image.className = "ofv-ppt-binary-image";
+    image.src = source.src;
+    image.alt = "";
+    image.draggable = false;
+    element.append(image);
+  }
+
+  if (texts.length > 0) {
+    const text = document.createElement("div");
+    const textKind = isLegacyPowerPointTitle(shape, presentation)
+      ? " ofv-ppt-binary-title"
+      : tableCell
+        ? " ofv-ppt-binary-table-cell"
+        : isLegacyPowerPointBody(shape, presentation)
+          ? " ofv-ppt-binary-body-text"
+          : "";
+    text.className = `ofv-ppt-binary-text${textKind}`;
+    text.textContent = texts.join("\n");
+    element.append(text);
+  }
+  canvas.append(element);
+}
+
+function isLegacyPowerPointTitle(shape: LegacyPowerPointShape, presentation: LegacyPowerPointPresentation): boolean {
+  return shape.top < presentation.height * 0.18 && shape.height < presentation.height * 0.24;
+}
+
+function isLegacyPowerPointBody(shape: LegacyPowerPointShape, presentation: LegacyPowerPointPresentation): boolean {
+  return shape.top < presentation.height * 0.24 && shape.height > presentation.height * 0.45;
+}
+
+function findLegacyPowerPointTableCells(shapes: LegacyPowerPointShape[]): Set<LegacyPowerPointShape> {
+  const rows = new Map<number, LegacyPowerPointShape[]>();
+  for (const shape of shapes) {
+    if (shape.texts.length !== 1 || shape.imageIndices.length > 0 || shape.texts[0].length > 80) {
+      continue;
+    }
+    const key = Math.round(shape.top / 4) * 4;
+    const row = rows.get(key) || [];
+    row.push(shape);
+    rows.set(key, row);
+  }
+  const cells = new Set<LegacyPowerPointShape>();
+  for (const row of rows.values()) {
+    if (row.length >= 3) {
+      row.forEach((shape) => cells.add(shape));
+    }
+  }
+  return cells;
+}
+
+function clampPresentationRatio(value: number, minimum = 0): number {
+  return Number.isFinite(value) ? Math.min(1, Math.max(minimum, value)) : minimum;
+}
+
+function toStandaloneArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 function renderLegacyWordBinary(

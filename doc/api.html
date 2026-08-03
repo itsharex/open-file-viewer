@@ -258,7 +258,7 @@ npm install @open-file-viewer/svelte</code></pre>
               </article>
               <article>
                 <strong>DWG</strong>
-                <p data-i18n="api.optional.dwg"><code>cadPlugin()</code> tries LibreDWG WASM by default. Install <code>@mlightcad/libredwg-web</code> and configure <code>wasmBaseUrl</code> for DWG linework previews.</p>
+                <p data-i18n="api.optional.dwg"><code>cadPlugin({ webglDwg })</code> uses a Worker-backed WebGL CAD scene for complex DWG files. The host copies the parser and MTEXT Workers into a public static directory. Without that option, the lightweight LibreDWG SVG path remains available.</p>
               </article>
               <article>
                 <strong>FLV / M2TS</strong>
@@ -268,8 +268,80 @@ npm install @open-file-viewer/svelte</code></pre>
             <div class="editor-window doc-code-window">
               <div class="editor-titlebar"><span></span><span></span><span></span><strong>terminal</strong></div>
               <pre><code data-language="bash">npm install pdfjs-dist
-npm install @mlightcad/libredwg-web
+npm install @mlightcad/cad-simple-viewer@1.5.9 @mlightcad/data-model@1.12.3 lodash-es@4.17.21
+npm install @mlightcad/libredwg-web@0.7.4
 npm install mpegts.js</code></pre>
+            </div>
+            <div class="doc-callout">
+              <strong data-i18n="api.optional.dwgSetupTitle">Recommended DWG setup</strong>
+              <p data-i18n="api.optional.dwgSetupBody">Install the pinned optional dependencies, add the copy script below to the host application's <code>scripts/</code> directory, and run it in <code>predev</code>/<code>prebuild</code>. The example targets the conventional <code>public/</code> static directory. After startup, verify both CAD Workers and the lightweight SVG engine assets return 200.</p>
+            </div>
+            <div class="editor-window doc-code-window">
+              <div class="editor-titlebar"><span></span><span></span><span></span><strong>scripts/copy-libredwg-assets.mjs</strong></div>
+              <pre><code data-language="javascript">import { copyFile, cp, mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const moduleEntry = fileURLToPath(import.meta.resolve("@mlightcad/libredwg-web"));
+const packageRoot = dirname(dirname(moduleEntry));
+const targetRoot = fileURLToPath(
+  new URL("../public/vendor/libredwg-web/", import.meta.url)
+);
+const viewerEntry = fileURLToPath(import.meta.resolve("@mlightcad/cad-simple-viewer"));
+const viewerRoot = dirname(dirname(viewerEntry));
+const viewerTarget = fileURLToPath(
+  new URL("../public/vendor/cad-engine/", import.meta.url)
+);
+
+await Promise.all([
+  mkdir(targetRoot, { recursive: true }),
+  mkdir(viewerTarget, { recursive: true })
+]);
+await Promise.all([
+  cp(join(packageRoot, "dist"), join(targetRoot, "dist"), {
+    recursive: true,
+    force: true
+  }),
+  cp(join(packageRoot, "wasm"), join(targetRoot, "wasm"), {
+    recursive: true,
+    force: true
+  }),
+  copyFile(
+    join(viewerRoot, "dist/libredwg-parser-worker.js"),
+    join(viewerTarget, "libredwg-parser-worker.js")
+  ),
+  copyFile(
+    join(viewerRoot, "dist/mtext-renderer-worker.js"),
+    join(viewerTarget, "mtext-renderer-worker.js")
+  )
+]);</code></pre>
+            </div>
+            <div class="editor-window doc-code-window">
+              <div class="editor-titlebar"><span></span><span></span><span></span><strong>package.json</strong></div>
+              <pre><code data-language="json">{
+  "scripts": {
+    "assets:dwg": "node scripts/copy-libredwg-assets.mjs",
+    "predev": "npm run assets:dwg",
+    "prebuild": "npm run assets:dwg"
+  }
+}</code></pre>
+            </div>
+            <div class="editor-window doc-code-window">
+              <div class="editor-titlebar"><span></span><span></span><span></span><strong>viewer.ts</strong></div>
+              <pre><code data-language="typescript">cadPlugin({
+  webglDwg: {
+    workerBaseUrl: "/vendor/cad-engine"
+  },
+  libreDwg: {
+    wasmBaseUrl: "/vendor/libredwg-web/wasm",
+    workerModuleUrl: "/vendor/libredwg-web/dist/libredwg-web.js",
+    workerTimeoutMs: 120_000
+  }
+});</code></pre>
+            </div>
+            <div class="doc-callout">
+              <strong data-i18n="api.optional.dwgDeployTitle">DWG deployment check</strong>
+              <p data-i18n="api.optional.dwgDeployBody">The two files below <code>/vendor/cad-engine/</code> and the lightweight SVG engine assets must be reachable. Add the application's public base path for subpath deployments, serve WASM as <code>application/wasm</code>, and allow Workers in CSP.</p>
             </div>
             <div class="doc-callout">
               <strong data-i18n="api.optional.pnpmTitle">pnpm 11 / blockExoticSubdeps note</strong>
@@ -568,7 +640,7 @@ export function customReportPlugin(): PreviewPlugin {
               <article><strong>archivePlugin</strong><p data-i18n="api.builtIn.archive">Archive directories and file structures for zip, rar, 7z, tar, gz and more.</p></article>
               <article><strong>gisPlugin</strong><p data-i18n="api.builtIn.gis">Map data including geojson, kml, kmz, gpx, topojson and shp.</p></article>
               <article><strong>model3dPlugin</strong><p data-i18n="api.builtIn.model3d">3D models including gltf, glb, obj, stl, fbx, dae, 3mf and usdz.</p></article>
-              <article><strong>cadPlugin</strong><p data-i18n="api.builtIn.cad">Engineering drawings and chip layouts including dxf, step, ifc, gds and oas. DWG tries LibreDWG WASM first, then falls back to a thumbnail or metadata; <code>binaryRenderer</code> can connect CADViewer, MxCAD or a conversion service.</p></article>
+              <article><strong>cadPlugin</strong><p data-i18n="api.builtIn.cad">Engineering drawings and chip layouts including dxf, dwg, step, ifc, gds and oas. Complex DWG files can use the Worker-backed WebGL CAD scene; the lightweight SVG and custom renderer paths remain available.</p></article>
               <article><strong>emailPlugin</strong><p data-i18n="api.builtIn.email">Email bodies, headers and attachment structures for eml, msg and mbox.</p></article>
             </div>
           </section>
