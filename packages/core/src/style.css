@@ -993,6 +993,11 @@
   max-width: 100%;
 }
 
+/* DOCX 纵向滚动统一由 viewport 承担，避免 panel 和文档层重复显示 scrollbar。 */
+.ofv-office-docx {
+  overflow: visible;
+}
+
 .ofv-document {
   overflow-wrap: anywhere;
   font-size: 14px;
@@ -1682,7 +1687,7 @@
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
-  overflow-y: auto;
+  overflow-y: hidden;
   color: #111827;
 }
 

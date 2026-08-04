@@ -50,6 +50,8 @@ describe("core responsive styles", () => {
     const docxWrapper = rule(".ofv-docx-document .ofv-docx-wrapper");
     const docxSection = rule(".ofv-docx-document section.ofv-docx");
     expect(rule(".ofv-docx-document")).toContain("overflow-x: auto");
+    expect(rule(".ofv-docx-document")).toContain("overflow-y: hidden");
+    expect(rule(".ofv-office-docx")).toContain("overflow: visible");
     expect(docxWrapper).toContain("width: 100%");
     expect(docxWrapper).toContain("max-width: 100%");
     expect(docxWrapper).toContain("overflow: hidden");
