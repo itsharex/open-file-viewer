@@ -908,6 +908,7 @@ describe("officePlugin", () => {
     expect(container.querySelector(".ofv-office-package-note")).toBeNull();
     expect(container.textContent).not.toContain("兼容包识别");
     expect(container.querySelector(".ofv-office-conversion")).toBeNull();
+    expect(container.querySelector(".ofv-office")?.classList.contains("ofv-office-docx")).toBe(true);
     expect(container.querySelector(".ofv-docx-document")?.textContent).toContain("DOCX layout page");
   });
 

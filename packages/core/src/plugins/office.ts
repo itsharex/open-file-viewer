@@ -534,6 +534,7 @@ async function detectPackagedOfficeFormat(arrayBuffer: ArrayBuffer): Promise<"do
 }
 
 async function renderDocx(panel: HTMLElement, arrayBuffer: ArrayBuffer, fit: PreviewFit): Promise<() => void> {
+  panel.classList.add("ofv-office-docx");
   const content = document.createElement("div");
   content.className = "ofv-docx-document";
   const styleContainer = document.createElement("style");
