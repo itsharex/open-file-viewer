@@ -18,12 +18,19 @@ export interface WebglDwgPreviewOptions {
 
 type CadEngineModule = typeof import("@mlightcad/cad-simple-viewer");
 
+const cadEnginePackageName = "@mlightcad/cad-simple-viewer";
+
 let engineModulePromise: Promise<CadEngineModule> | undefined;
 let pendingDestroy: Promise<void> = Promise.resolve();
 
 function loadCadEngine(): Promise<CadEngineModule> {
-  engineModulePromise ??= import("@mlightcad/cad-simple-viewer");
+  // 运行时解析可选 CAD 引擎，避免 Strict ESM bundler 在未安装时中断构建。
+  engineModulePromise ??= importOptionalModule<CadEngineModule>(cadEnginePackageName);
   return engineModulePromise;
+}
+
+function importOptionalModule<T>(packageName: string): Promise<T> {
+  return new Function("packageName", "return import(packageName)")(packageName) as Promise<T>;
 }
 
 export async function renderWebglDwgPreview(
