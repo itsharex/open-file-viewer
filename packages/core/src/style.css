@@ -2294,7 +2294,7 @@
   position: relative;
   border: 1px solid var(--ofv-border);
   padding: 5px 10px 5px 8px;
-  white-space: nowrap;
+  white-space: normal;
   overflow: hidden;
   overflow-wrap: normal;
   word-break: normal;

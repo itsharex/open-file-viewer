@@ -144,7 +144,7 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-workbook-table td,\n.ofv-workbook-table th")).toContain("padding: 2px 2px 2px 3px");
     expect(rule(".ofv-workbook-table td,\n.ofv-workbook-table th")).toContain("line-height: 1.25");
     expect(rule(".ofv-cell-number")).toContain("text-align: right");
-    expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("white-space: nowrap");
+    expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("white-space: normal");
     expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("overflow-wrap: normal");
     expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("overflow: hidden");
     expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("text-overflow: clip");
