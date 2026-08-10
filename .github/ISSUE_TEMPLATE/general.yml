@@ -1,0 +1,49 @@
+name: 其他问题或建议
+description: 提交功能建议、使用疑问或其他非 Bug 事项
+title: "[Issue] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        所有 Issue 都必须附带与内容相关的文件，例如示例文件、截图、录屏、日志或设计稿。
+        上传前请移除敏感信息；GitHub 不支持的文件格式请先压缩为 ZIP。
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: 类型
+      options:
+        - 功能建议
+        - 使用疑问
+        - 文档问题
+        - 兼容性问题
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 详细说明
+      description: 请描述使用场景、期望结果，以及附件与本 Issue 的关系。
+    validations:
+      required: true
+
+  - type: upload
+    id: attachment
+    attributes:
+      label: 相关附件
+      description: 必须上传至少一个相关文件；不支持的扩展名请压缩为 ZIP，单个文件最大 25 MB。
+    validations:
+      required: true
+      accept: ".zip,.gz,.pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.gif,.svg,.webp,.mp4,.mov,.webm,.json,.log,.txt,.csv"
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我已确认附件与本 Issue 相关，且不包含密码、密钥、个人隐私或其他不应公开的信息。
+          required: true
+        - label: 我已搜索现有 Issues，确认没有重复提交。
+          required: true

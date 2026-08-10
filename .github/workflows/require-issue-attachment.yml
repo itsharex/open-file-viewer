@@ -1,0 +1,89 @@
+name: Require issue attachment
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate attachment
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const issue = context.payload.issue
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+            const issue_number = issue.number
+            const label = 'needs-attachment'
+            const marker = '<!-- require-issue-attachment -->'
+            const attachmentPattern = /https:\/\/(?:github\.com\/user-attachments\/(?:assets|files)|user-images\.githubusercontent\.com)\/[^\s)>]+/i
+            const hasAttachment = attachmentPattern.test(issue.body || '')
+            const labels = issue.labels.map((item) => typeof item === 'string' ? item : item.name)
+            const hasMissingAttachmentLabel = labels.includes(label)
+
+            if (hasAttachment) {
+              if (!hasMissingAttachmentLabel) return
+
+              await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label })
+
+              if (issue.state === 'closed') {
+                await github.rest.issues.update({ owner, repo, issue_number, state: 'open' })
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number,
+                  body: `${marker}\n已检测到附件，Issue 已自动重新打开。`,
+                })
+              }
+              return
+            }
+
+            try {
+              await github.rest.issues.getLabel({ owner, repo, name: label })
+            } catch (error) {
+              if (error.status !== 404) throw error
+              await github.rest.issues.createLabel({
+                owner,
+                repo,
+                name: label,
+                color: 'd73a4a',
+                description: 'Issue 缺少必须上传的相关附件',
+              })
+            }
+
+            if (!hasMissingAttachmentLabel) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [label] })
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            })
+            const alreadyNotified = comments.some((comment) => comment.body?.includes(marker))
+
+            if (!alreadyNotified) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body: `${marker}\n本仓库要求每个 Issue 都上传与内容相关的附件（例如源文件、复现文件、截图、录屏、日志或设计稿）。请先移除敏感信息；GitHub 不支持的格式可压缩为 ZIP。\n\n请编辑 Issue 正文补充附件，检测通过后会自动重新打开。`,
+              })
+            }
+
+            if (issue.state !== 'closed') {
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number,
+                state: 'closed',
+                state_reason: 'not_planned',
+              })
+            }

@@ -38,7 +38,7 @@ body:
       description: 必须上传可复现问题的原始文件；不支持的扩展名请压缩为 ZIP，单个文件最大 25 MB。
     validations:
       required: true
-      accept: ".zip,.gz,.tar.gz,.pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.gif,.svg,.webp,.json,.log,.txt,.csv"
+      accept: ".zip,.gz,.pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.gif,.svg,.webp,.json,.log,.txt,.csv"
 
   - type: upload
     id: screenshots
@@ -74,4 +74,3 @@ body:
           required: true
         - label: 我已搜索现有 Issues，确认没有重复报告。
           required: true
-
