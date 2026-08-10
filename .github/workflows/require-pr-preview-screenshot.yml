@@ -1,0 +1,85 @@
+name: Require PR preview screenshot
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate preview screenshot
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const pullRequest = context.payload.pull_request
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+            const issue_number = pullRequest.number
+            const body = pullRequest.body || ''
+            const label = 'needs-preview-screenshot'
+            const marker = '<!-- require-pr-preview-screenshot -->'
+
+            const screenshotSection = body.match(
+              /(?:^|\n)##\s+预览成功截图\s*\n([\s\S]*?)(?=\n##\s+|\s*$)/i,
+            )?.[1] || ''
+            const githubImageUrl = String.raw`https:\/\/(?:github\.com\/user-attachments\/assets|user-images\.githubusercontent\.com)\/[^\s)"'>]+`
+            const markdownImage = new RegExp(String.raw`!\[[^\]]*\]\(\s*${githubImageUrl}(?:\s+["'][^"']*["'])?\s*\)`, 'i')
+            const htmlImage = new RegExp(String.raw`<img\b[^>]*\bsrc=["']${githubImageUrl}["'][^>]*>`, 'i')
+            const hasScreenshot = markdownImage.test(screenshotSection) || htmlImage.test(screenshotSection)
+            const hasConfirmation = /-\s*\[[xX]\]\s*截图来自本次变更的实际预览结果/.test(screenshotSection)
+            const labels = pullRequest.labels.map((item) => item.name)
+            const hasLabel = labels.includes(label)
+
+            if (hasScreenshot && hasConfirmation) {
+              if (hasLabel) {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label })
+              }
+              core.info('已检测到预览成功截图和确认项。')
+              return
+            }
+
+            try {
+              await github.rest.issues.getLabel({ owner, repo, name: label })
+            } catch (error) {
+              if (error.status !== 404) throw error
+              await github.rest.issues.createLabel({
+                owner,
+                repo,
+                name: label,
+                color: 'd73a4a',
+                description: 'Pull Request 缺少预览成功截图或确认项',
+              })
+            }
+
+            if (!hasLabel) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [label] })
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            })
+            const alreadyNotified = comments.some((comment) => comment.body?.includes(marker))
+
+            if (!alreadyNotified) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body: `${marker}\n请在 PR 正文的“预览成功截图”一节上传至少一张本次变更后的实际预览截图，并勾选“截图来自本次变更的实际预览结果”。补充后请编辑 PR 正文，本检查会自动重新执行。`,
+              })
+            }
+
+            const missing = [
+              !hasScreenshot && 'GitHub 上传的预览成功截图',
+              !hasConfirmation && '截图来源确认项',
+            ].filter(Boolean).join('、')
+            core.setFailed(`PR 缺少：${missing}`)
