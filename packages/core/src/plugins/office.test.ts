@@ -20,7 +20,10 @@ const renderDocxAsync = vi.hoisted(() =>
     }
     if (_styleContainer) {
       const style = document.createElement("style");
-      style.textContent = '.docx-internal-style { color: red; } p.ofv-docx-num-1-0:before { content: "-\\9"; font-family: 宋体; }';
+      style.textContent = `.docx-internal-style { color: red; }
+        table.ofv-docx-table p { margin-inline: 0pt; }
+        p.ofv-docx-num-1-0:before { content: "-\\9"; font-family: 宋体; }
+        p.ofv-docx-num-1-0 { display: list-item; text-indent: -18pt; margin-inline-start: 18pt; }`;
       _styleContainer.append(style);
     }
     const wrapper = document.createElement("div");
@@ -1411,6 +1414,8 @@ describe("officePlugin", () => {
     const generatedCss = document.head.querySelector(".ofv-docx-style-container")?.textContent || "";
     expect(generatedCss).toContain('content: "-\\00a0";');
     expect(generatedCss).not.toContain('content: "-\\9";');
+    expect(generatedCss).toContain(".ofv-docx p.ofv-docx-num-1-0 {");
+    expect(generatedCss).toContain("margin-inline-start: 18pt;");
 
     viewer.destroy();
   });

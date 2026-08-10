@@ -1394,10 +1394,15 @@ function normalizeDocxNumberingStyles(styleContainer: HTMLElement | undefined): 
   if (!styleContainer?.textContent) {
     return;
   }
-  styleContainer.textContent = styleContainer.textContent.replace(
-    /(p\.[\w-]+-num-\d+-\d+:before\s*\{[\s\S]*?content:\s*"[^"\\]*(?:\\.[^"\\]*)*)\\9(";\s*[\s\S]*?\})/g,
-    "$1\\00a0$2"
-  );
+  styleContainer.textContent = styleContainer.textContent
+    .replace(
+      /(p\.[\w-]+-num-\d+-\d+:before\s*\{[\s\S]*?content:\s*"[^"\\]*(?:\\.[^"\\]*)*)\\9(";\s*[\s\S]*?\})/g,
+      "$1\\00a0$2"
+    )
+    .replace(
+      /(^|\})\s*(p\.[\w-]+-num-\d+-\d+\s*\{(?=[^}]*\bmargin-inline-start\s*:)[^}]*\})/gm,
+      "$1\n.ofv-docx $2"
+    );
 }
 
 type DocxChartPreview = ChartPreview & {
