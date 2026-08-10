@@ -84,7 +84,7 @@ const zhTranslations: Record<string, string> = {
   "api.optional.dwgDeployBody":
     "必须能访问 <code>/vendor/cad-engine/</code> 下的两个 Worker 和轻量 SVG 引擎资源。二级路径部署时需要加上应用公共基础路径，WASM 应返回 <code>application/wasm</code>，CSP 需要允许 Worker。",
   "api.optional.video":
-    "<code>videoPlugin()</code> 对 MP4、WebM、MOV 等原生格式不需要额外依赖；FLV、MPEG-TS/M2TS 需要业务项目安装 <code>mpegts.js</code>，未安装时展示下载 fallback。",
+    "<code>videoPlugin()</code> 对 MP4、WebM、MOV 等原生格式不需要额外依赖。传入 <code>{ controlsList: &quot;nodownload&quot; }</code> 可隐藏 Chromium 原生控制栏里的下载入口；它只是浏览器 UI 提示，不会关闭预览器工具栏或 fallback 下载。FLV、MPEG-TS/M2TS 需要业务项目安装 <code>mpegts.js</code>，未安装时展示下载 fallback。",
   "api.optional.pnpmTitle": "pnpm 11 / blockExoticSubdeps 说明",
   "api.optional.pnpmBody":
     "<code>mpegts.js</code> 的上游依赖中包含 git 形式的 <code>webworkify-webpack</code>。因此 Open File Viewer 不再把它作为 core 强制依赖。只有确实需要 FLV/M2TS 播放时才安装它；如果你的 pnpm 配置阻止 git 子依赖，可以在业务项目中覆盖到 npm 版本，或继续使用内置下载降级。",

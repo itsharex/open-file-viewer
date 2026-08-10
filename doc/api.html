@@ -262,7 +262,7 @@ npm install @open-file-viewer/svelte</code></pre>
               </article>
               <article>
                 <strong>FLV / M2TS</strong>
-                <p data-i18n="api.optional.video"><code>videoPlugin()</code> needs no extra dependency for native formats such as MP4, WebM and MOV. FLV and MPEG-TS/M2TS require <code>mpegts.js</code>; otherwise a download fallback is shown.</p>
+                <p data-i18n="api.optional.video"><code>videoPlugin()</code> needs no extra dependency for native formats such as MP4, WebM and MOV. Pass <code>{ controlsList: "nodownload" }</code> to hide Chromium's native Download item. This browser UI hint does not disable the viewer toolbar or fallback downloads. FLV and MPEG-TS/M2TS require <code>mpegts.js</code>; otherwise a download fallback is shown.</p>
               </article>
             </div>
             <div class="editor-window doc-code-window">
@@ -330,6 +330,9 @@ await Promise.all([
               <div class="editor-titlebar"><span></span><span></span><span></span><strong>viewer.ts</strong></div>
               <pre><code data-language="typescript">cadPlugin({
   webglDwg: {
+    // Host-owned loading keeps non-CAD builds free of the optional engine
+    // and gives strict esbuild resolution an explicit import.
+    engineLoader: () =&gt; import("@mlightcad/cad-simple-viewer"),
     workerBaseUrl: "/vendor/cad-engine"
   },
   libreDwg: {

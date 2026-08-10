@@ -4,6 +4,15 @@ import type { CadBinaryPreviewContext } from "./cad";
 export interface WebglDwgPreviewOptions {
   /** Directory containing the DWG parser and MTEXT worker bundles. */
   workerBaseUrl: string;
+  /**
+   * Loads the optional WebGL CAD engine.
+   *
+   * Keeping this import in the host application lets strict bundlers resolve
+   * the peer only when WebGL DWG preview is enabled.
+   *
+   * @example `() => import("@mlightcad/cad-simple-viewer")`
+   */
+  engineLoader: WebglDwgEngineLoader;
   /** Optional base URL for CAD fonts and other runtime resources. */
   baseUrl?: string;
   /** Skip loading the engine's default font set. Defaults to false. */
@@ -16,21 +25,26 @@ export interface WebglDwgPreviewOptions {
   useMainThreadDraw?: boolean;
 }
 
+export type WebglDwgEngineLoader = () => Promise<unknown>;
+
 type CadEngineModule = typeof import("@mlightcad/cad-simple-viewer");
 
-const cadEnginePackageName = "@mlightcad/cad-simple-viewer";
-
-let engineModulePromise: Promise<CadEngineModule> | undefined;
+const engineModulePromises = new WeakMap<WebglDwgEngineLoader, Promise<CadEngineModule>>();
 let pendingDestroy: Promise<void> = Promise.resolve();
 
-function loadCadEngine(): Promise<CadEngineModule> {
-  // 运行时解析可选 CAD 引擎，避免 Strict ESM bundler 在未安装时中断构建。
-  engineModulePromise ??= importOptionalModule<CadEngineModule>(cadEnginePackageName);
-  return engineModulePromise;
-}
+function loadCadEngine(engineLoader: WebglDwgEngineLoader | undefined): Promise<CadEngineModule> {
+  if (!engineLoader) {
+    throw new Error(
+      'WebGL DWG preview requires webglDwg.engineLoader, for example () => import("@mlightcad/cad-simple-viewer").'
+    );
+  }
 
-function importOptionalModule<T>(packageName: string): Promise<T> {
-  return new Function("packageName", "return import(packageName)")(packageName) as Promise<T>;
+  let engineModulePromise = engineModulePromises.get(engineLoader);
+  if (!engineModulePromise) {
+    engineModulePromise = engineLoader().then(resolveCadEngineModule);
+    engineModulePromises.set(engineLoader, engineModulePromise);
+  }
+  return engineModulePromise;
 }
 
 export async function renderWebglDwgPreview(
@@ -55,7 +69,7 @@ export async function renderWebglDwgPreview(
 
   let manager: ReturnType<CadEngineModule["AcApDocManager"]["createInstance"]>;
   try {
-    const engine = await loadCadEngine();
+    const engine = await loadCadEngine(options.engineLoader);
     const workerBaseUrl = normalizeBaseUrl(options.workerBaseUrl);
     const workerUrls = {
       dwgParser: resolveRuntimeUrl(`${workerBaseUrl}/libredwg-parser-worker.js`),
@@ -148,6 +162,14 @@ export async function renderWebglDwgPreview(
       });
     }
   };
+}
+
+function resolveCadEngineModule(value: unknown): CadEngineModule {
+  const engine = value as Partial<CadEngineModule> | null;
+  if (!engine?.AcApDocManager || !engine.AcEdOpenMode || !engine.AcApOpenViewMode) {
+    throw new Error("The configured WebGL DWG engine module is invalid.");
+  }
+  return engine as CadEngineModule;
 }
 
 function normalizeBaseUrl(value: string): string {

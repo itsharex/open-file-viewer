@@ -59,8 +59,10 @@ describe("core responsive styles", () => {
     expect(docxWrapper).toContain("--ofv-docx-scale: 1");
     expect(docxWrapper).toContain("box-sizing: border-box");
     expect(rule(".ofv-office")).toContain("--ofv-office-zoom: 1");
-    expect(rule(".ofv-docx-page-frame")).toContain("max-width: 100%");
-    expect(rule(".ofv-docx-page-frame")).toContain("overflow: visible");
+    const docxPageFrame = rule(".ofv-docx-page-frame");
+    expect(docxPageFrame).toContain("max-width: 100%");
+    expect(docxPageFrame).toContain("margin-bottom: 30px");
+    expect(docxPageFrame).toContain("overflow: visible");
     expect(rule(".ofv-docx-textbox-page-flow-layout")).toContain("min-height: 0");
     expect(rule(".ofv-docx-textbox-page-flow-layout")).not.toContain("842pt");
     expect(rule(".ofv-docx-textbox-continuation-flow-layout .ofv-docx-textbox-page-flow-main")).toContain(
@@ -71,6 +73,7 @@ describe("core responsive styles", () => {
     );
     expect(docxSection).toContain("max-width: none");
     expect(docxSection).toContain("background: #fff");
+    expect(docxSection).toContain("box-shadow: 0 0 10px rgba(0, 0, 0, 0.5)");
     expect(docxSection).toContain("overflow: visible");
     expect(docxSection).toContain("overflow-wrap: normal");
     expect(docxSection).toContain("transform: scale(calc(var(--ofv-docx-scale) * var(--ofv-office-zoom, 1)))");

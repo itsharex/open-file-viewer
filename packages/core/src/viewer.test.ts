@@ -1014,12 +1014,7 @@ describe("createViewer", () => {
     document.body.append(container);
     const print = vi.fn();
     const focus = vi.fn();
-    Object.defineProperty(HTMLIFrameElement.prototype, "contentWindow", {
-      configurable: true,
-      get() {
-        return { focus, print };
-      }
-    });
+    vi.spyOn(HTMLIFrameElement.prototype, "contentWindow", "get").mockReturnValue({ focus, print } as unknown as Window);
 
     const plugin: PreviewPlugin = {
       name: "printable",
@@ -1051,16 +1046,12 @@ describe("createViewer", () => {
     viewer.destroy();
   });
 
-  it("removes the print iframe after printing", async () => {
+  it("keeps the print iframe until the browser finishes printing", async () => {
     const container = document.createElement("div");
     document.body.append(container);
     const print = vi.fn();
-    Object.defineProperty(HTMLIFrameElement.prototype, "contentWindow", {
-      configurable: true,
-      get() {
-        return { focus: vi.fn(), print };
-      }
-    });
+    const printWindow = Object.assign(new EventTarget(), { focus: vi.fn(), print });
+    vi.spyOn(HTMLIFrameElement.prototype, "contentWindow", "get").mockReturnValue(printWindow as unknown as Window);
 
     const plugin: PreviewPlugin = {
       name: "print-cleanup",
@@ -1085,8 +1076,62 @@ describe("createViewer", () => {
     await waitFor(() => print.mock.calls.length === 1);
     expect(document.querySelector(".ofv-print-frame")).not.toBeNull();
 
-    await waitFor(() => document.querySelector(".ofv-print-frame") === null, 1500);
+    printWindow.dispatchEvent(new Event("afterprint"));
+    await waitFor(() => document.querySelector(".ofv-print-frame") === null);
 
+    viewer.destroy();
+  });
+
+  it("waits for lazy preview content before creating the print snapshot", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const print = vi.fn();
+    const printWindow = Object.assign(new EventTarget(), { focus: vi.fn(), print });
+    vi.spyOn(HTMLIFrameElement.prototype, "contentWindow", "get").mockReturnValue(printWindow as unknown as Window);
+
+    let finishPreparation: (() => void) | undefined;
+    const preparePrint = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPreparation = resolve;
+        })
+    );
+    const plugin: PreviewPlugin = {
+      name: "lazy-printable",
+      match: () => true,
+      render(ctx) {
+        ctx.viewport.textContent = "loading pages";
+        return {
+          preparePrint: async () => {
+            await preparePrint();
+            ctx.viewport.textContent = "all pages ready";
+          },
+          destroy: vi.fn()
+        };
+      }
+    };
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["hello"], { type: "text/plain" }),
+      fileName: "lazy.txt",
+      toolbar: true,
+      plugins: [plugin]
+    });
+
+    await waitFor(() => container.querySelector(".ofv-viewport")?.textContent === "loading pages");
+    container.querySelector<HTMLButtonElement>('button[aria-label="Print preview"]')?.click();
+
+    await waitFor(() => preparePrint.mock.calls.length === 1);
+    expect(print).not.toHaveBeenCalled();
+    expect(document.querySelector(".ofv-print-frame")).toBeNull();
+
+    finishPreparation?.();
+    await waitFor(() => print.mock.calls.length === 1);
+
+    const printFrame = document.querySelector<HTMLIFrameElement>(".ofv-print-frame");
+    expect(printFrame?.contentDocument?.body.textContent).toContain("all pages ready");
+    printWindow.dispatchEvent(new Event("afterprint"));
     viewer.destroy();
   });
 

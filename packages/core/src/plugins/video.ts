@@ -50,7 +50,12 @@ const videoMimeTypes = new Set([
 ]);
 const hlsMimeTypes = new Set(["application/vnd.apple.mpegurl", "application/x-mpegurl", "application/mpegurl"]);
 
-export function videoPlugin(): PreviewPlugin {
+export interface VideoPluginOptions {
+  /** Space-separated restrictions for the browser's native video controls, such as "nodownload". */
+  controlsList?: string;
+}
+
+export function videoPlugin(options: VideoPluginOptions = {}): PreviewPlugin {
   return {
     name: "video",
     match(file) {
@@ -72,6 +77,9 @@ export function videoPlugin(): PreviewPlugin {
       video.controls = true;
       video.playsInline = true;
       video.preload = "metadata";
+      if (options.controlsList !== undefined) {
+        video.setAttribute("controlslist", options.controlsList);
+      }
       video.style.objectFit = ctx.options.fit === "cover" ? "cover" : "contain";
       
       const ext = ctx.file.extension.toLowerCase();

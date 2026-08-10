@@ -933,6 +933,315 @@ describe("officePlugin", () => {
     expect(paragraphs[2]?.style.lineHeight).toBe("1.5");
   });
 
+  it("normalizes DOCX atLeast line heights against the largest child font", async () => {
+    renderDocxAsync.mockImplementationOnce(async (_data: unknown, bodyContainer: HTMLElement) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "ofv-docx-wrapper";
+      const page = document.createElement("section");
+      page.className = "ofv-docx";
+      page.style.width = "794px";
+      page.style.minHeight = "1123px";
+      const article = document.createElement("article");
+
+      for (const [lineHeight, fontSize, text] of [
+        ["calc(100% + 2.4px)", "21pt", "DOCX title with an undersized atLeast line box"],
+        ["calc(100% + 2.4px)", "15pt", "DOCX body with an undersized atLeast line box"],
+        ["calc(100% + 40px)", "15pt", "DOCX body with an intentional wide minimum line box"]
+      ]) {
+        const paragraph = document.createElement("p");
+        paragraph.style.lineHeight = lineHeight;
+        const run = document.createElement("span");
+        run.style.fontSize = fontSize;
+        run.textContent = text;
+        paragraph.append(run);
+        article.append(paragraph);
+      }
+
+      page.append(article);
+      wrapper.append(page);
+      bodyContainer.append(wrapper);
+    });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    createViewer({
+      container,
+      file: new Blob(["docx"], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+      fileName: "at-least-line-height.docx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-docx-document")));
+    const paragraphs = Array.from(container.querySelectorAll<HTMLParagraphElement>("section.ofv-docx p"));
+    expect(paragraphs[0]?.style.lineHeight).toBe("1.2");
+    expect(paragraphs[1]?.style.lineHeight).toBe("1.2");
+    expect(paragraphs[2]?.style.lineHeight).toBe("40px");
+  });
+
+  it("adds the DOCX East Asian theme font after the Latin theme font", async () => {
+    renderDocxAsync.mockImplementationOnce(async (_data: unknown, bodyContainer: HTMLElement, styleContainer?: HTMLElement) => {
+      if (styleContainer) {
+        styleContainer.textContent = `.ofv-docx-wrapper { --docx-minorHAnsi-font: Calibri; }
+          .ofv-docx p span { font-family: var(--docx-minorHAnsi-font); font-size: 10.5pt; }`;
+      }
+      const wrapper = document.createElement("div");
+      wrapper.className = "ofv-docx-wrapper";
+      const page = document.createElement("section");
+      page.className = "ofv-docx";
+      page.style.width = "794px";
+      page.style.minHeight = "1123px";
+      const article = document.createElement("article");
+      const paragraph = document.createElement("p");
+      const run = document.createElement("span");
+      run.textContent = "中文主题字体需要使用宋体回退以保留原始文档的换行和分页布局。";
+      paragraph.append(run);
+      article.append(paragraph);
+      page.append(article);
+      wrapper.append(page);
+      bodyContainer.append(wrapper);
+    });
+
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>`
+    );
+    zip.file(
+      "word/styles.xml",
+      `<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsiaTheme="minorEastAsia"/></w:rPr></w:rPrDefault></w:docDefaults>
+      </w:styles>`
+    );
+    zip.file(
+      "word/theme/theme1.xml",
+      `<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:themeElements><a:fontScheme><a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/>
+          <a:font script="Hans" typeface="宋体"/>
+        </a:minorFont></a:fontScheme></a:themeElements>
+      </a:theme>`
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    createViewer({
+      container,
+      file: await zip.generateAsync({
+        type: "blob",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      }),
+      fileName: "east-asian-theme.docx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-docx-document")));
+    const css = document.head.querySelector<HTMLStyleElement>(".ofv-docx-style-container")?.textContent || "";
+    expect(css).toContain(
+      "font-family: var(--docx-minorHAnsi-font), var(--ofv-docx-east-asia-font);"
+    );
+    expect(css).toContain('--ofv-docx-east-asia-font: "宋体"');
+    expect(css).toContain('--docx-majorEastAsia-font: "宋体"');
+    expect(css).toContain('--docx-minorEastAsia-font: "宋体"');
+  });
+
+  it("moves overflowing DOCX flow blocks onto continuation pages", async () => {
+    renderDocxAsync.mockImplementationOnce(async (_data: unknown, bodyContainer: HTMLElement) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "ofv-docx-wrapper";
+      const page = document.createElement("section");
+      page.className = "ofv-docx";
+      page.style.width = "600px";
+      page.style.minHeight = "400px";
+      page.style.padding = "50px";
+      const header = document.createElement("header");
+      header.textContent = "Repeated header";
+      const article = document.createElement("article");
+
+      for (let index = 1; index <= 4; index += 1) {
+        const paragraph = document.createElement("div");
+        paragraph.textContent = `Overflow paragraph ${index}`;
+        paragraph.getBoundingClientRect = () => {
+          const position = Array.from(paragraph.parentElement?.children || []).indexOf(paragraph);
+          const top = 50 + Math.max(0, position) * 120;
+          return { x: 0, y: top, top, right: 500, bottom: top + 100, left: 0, width: 500, height: 100, toJSON: () => ({}) };
+        };
+        article.append(paragraph);
+      }
+
+      page.append(header, article);
+      wrapper.append(page);
+      bodyContainer.append(wrapper);
+    });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    createViewer({
+      container,
+      file: new Blob(["docx"], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+      fileName: "overflowing-flow.docx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => container.querySelectorAll("section.ofv-docx").length === 2);
+    const pages = Array.from(container.querySelectorAll<HTMLElement>("section.ofv-docx"));
+    expect(pages[0]?.querySelector("article")?.textContent).toBe("Overflow paragraph 1Overflow paragraph 2");
+    expect(pages[1]?.querySelector("article")?.textContent).toBe("Overflow paragraph 3Overflow paragraph 4");
+    expect(pages[1]?.querySelector("header")?.textContent).toBe("Repeated header");
+    expect(pages[1]?.dataset.ofvDocxFlowContinuation).toBe("true");
+  });
+
+  it("splits an overflowing DOCX paragraph across pages without losing rich text", async () => {
+    renderDocxAsync.mockImplementationOnce(async (_data: unknown, bodyContainer: HTMLElement) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "ofv-docx-wrapper";
+      const page = document.createElement("section");
+      page.className = "ofv-docx";
+      page.style.width = "600px";
+      page.style.minHeight = "200px";
+      page.style.padding = "20px";
+      const article = document.createElement("article");
+      const heading = document.createElement("p");
+      heading.textContent = "Section heading";
+      const paragraph = document.createElement("p");
+      paragraph.className = "ofv-docx-num-1-0";
+      paragraph.style.marginTop = "12px";
+      paragraph.style.marginBottom = "12px";
+      paragraph.style.textIndent = "24px";
+      const bold = document.createElement("span");
+      bold.style.fontWeight = "bold";
+      bold.textContent = "Rich heading";
+      const lineBreak = document.createElement("br");
+      const body = document.createElement("span");
+      body.textContent = "abcdefghijklmnopqrstuvwxyz".repeat(4);
+      paragraph.append(bold, lineBreak, body);
+      article.append(heading, paragraph);
+      page.append(article);
+      wrapper.append(page);
+      bodyContainer.append(wrapper);
+    });
+
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.tagName !== "P") {
+        return { x: 0, y: 0, top: 0, right: 600, bottom: 0, left: 0, width: 600, height: 0, toJSON: () => ({}) };
+      }
+      const siblings = Array.from(this.parentElement?.children || []) as HTMLElement[];
+      let top = 20;
+      for (const sibling of siblings) {
+        if (sibling === this) {
+          break;
+        }
+        top += Math.ceil((sibling.textContent?.length || 0) / 10) * 20;
+      }
+      const height = Math.max(20, Math.ceil((this.textContent?.length || 0) / 10) * 20);
+      return { x: 20, y: top, top, right: 580, bottom: top + height, left: 20, width: 560, height, toJSON: () => ({}) };
+    });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    createViewer({
+      container,
+      file: new Blob(["docx"], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+      fileName: "split-paragraph.docx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => container.querySelectorAll("section.ofv-docx").length === 2);
+    const pages = Array.from(container.querySelectorAll<HTMLElement>("section.ofv-docx"));
+    const firstPart = pages[0]?.querySelectorAll("article p")[1] as HTMLElement | undefined;
+    const continuation = pages[1]?.querySelector<HTMLElement>("article p");
+    expect(`${firstPart?.textContent}${continuation?.textContent}`).toBe(`Rich heading${"abcdefghijklmnopqrstuvwxyz".repeat(4)}`);
+    expect(firstPart?.textContent?.length).toBeGreaterThan(20);
+    expect(continuation?.dataset.ofvDocxParagraphContinuation).toBe("true");
+    expect(continuation?.classList.contains("ofv-docx-num-1-0")).toBe(false);
+    expect(continuation?.style.textIndent).toBe("0px");
+    expect(firstPart?.querySelector("span[style*='font-weight: bold']")?.textContent).toBe("Rich heading");
+    expect((firstPart?.querySelectorAll("br").length || 0) + (continuation?.querySelectorAll("br").length || 0)).toBe(1);
+  });
+
+  it("splits overflowing DOCX tables between complete rowspan groups without adding a blank page", async () => {
+    renderDocxAsync.mockImplementationOnce(async (_data: unknown, bodyContainer: HTMLElement) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "ofv-docx-wrapper";
+      const page = document.createElement("section");
+      page.className = "ofv-docx";
+      page.style.width = "600px";
+      page.style.minHeight = "300px";
+      page.style.padding = "20px";
+      const header = document.createElement("header");
+      header.textContent = "Repeated header";
+      const article = document.createElement("article");
+      const heading = document.createElement("p");
+      heading.textContent = "Fees";
+      const table = document.createElement("table");
+      const colgroup = document.createElement("colgroup");
+      colgroup.append(document.createElement("col"));
+      table.append(colgroup);
+
+      for (let index = 1; index <= 5; index += 1) {
+        const row = table.insertRow();
+        const cell = row.insertCell();
+        cell.textContent = `Row ${index}`;
+        if (index === 1) {
+          cell.rowSpan = 2;
+        }
+        row.getBoundingClientRect = () => {
+          const currentTable = row.closest("table")!;
+          const rowIndex = Array.from(currentTable.rows).indexOf(row);
+          const top = (currentTable.previousElementSibling ? 70 : 20) + rowIndex * 80;
+          return { x: 20, y: top, top, right: 580, bottom: top + 80, left: 20, width: 560, height: 80, toJSON: () => ({}) };
+        };
+      }
+
+      table.getBoundingClientRect = () => ({
+        x: 20,
+        y: 70,
+        top: 70,
+        right: 580,
+        bottom: 470,
+        left: 20,
+        width: 560,
+        height: 400,
+        toJSON: () => ({})
+      });
+      const trailingEmptyParagraph = document.createElement("p");
+      trailingEmptyParagraph.getBoundingClientRect = () => ({
+        x: 20,
+        y: 290,
+        top: 290,
+        right: 580,
+        bottom: 310,
+        left: 20,
+        width: 560,
+        height: 20,
+        toJSON: () => ({})
+      });
+      article.append(heading, table, trailingEmptyParagraph);
+      page.append(header, article);
+      wrapper.append(page);
+      bodyContainer.append(wrapper);
+    });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    createViewer({
+      container,
+      file: new Blob(["docx"], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+      fileName: "split-table.docx",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => container.querySelectorAll("section.ofv-docx").length === 2);
+    const pages = Array.from(container.querySelectorAll<HTMLElement>("section.ofv-docx"));
+    const firstTable = pages[0]?.querySelector<HTMLTableElement>("article table");
+    const continuationTable = pages[1]?.querySelector<HTMLTableElement>("article table");
+    expect(Array.from(firstTable?.rows || []).map((row) => row.textContent)).toEqual(["Row 1", "Row 2"]);
+    expect(Array.from(continuationTable?.rows || []).map((row) => row.textContent)).toEqual(["Row 3", "Row 4", "Row 5"]);
+    expect(firstTable?.rows[0]?.cells[0]?.rowSpan).toBe(2);
+    expect(firstTable?.querySelectorAll(":scope > colgroup")).toHaveLength(1);
+    expect(continuationTable?.querySelectorAll(":scope > colgroup")).toHaveLength(1);
+    expect(continuationTable?.dataset.ofvDocxTableContinuation).toBe("true");
+    expect(pages[1]?.querySelector("header")?.textContent).toBe("Repeated header");
+    expect(pages[1]?.querySelectorAll("article p")).toHaveLength(0);
+  });
+
   it("keeps DOCX page width stable inside narrow containers", async () => {
     const container = document.createElement("div");
     container.style.width = "220px";

@@ -104,6 +104,7 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
   canCommand(command: string): boolean;
   command(command: string): boolean;
   resize(size: PreviewSize): void;
+  preparePrint?(): void | Promise<void>;
   destroy(): void;
 }> {
   const useLegacyCompatibility = shouldUseLegacyPdfCompatibility(options.compatibilityMode);
@@ -217,10 +218,12 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
     wrapper: HTMLDivElement;
     canvas: HTMLCanvasElement | null;
     renderTask: any | null;
+    renderPromise: Promise<void> | null;
     rendered: boolean;
   }> = [];
 
   let observer: IntersectionObserver | null = null;
+  let printPreparation: Promise<void> | undefined;
   let currentSize = options.size;
   let zoomFactor = getInitialZoom({ options: { zoom: options.zoom ?? 1 } }, 0.25, 4);
   let rotation = 0;
@@ -299,100 +302,114 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
 
   const renderPage = async (pageIdx: number, size: PreviewSize) => {
     const state = pageStates[pageIdx];
-    if (!state || state.rendered) return;
+    if (!state) return;
+
+    while (state.renderPromise) {
+      await state.renderPromise;
+    }
+    if (state.rendered) return;
 
     state.rendered = true;
+    const renderPromise = (async () => {
+      try {
+        const page = await pdfDocument.getPage(pageIdx + 1);
+        const meta = pagesMeta[pageIdx];
+        const scale = resolvePdfPageScale(
+          meta,
+          options.fit,
+          resolveLayoutWidth(size),
+          resolveLayoutHeight(size),
+          zoomFactor,
+          rotation
+        );
+        const viewport = page.getViewport({ scale, rotation: getPdfRenderRotation(meta, rotation) });
+        const outputScale = getPdfOutputScale();
+        const cssWidth = Math.floor(viewport.width);
+        const cssHeight = Math.floor(viewport.height);
 
-    try {
-      const page = await pdfDocument.getPage(pageIdx + 1);
-      const meta = pagesMeta[pageIdx];
-      const scale = resolvePdfPageScale(
-        meta,
-        options.fit,
-        resolveLayoutWidth(size),
-        resolveLayoutHeight(size),
-        zoomFactor,
-        rotation
-      );
-      const viewport = page.getViewport({ scale, rotation: getPdfRenderRotation(meta, rotation) });
-      const outputScale = getPdfOutputScale();
-      const cssWidth = Math.floor(viewport.width);
-      const cssHeight = Math.floor(viewport.height);
+        const canvas = document.createElement("canvas");
+        canvas.className = "ofv-pdf-page";
+        canvas.width = Math.floor(cssWidth * outputScale);
+        canvas.height = Math.floor(cssHeight * outputScale);
+        canvas.style.width = `${cssWidth}px`;
+        canvas.style.height = `${cssHeight}px`;
 
-      const canvas = document.createElement("canvas");
-      canvas.className = "ofv-pdf-page";
-      canvas.width = Math.floor(cssWidth * outputScale);
-      canvas.height = Math.floor(cssHeight * outputScale);
-      canvas.style.width = `${cssWidth}px`;
-      canvas.style.height = `${cssHeight}px`;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          throw new Error("Canvas 2D context is not available.");
+        }
 
-      const context = canvas.getContext("2d");
-      if (!context) {
-        throw new Error("Canvas 2D context is not available.");
-      }
+        state.wrapper.replaceChildren(canvas);
+        state.canvas = canvas;
 
-      state.wrapper.replaceChildren(canvas);
-      state.canvas = canvas;
+        const renderTask = page.render({
+          canvasContext: context,
+          viewport,
+          transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0]
+        });
+        state.renderTask = renderTask;
 
-      const renderTask = page.render({
-        canvasContext: context,
-        viewport,
-        transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0]
-      });
-      state.renderTask = renderTask;
+        await renderTask.promise;
+        state.renderTask = null;
 
-      await renderTask.promise;
-      state.renderTask = null;
+        const textContent = await page.getTextContent();
+        const textLayer = document.createElement("div");
+        textLayer.className = "ofv-pdf-text-layer";
+        textLayer.style.width = `${cssWidth}px`;
+        textLayer.style.height = `${cssHeight}px`;
+        state.wrapper.appendChild(textLayer);
 
-      const textContent = await page.getTextContent();
-      const textLayer = document.createElement("div");
-      textLayer.className = "ofv-pdf-text-layer";
-      textLayer.style.width = `${cssWidth}px`;
-      textLayer.style.height = `${cssHeight}px`;
-      state.wrapper.appendChild(textLayer);
+        for (const item of textContent.items) {
+          if (!("str" in item)) continue;
+          const str = (item as any).str;
+          if (!str.trim()) continue;
 
-      for (const item of textContent.items) {
-        if (!("str" in item)) continue;
-        const str = (item as any).str;
-        if (!str.trim()) continue;
+          const tx = multiplyMatrices(viewport.transform, (item as any).transform);
+          const fontHeight = Math.sqrt(tx[2] * tx[2] + tx[3] * tx[3]);
 
-        const tx = multiplyMatrices(viewport.transform, (item as any).transform);
-        const fontHeight = Math.sqrt(tx[2] * tx[2] + tx[3] * tx[3]);
+          const span = document.createElement("span");
+          span.textContent = str;
+          span.style.fontSize = `${fontHeight}px`;
+          span.style.lineHeight = "1";
+          span.style.height = `${fontHeight}px`;
+          span.style.fontFamily = (item as any).fontName || "sans-serif";
+          span.style.left = `${tx[4]}px`;
+          span.style.top = `${tx[5] - fontHeight}px`;
+          span.style.transformOrigin = "0% 0%";
 
-        const span = document.createElement("span");
-        span.textContent = str;
-        span.style.fontSize = `${fontHeight}px`;
-        span.style.lineHeight = "1";
-        span.style.height = `${fontHeight}px`;
-        span.style.fontFamily = (item as any).fontName || "sans-serif";
-        span.style.left = `${tx[4]}px`;
-        span.style.top = `${tx[5] - fontHeight}px`;
-        span.style.transformOrigin = "0% 0%";
+          textLayer.appendChild(span);
 
-        textLayer.appendChild(span);
-
-        if ((item as any).width) {
-          const itemWidth = (item as any).width * scale;
-          const actualWidth = span.offsetWidth || span.getBoundingClientRect().width;
-          if (actualWidth > 0 && Math.abs(actualWidth - itemWidth) > 1) {
-            span.style.transform = `scaleX(${itemWidth / actualWidth})`;
+          if ((item as any).width) {
+            const itemWidth = (item as any).width * scale;
+            const actualWidth = span.offsetWidth || span.getBoundingClientRect().width;
+            if (actualWidth > 0 && Math.abs(actualWidth - itemWidth) > 1) {
+              span.style.transform = `scaleX(${itemWidth / actualWidth})`;
+            }
           }
         }
-      }
-      if (textLayer.childElementCount === 0 && isCanvasVisuallyBlank(canvas, context)) {
-        state.wrapper.appendChild(
-          createPageStatus(
-            "ofv-pdf-empty",
-            messages.pdfPageEmpty
-          )
+        if (textLayer.childElementCount === 0 && isCanvasVisuallyBlank(canvas, context)) {
+          state.wrapper.appendChild(
+            createPageStatus(
+              "ofv-pdf-empty",
+              messages.pdfPageEmpty
+            )
+          );
+        }
+      } catch (err) {
+        console.error(`Failed to render PDF page ${pageIdx + 1}:`, err);
+        state.rendered = false;
+        state.wrapper.replaceChildren(
+          createPageStatus("ofv-pdf-error", messages.pdfPageRenderFailed)
         );
       }
-    } catch (err) {
-      console.error(`Failed to render PDF page ${pageIdx + 1}:`, err);
-      state.rendered = false;
-      state.wrapper.replaceChildren(
-        createPageStatus("ofv-pdf-error", messages.pdfPageRenderFailed)
-      );
+    })();
+    state.renderPromise = renderPromise;
+    try {
+      await renderPromise;
+    } finally {
+      if (state.renderPromise === renderPromise) {
+        state.renderPromise = null;
+      }
     }
   };
 
@@ -414,7 +431,7 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
               if (!state.rendered) {
                 void renderPage(pageIdx, size);
               }
-            } else if (state.rendered && pdfDocument.numPages > 8) {
+            } else if (!printPreparation && state.rendered && pdfDocument.numPages > 8) {
               clearPage(pageIdx);
             }
           });
@@ -456,6 +473,7 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
         wrapper,
         canvas: null,
         renderTask: null,
+        renderPromise: null,
         rendered: false
       });
 
@@ -530,6 +548,33 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
       resizeTimer = window.setTimeout(() => {
         renderLayout(size);
       }, 120);
+    },
+    preparePrint() {
+      if (printPreparation) {
+        return printPreparation;
+      }
+      const activeObserver = observer;
+      activeObserver?.disconnect();
+      printPreparation = (async () => {
+        let nextPage = 0;
+        const renderNext = async () => {
+          while (nextPage < pageStates.length) {
+            const pageIndex = nextPage;
+            nextPage += 1;
+            await renderPage(pageIndex, currentSize);
+          }
+        };
+        const workerCount = Math.min(3, pageStates.length);
+        await Promise.all(Array.from({ length: workerCount }, () => renderNext()));
+      })().finally(() => {
+        if (observer === activeObserver) {
+          for (const state of pageStates) {
+            activeObserver?.observe(state.wrapper);
+          }
+        }
+        printPreparation = undefined;
+      });
+      return printPreparation;
     },
     destroy() {
       options.toolbar?.setZoom(undefined);

@@ -212,6 +212,7 @@ describe("cadPlugin", () => {
     document.body.append(container);
     const bytes = new Uint8Array([..."AC1027\0\0DWGDATA"].map((char) => char.charCodeAt(0)));
     const destroy = vi.fn();
+    const engineLoader = vi.fn(async () => ({}));
     vi.mocked(renderWebglDwgPreview).mockImplementationOnce(async ({ panel }) => {
       const canvas = document.createElement("canvas");
       canvas.className = "webgl-dwg-stage";
@@ -223,14 +224,14 @@ describe("cadPlugin", () => {
       container,
       file: bytes.buffer,
       fileName: "complex.dwg",
-      plugins: [cadPlugin({ webglDwg: { workerBaseUrl: "/vendor/cad-engine" } })]
+      plugins: [cadPlugin({ webglDwg: { workerBaseUrl: "/vendor/cad-engine", engineLoader } })]
     });
 
     await waitFor(() => Boolean(container.querySelector(".webgl-dwg-stage")));
 
     expect(renderWebglDwgPreview).toHaveBeenCalledWith(
       expect.objectContaining({ fileName: "complex.dwg", extension: "dwg" }),
-      { workerBaseUrl: "/vendor/cad-engine" }
+      { workerBaseUrl: "/vendor/cad-engine", engineLoader }
     );
     expect(renderLibreDwgPreview).not.toHaveBeenCalled();
 

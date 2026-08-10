@@ -439,10 +439,14 @@ npm install @mlightcad/cad-simple-viewer@1.5.9 @mlightcad/data-model@1.12.3 loda
 ```ts
 cadPlugin({
   webglDwg: {
+    engineLoader: () => import("@mlightcad/cad-simple-viewer"),
     workerBaseUrl: "/vendor/cad-engine"
   }
 });
 ```
+
+显式传入 `engineLoader` 可以让未配置 WebGL DWG 预览的构建不包含这个可选引擎，
+也让严格的 esbuild 依赖解析能够在业务侧解析该包。
 
 WebGL 包使用 MIT 许可；其发布的 DWG 解析 Worker 基于 LibreDWG，业务仍需检查该
 Worker 的许可证要求。可通过 `webglDwg.baseUrl` 配置 CAD 字体资源，只有确认拥有

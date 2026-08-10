@@ -219,6 +219,8 @@ export interface PreviewInstance {
   resize?: (size: PreviewSize) => void;
   command?: (command: PreviewCommand) => void | boolean;
   canCommand?: (command: PreviewCommand) => boolean;
+  /** Resolve once any lazily rendered content is ready to be captured for printing. */
+  preparePrint?: () => void | Promise<void>;
   destroy: () => void;
 }
 

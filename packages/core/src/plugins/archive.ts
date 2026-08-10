@@ -446,6 +446,9 @@ export function archivePlugin(): PreviewPlugin {
         command(command) {
           return currentSubInstance?.command?.(command) ?? false;
         },
+        preparePrint() {
+          return currentSubInstance?.preparePrint?.();
+        },
         resize(size) {
           currentSubInstance?.resize?.(size);
         },

@@ -1506,6 +1506,9 @@ function createPlugins() {
     xmindPlugin(),
     cadPlugin({
       webglDwg: {
+        // Keep the optional engine host-owned so strict esbuild can resolve it
+        // and builds without WebGL DWG configuration can omit it.
+        engineLoader: () => import("@mlightcad/cad-simple-viewer"),
         workerBaseUrl: "/vendor/cad-engine"
       },
       libreDwg: {

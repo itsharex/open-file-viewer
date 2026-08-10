@@ -54,6 +54,7 @@ export function createViewer(options: PreviewOptions): FileViewer {
   const queue = normalizeQueue(options);
   let currentIndex = clampIndex(options.initialIndex || 0, queue.length);
   let currentInstance: PreviewInstance | undefined;
+  let printPreparationPending = false;
 
   const goTo = async (index: number) => {
     if (destroyed || queue.length === 0) {
@@ -70,7 +71,26 @@ export function createViewer(options: PreviewOptions): FileViewer {
       getLength: () => queue.length,
       next: () => goTo(currentIndex + 1),
       previous: () => goTo(currentIndex - 1),
-      command: (command) => currentInstance?.command?.(command)
+      command: (command) => currentInstance?.command?.(command),
+      print: async () => {
+        if (printPreparationPending) {
+          return;
+        }
+        printPreparationPending = true;
+        const instance = currentInstance;
+        try {
+          await instance?.preparePrint?.();
+        } catch (error) {
+          console.error("Failed to prepare file preview for printing:", error);
+          printPreparationPending = false;
+          return;
+        }
+        printPreparationPending = false;
+        if (destroyed || instance !== currentInstance) {
+          return;
+        }
+        printPreview(viewport);
+      }
     },
     options.locale || "en-US"
   );
@@ -378,6 +398,7 @@ function createToolbar(
     next: () => void | Promise<void>;
     previous: () => void | Promise<void>;
     command: (command: PreviewCommand) => void | boolean | undefined;
+    print: () => void | Promise<void>;
   },
   locale: PreviewLocale
 ):
@@ -802,6 +823,7 @@ function createToolbarContext({
     next: () => void | Promise<void>;
     previous: () => void | Promise<void>;
     command: (command: PreviewCommand) => void | boolean | undefined;
+    print: () => void | Promise<void>;
   };
   element: HTMLElement;
   search: ReturnType<typeof createSearchController>;
@@ -849,7 +871,7 @@ function createToolbarContext({
       }
     },
     print() {
-      printPreview(viewport);
+      void queue.print();
     },
     search: search.search,
     clearSearch: search.clear
@@ -1298,6 +1320,9 @@ function hasHiddenSearchAncestor(element: HTMLElement, root: HTMLElement): boole
   return false;
 }
 
+const PRINT_RESOURCE_WAIT_TIMEOUT_MS = 15_000;
+const PRINT_FRAME_CLEANUP_TIMEOUT_MS = 5 * 60_000;
+
 function printPreview(viewport: HTMLElement): void {
   const frame = document.createElement("iframe");
   frame.className = "ofv-print-frame";
@@ -1472,24 +1497,106 @@ function printPreview(viewport: HTMLElement): void {
 
   doc.body.append(clone);
 
-  let printed = false;
-  const printAndCleanup = () => {
-    if (printed) {
+  const printWindow = frame.contentWindow;
+  if (!printWindow) {
+    frame.remove();
+    return;
+  }
+
+  let cleanedUp = false;
+  let cleanupTimer: number | undefined;
+  const cleanup = () => {
+    if (cleanedUp) {
       return;
     }
-    printed = true;
-    frame.contentWindow?.focus();
-    frame.contentWindow?.print();
-    window.setTimeout(() => frame.remove(), 1000);
+    cleanedUp = true;
+    window.clearTimeout(cleanupTimer);
+    printWindow.removeEventListener?.("afterprint", cleanup);
+    frame.remove();
   };
+  printWindow.addEventListener?.("afterprint", cleanup, { once: true });
 
-  frame.onload = () => {
-    printAndCleanup();
-  };
+  void waitForPrintResources(doc).then(() => {
+    if (cleanedUp || !frame.isConnected) {
+      return;
+    }
+    cleanupTimer = window.setTimeout(cleanup, PRINT_FRAME_CLEANUP_TIMEOUT_MS);
+    try {
+      printWindow.focus();
+      printWindow.print();
+    } catch {
+      cleanup();
+    }
+  });
+}
 
-  window.setTimeout(() => {
-    printAndCleanup();
-  }, 100);
+async function waitForPrintResources(doc: Document): Promise<void> {
+  const pending: Array<Promise<void>> = [];
+  for (const image of Array.from(doc.images)) {
+    pending.push(waitForPrintImage(image));
+  }
+  for (const stylesheet of Array.from(doc.querySelectorAll<HTMLLinkElement>("link[rel='stylesheet']"))) {
+    pending.push(waitForPrintStylesheet(stylesheet));
+  }
+  if (doc.fonts?.ready) {
+    pending.push(Promise.resolve(doc.fonts.ready).then(() => undefined, () => undefined));
+  }
+
+  await settlePrintResources(pending);
+  void doc.body.offsetHeight;
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+}
+
+function waitForPrintImage(image: HTMLImageElement): Promise<void> {
+  if (typeof image.decode === "function") {
+    return image.decode().then(() => undefined, () => undefined);
+  }
+  if (image.complete) {
+    return Promise.resolve();
+  }
+  return waitForPrintElement(image);
+}
+
+function waitForPrintStylesheet(stylesheet: HTMLLinkElement): Promise<void> {
+  try {
+    if (stylesheet.sheet) {
+      return Promise.resolve();
+    }
+  } catch {
+    // Cross-origin stylesheets can deny CSSOM access while still loading normally.
+  }
+  return waitForPrintElement(stylesheet);
+}
+
+function waitForPrintElement(element: HTMLElement): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      element.removeEventListener("load", done);
+      element.removeEventListener("error", done);
+      resolve();
+    };
+    element.addEventListener("load", done, { once: true });
+    element.addEventListener("error", done, { once: true });
+  });
+}
+
+function settlePrintResources(pending: Array<Promise<void>>): Promise<void> {
+  if (pending.length === 0) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      window.clearTimeout(timeout);
+      resolve();
+    };
+    const timeout = window.setTimeout(finish, PRINT_RESOURCE_WAIT_TIMEOUT_MS);
+    void Promise.all(pending).then(finish, finish);
+  });
 }
 
 function copyCanvasContent(sourceRoot: HTMLElement, targetRoot: HTMLElement): void {

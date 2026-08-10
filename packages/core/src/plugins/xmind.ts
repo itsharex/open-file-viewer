@@ -101,6 +101,9 @@ export function xmindPlugin(): PreviewPlugin {
         command(command) {
           return instance?.command?.(command) ?? false;
         },
+        preparePrint() {
+          return instance?.preparePrint?.();
+        },
         destroy() {
           instance?.destroy();
           revokeObjectUrls(objectUrls);

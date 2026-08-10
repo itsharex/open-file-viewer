@@ -48,31 +48,33 @@ Object.defineProperty(globalThis, "IntersectionObserver", {
   value: IntersectionObserverStub
 });
 
-Object.defineProperty(window, "matchMedia", {
-  configurable: true,
-  writable: true,
-  value: vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn()
-  }))
-});
+if (typeof window !== "undefined") {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    }))
+  });
 
-Object.defineProperty(window.HTMLMediaElement.prototype, "pause", {
-  configurable: true,
-  writable: true,
-  value: vi.fn()
-});
+  Object.defineProperty(window.HTMLMediaElement.prototype, "pause", {
+    configurable: true,
+    writable: true,
+    value: vi.fn()
+  });
 
-Object.defineProperty(window.HTMLMediaElement.prototype, "play", {
-  configurable: true,
-  writable: true,
-  value: vi.fn(() => Promise.resolve())
-});
+  Object.defineProperty(window.HTMLMediaElement.prototype, "play", {
+    configurable: true,
+    writable: true,
+    value: vi.fn(() => Promise.resolve())
+  });
 
-Object.defineProperty(window.HTMLMediaElement.prototype, "load", {
-  configurable: true,
-  writable: true,
-  value: vi.fn()
-});
+  Object.defineProperty(window.HTMLMediaElement.prototype, "load", {
+    configurable: true,
+    writable: true,
+    value: vi.fn()
+  });
+}

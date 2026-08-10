@@ -1,6 +1,7 @@
 export { createViewer } from "./viewer";
 export { imagePlugin } from "./plugins/image";
 export { videoPlugin } from "./plugins/video";
+export type { VideoPluginOptions } from "./plugins/video";
 export { audioPlugin } from "./plugins/audio";
 export { textPlugin } from "./plugins/text";
 export { pdfPlugin } from "./plugins/pdf";
@@ -16,7 +17,7 @@ export { xmindPlugin } from "./plugins/xmind";
 export { cadPlugin } from "./plugins/cad";
 export type { CadBinaryPreviewContext, CadPluginOptions } from "./plugins/cad";
 export type { LibreDwgPreviewOptions } from "./plugins/cad-dwg";
-export type { WebglDwgPreviewOptions } from "./plugins/cad-webgl";
+export type { WebglDwgEngineLoader, WebglDwgPreviewOptions } from "./plugins/cad-webgl";
 export { model3dPlugin } from "./plugins/model3d";
 export { gisPlugin } from "./plugins/gis";
 export { assetPlugin } from "./plugins/asset";

@@ -1194,7 +1194,7 @@ function smokeCases(): SmokeCase[] {
       fileName: "notes.txt",
       plugins: [textPlugin()],
       selector: ".ofv-code-container.is-wrapped",
-      text: "纯文本"
+      text: "plain text"
     },
     {
       name: "extensionless project file",
@@ -1380,7 +1380,7 @@ function smokeCases(): SmokeCase[] {
       fileName: "locked.pdf",
       plugins: [pdfPlugin({ pdfjs: failingPdfJs() as any })],
       selector: ".ofv-fallback",
-      text: "PDF 预览失败"
+      text: "PDF preview failed"
     },
     {
       name: "EPUB",
@@ -1708,7 +1708,7 @@ function smokeCases(): SmokeCase[] {
       fileName: "legacy.doc",
       plugins: [officePlugin()],
       selector: ".ofv-office-conversion",
-      text: "Office 转换提示"
+      text: "Office conversion guidance"
     },
     {
       name: "fallback",
@@ -1983,7 +1983,7 @@ function formatAliasSmokeCases(): SmokeCase[] {
       fileName: `legacy.${extension}`,
       plugins: [officePlugin()],
       selector: ".ofv-office-conversion",
-      text: "Office 转换提示"
+      text: "Office conversion guidance"
     })),
     {
       name: "FODS sheet",
@@ -2039,7 +2039,7 @@ function formatAliasSmokeCases(): SmokeCase[] {
       fileName: `legacy.${extension}`,
       plugins: [officePlugin()],
       selector: ".ofv-office-conversion",
-      text: "Office 转换提示"
+      text: "Office conversion guidance"
     })),
     ...["tar", "gz", "tgz"].map((extension) => ({
       name: `archive alias .${extension}`,
@@ -4257,7 +4257,7 @@ function aliasCleanPreviewCases(): CleanPreviewCase[] {
       fileName: "clean-alias.doc",
       plugins: [officePlugin()],
       selector: ".ofv-office-conversion",
-      text: "Office 转换提示",
+      text: "Office conversion guidance",
       hiddenText: [],
       hiddenSelectors: [],
       covers: ["doc"]

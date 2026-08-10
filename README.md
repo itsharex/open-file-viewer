@@ -336,10 +336,15 @@ then configure that directory:
 ```ts
 cadPlugin({
   webglDwg: {
+    engineLoader: () => import("@mlightcad/cad-simple-viewer"),
     workerBaseUrl: "/vendor/cad-engine"
   }
 });
 ```
+
+The explicit `engineLoader` keeps the optional engine out of builds that do not
+configure WebGL DWG preview and gives strict esbuild setups a host-owned import
+they can resolve.
 
 The WebGL package is MIT licensed. Its published DWG parser Worker is based on
 LibreDWG, so applications should also review the Worker's license requirements.

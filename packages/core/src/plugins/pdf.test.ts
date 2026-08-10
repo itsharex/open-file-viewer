@@ -66,6 +66,54 @@ describe("pdfPlugin", () => {
     viewer.destroy();
   });
 
+  it("renders every lazy PDF page before capturing the print snapshot", async () => {
+    class IdleIntersectionObserver {
+      observe = vi.fn();
+      disconnect = vi.fn();
+    }
+    vi.stubGlobal("IntersectionObserver", IdleIntersectionObserver);
+    const toDataURL = vi
+      .spyOn(HTMLCanvasElement.prototype, "toDataURL")
+      .mockReturnValue("data:image/png;base64,cHJpbnQ=");
+    vi.spyOn(HTMLImageElement.prototype, "complete", "get").mockReturnValue(true);
+
+    const print = vi.fn();
+    const printWindow = Object.assign(new EventTarget(), { focus: vi.fn(), print });
+    Object.defineProperty(HTMLIFrameElement.prototype, "contentWindow", {
+      configurable: true,
+      get() {
+        return printWindow;
+      }
+    });
+
+    const container = createSizedContainer();
+    const pdfjs = createPdfJsMock({ numPages: 10 });
+    const viewer = createViewer({
+      container,
+      file: new Blob(["pdf"], { type: "application/pdf" }),
+      fileName: "many-pages.pdf",
+      toolbar: true,
+      plugins: [pdfPlugin({ pdfjs })]
+    });
+
+    await waitFor(() => container.querySelectorAll(".ofv-pdf-page-wrapper").length === 10);
+    await waitFor(() => container.querySelectorAll("canvas.ofv-pdf-page").length === 2);
+    expect(container.querySelectorAll(".ofv-pdf-skeleton")).toHaveLength(8);
+
+    container.querySelector<HTMLButtonElement>('button[aria-label="Print preview"]')?.click();
+    await waitFor(() => print.mock.calls.length === 1);
+
+    const printDocument = document.querySelector<HTMLIFrameElement>(".ofv-print-frame")?.contentDocument;
+    expect(printDocument?.querySelectorAll(".ofv-pdf-page-wrapper")).toHaveLength(10);
+    expect(printDocument?.querySelectorAll("img.ofv-pdf-page")).toHaveLength(10);
+    expect(printDocument?.querySelectorAll("canvas.ofv-pdf-page")).toHaveLength(0);
+    expect(printDocument?.querySelector(".ofv-pdf-skeleton")).toBeNull();
+    expect(toDataURL).toHaveBeenCalledTimes(10);
+
+    printWindow.dispatchEvent(new Event("afterprint"));
+    viewer.destroy();
+  });
+
   it("lays out PDF pages and responds to zoom commands", async () => {
     const container = createSizedContainer();
     const objectUrl = "blob:ofv-pdf";
@@ -748,7 +796,7 @@ describe("pdfPlugin", () => {
   });
 });
 
-function createPdfJsMock(options: { page?: any } = {}): any {
+function createPdfJsMock(options: { page?: any; numPages?: number } = {}): any {
   const page = options.page || createPdfPageMock();
 
   return {
@@ -757,7 +805,7 @@ function createPdfJsMock(options: { page?: any } = {}): any {
     GlobalWorkerOptions: { workerSrc: "" },
     getDocument: vi.fn(() => ({
       promise: Promise.resolve({
-        numPages: 2,
+        numPages: options.numPages ?? 2,
         getPage: vi.fn(() => Promise.resolve(page)),
         destroy: vi.fn()
       })

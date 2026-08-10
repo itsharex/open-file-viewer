@@ -361,12 +361,38 @@ describe("media plugins", () => {
 
     await waitFor(() => Boolean(container.querySelector(".ofv-media-info")));
 
+    expect(container.querySelector("video")?.getAttribute("controlslist")).toBeNull();
     expect(container.querySelector<HTMLElement>(".ofv-media-info")?.hidden).toBe(true);
     expect(container.textContent).toContain("格式MP4");
     expect(container.textContent).toContain("编码isom");
     expect(container.textContent).toContain("尺寸1920 x 1080px");
     expect(container.textContent).toContain("时长0:12");
     expect(container.textContent).toContain("轨道1");
+
+    viewer.destroy();
+  });
+
+  it("passes controlsList restrictions to the native video controls", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:video-controls-list"),
+      revokeObjectURL: vi.fn()
+    });
+
+    const viewer = createViewer({
+      container,
+      file: minimalMp4(),
+      fileName: "restricted-controls.mp4",
+      plugins: [videoPlugin({ controlsList: "nodownload noremoteplayback" })]
+    });
+
+    await waitFor(() => Boolean(container.querySelector("video")));
+
+    const video = container.querySelector<HTMLVideoElement>("video");
+    expect(video?.controls).toBe(true);
+    expect(video?.getAttribute("controlslist")).toBe("nodownload noremoteplayback");
 
     viewer.destroy();
   });

@@ -242,6 +242,9 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
         command(command) {
           return delegatedInstance?.command?.(command) || controller?.command(command) || false;
         },
+        preparePrint() {
+          return delegatedInstance?.preparePrint?.();
+        },
         destroy() {
           delegatedInstance?.destroy();
           controller?.destroy();
@@ -582,6 +585,7 @@ async function renderDocx(panel: HTMLElement, arrayBuffer: ArrayBuffer, fit: Pre
       return () => undefined;
     }
     panel.append(content);
+    paginateDocxFlow(content);
     disposeFit = fitDocxPages(content, fit);
     return () => {
       disposeFit?.();
@@ -1362,6 +1366,7 @@ function looksLikeDocxTextboxHeading(value: string): boolean {
 
 async function normalizeDocxLayout(container: HTMLElement, arrayBuffer: ArrayBuffer, styleContainer?: HTMLElement): Promise<void> {
   const [hints, charts] = await Promise.all([readDocxLayoutHints(arrayBuffer), readDocxCharts(arrayBuffer)]);
+  normalizeDocxEastAsiaFontStyles(styleContainer, hints.eastAsiaFonts);
   normalizeDocxNumberingStyles(styleContainer);
   repairDocxChartPlaceholders(container, charts);
   const pages = container.querySelectorAll<HTMLElement>("section.ofv-docx");
@@ -1371,6 +1376,12 @@ async function normalizeDocxLayout(container: HTMLElement, arrayBuffer: ArrayBuf
     repairDocxHeadingShapeAlignment(page);
     repairDocxListIndentAlignment(page);
     for (const element of page.querySelectorAll<HTMLElement>("[style*='line-height']")) {
+      const atLeastLineHeight = parseDocxAtLeastLineHeight(element.style.lineHeight);
+      if (atLeastLineHeight !== undefined) {
+        const largestFontSize = getLargestDocxFontSize(element);
+        element.style.lineHeight = atLeastLineHeight <= largestFontSize * 1.2 ? "1.2" : `${formatCssNumber(atLeastLineHeight)}px`;
+        continue;
+      }
       const lineHeight = parseCssLineHeight(element.style.lineHeight);
       if (lineHeight > 0 && lineHeight < 1) {
         element.style.lineHeight = "1.2";
@@ -1575,6 +1586,11 @@ function findAdjacentDocxParagraphText(
 }
 
 type DocxLayoutHints = {
+  eastAsiaFonts?: {
+    fallback?: string;
+    major?: string;
+    minor?: string;
+  };
   floatingPictures: Array<{
     widthPt: number;
     heightPt: number;
@@ -1589,14 +1605,71 @@ type DocxLayoutHints = {
 async function readDocxLayoutHints(arrayBuffer: ArrayBuffer): Promise<DocxLayoutHints> {
   try {
     const zip = await JSZip.loadAsync(arrayBuffer);
-    const documentXml = await zip.file("word/document.xml")?.async("text");
-    if (!documentXml) {
-      return { floatingPictures: [] };
-    }
-    return { floatingPictures: extractFloatingPictureHints(documentXml) };
+    const themeEntry = Object.values(zip.files).find((entry) => !entry.dir && /^word\/theme\/theme\d+\.xml$/i.test(entry.name));
+    const [documentXml, stylesXml, themeXml] = await Promise.all([
+      zip.file("word/document.xml")?.async("text"),
+      zip.file("word/styles.xml")?.async("text"),
+      themeEntry?.async("text")
+    ]);
+    return {
+      eastAsiaFonts: extractDocxEastAsiaFonts(stylesXml || "", themeXml || ""),
+      floatingPictures: documentXml ? extractFloatingPictureHints(documentXml) : []
+    };
   } catch {
     return { floatingPictures: [] };
   }
+}
+
+function extractDocxEastAsiaFonts(stylesXml: string, themeXml: string): DocxLayoutHints["eastAsiaFonts"] {
+  const defaults = /<w:docDefaults\b[\s\S]*?<\/w:docDefaults>/.exec(stylesXml)?.[0] || "";
+  const directFont = /<w:rFonts\b[^>]*\bw:eastAsia="([^"]+)"/.exec(defaults)?.[1];
+  const themeName = /<w:rFonts\b[^>]*\bw:eastAsiaTheme="([^"]+)"/.exec(defaults)?.[1] || "minorEastAsia";
+  const major = extractDocxThemeEastAsiaFont(themeXml, "major");
+  const minor = extractDocxThemeEastAsiaFont(themeXml, "minor");
+  const direct = directFont ? decodeXml(directFont).trim() || undefined : undefined;
+  return {
+    fallback: direct || (/^major/i.test(themeName) ? major : minor) || minor || major,
+    major,
+    minor
+  };
+}
+
+function extractDocxThemeEastAsiaFont(themeXml: string, kind: "major" | "minor"): string | undefined {
+  const block = new RegExp(`<a:${kind}Font\\b[\\s\\S]*?<\\/a:${kind}Font>`, "i").exec(themeXml)?.[0] || "";
+  const eastAsia = /<a:ea\b[^>]*\btypeface="([^"]+)"/i.exec(block)?.[1];
+  const scriptFont = /<a:font\b[^>]*\bscript="Hans"[^>]*\btypeface="([^"]+)"/i.exec(block)?.[1];
+  const font = eastAsia || scriptFont;
+  return font ? decodeXml(font).trim() || undefined : undefined;
+}
+
+function normalizeDocxEastAsiaFontStyles(
+  styleContainer: HTMLElement | undefined,
+  fonts: DocxLayoutHints["eastAsiaFonts"]
+): void {
+  if (!styleContainer?.textContent || !fonts?.fallback) {
+    return;
+  }
+  const safeFallback = sanitizeDocxCssFontFamily(fonts.fallback);
+  if (!safeFallback) {
+    return;
+  }
+  const variable = "--ofv-docx-east-asia-font";
+  const css = styleContainer.textContent.replace(/font-family:\s*([^;{}]+);/gi, (declaration, families: string) => {
+    if (families.includes(variable)) {
+      return declaration;
+    }
+    return `font-family: ${families.trim()}, var(${variable});`;
+  });
+  const declarations = [
+    `${variable}: "${safeFallback}";`,
+    `--docx-majorEastAsia-font: "${sanitizeDocxCssFontFamily(fonts.major) || safeFallback}";`,
+    `--docx-minorEastAsia-font: "${sanitizeDocxCssFontFamily(fonts.minor) || safeFallback}";`
+  ];
+  styleContainer.textContent = `${css}\n.ofv-docx-wrapper { ${declarations.join(" ")} }\n`;
+}
+
+function sanitizeDocxCssFontFamily(fontFamily: string | undefined): string {
+  return fontFamily?.replace(/["'\\,;{}()]/g, "").trim() || "";
 }
 
 function extractFloatingPictureHints(xml: string): DocxLayoutHints["floatingPictures"] {
@@ -1712,6 +1785,302 @@ function parseCssLineHeight(value: string): number {
   }
   const parsed = Number.parseFloat(trimmed);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseDocxAtLeastLineHeight(value: string): number | undefined {
+  const match = /^calc\(\s*100%\s*\+\s*(-?\d+(?:\.\d+)?)\s*(px|pt)\s*\)$/i.exec(value.trim());
+  if (!match) {
+    return undefined;
+  }
+  const amount = Number.parseFloat(match[1] || "");
+  if (!Number.isFinite(amount) || amount < 0) {
+    return undefined;
+  }
+  return match[2]?.toLowerCase() === "pt" ? amount * (4 / 3) : amount;
+}
+
+function getLargestDocxFontSize(element: HTMLElement): number {
+  let largest = 0;
+  const view = element.ownerDocument.defaultView;
+  for (const child of [element, ...element.querySelectorAll<HTMLElement>("*")]) {
+    largest = Math.max(largest, parseCssLengthInPixels(child.style.fontSize));
+    if (view) {
+      largest = Math.max(largest, parseCssLengthInPixels(view.getComputedStyle(child).fontSize));
+    }
+  }
+  return largest || 16;
+}
+
+function parseCssLengthInPixels(value: string): number {
+  const match = /^(-?\d+(?:\.\d+)?)\s*(px|pt)?$/i.exec(value.trim());
+  if (!match) {
+    return 0;
+  }
+  const amount = Number.parseFloat(match[1] || "");
+  if (!Number.isFinite(amount)) {
+    return 0;
+  }
+  return match[2]?.toLowerCase() === "pt" ? amount * (4 / 3) : amount;
+}
+
+function paginateDocxFlow(container: HTMLElement): void {
+  const wrapper = container.querySelector<HTMLElement>(".ofv-docx-wrapper");
+  if (!wrapper) {
+    return;
+  }
+
+  const sourcePages = Array.from(wrapper.querySelectorAll<HTMLElement>(":scope > section.ofv-docx"));
+  for (const sourcePage of sourcePages) {
+    paginateDocxPage(sourcePage);
+  }
+}
+
+function paginateDocxPage(sourcePage: HTMLElement): void {
+  const flowRoot = Array.from(sourcePage.children).find(
+    (child): child is HTMLElement => child instanceof HTMLElement && child.tagName === "ARTICLE"
+  );
+  const nominalHeight = parseCssLengthInPixels(sourcePage.style.height || sourcePage.style.minHeight);
+  if (!flowRoot || nominalHeight <= 0 || flowRoot.children.length < 2) {
+    return;
+  }
+
+  const blocks = Array.from(flowRoot.children);
+  const lastBlock = blocks.at(-1);
+  if (!(lastBlock instanceof HTMLElement) || !docxBlockExceedsPage(lastBlock, sourcePage, nominalHeight)) {
+    return;
+  }
+
+  flowRoot.replaceChildren();
+  let page = sourcePage;
+  let pageFlow = flowRoot;
+  let continuationCount = 0;
+
+  for (const block of blocks) {
+    pageFlow.append(block);
+    if (!(block instanceof HTMLElement)) {
+      continue;
+    }
+
+    let overflowBlock = block;
+    while (docxBlockExceedsPage(overflowBlock, page, nominalHeight) && continuationCount < 100) {
+      if (docxBlockIsVisuallyEmpty(overflowBlock)) {
+        overflowBlock.remove();
+        break;
+      }
+      const splitContinuation = splitDocxFlowBlockToFit(overflowBlock, page, nominalHeight);
+      if (!splitContinuation && pageFlow.children.length <= 1) {
+        break;
+      }
+      if (!splitContinuation) {
+        overflowBlock.remove();
+      }
+      const continuation = createDocxContinuationPage(sourcePage, flowRoot);
+      page.after(continuation.page);
+      page = continuation.page;
+      pageFlow = continuation.flowRoot;
+      overflowBlock = splitContinuation || overflowBlock;
+      pageFlow.append(overflowBlock);
+      continuationCount += 1;
+    }
+  }
+}
+
+function splitDocxFlowBlockToFit(block: HTMLElement, page: HTMLElement, nominalHeight: number): HTMLElement | undefined {
+  if (block instanceof HTMLTableElement) {
+    return splitDocxTableToFit(block, page, nominalHeight);
+  }
+  return splitDocxParagraphToFit(block, page, nominalHeight);
+}
+
+function splitDocxTableToFit(table: HTMLTableElement, page: HTMLElement, nominalHeight: number): HTMLTableElement | undefined {
+  const rows = Array.from(table.rows);
+  if (rows.length < 2) {
+    return undefined;
+  }
+
+  const pageBottom = docxPageContentBottom(page, nominalHeight);
+  let splitIndex = 0;
+  for (let index = 1; index < rows.length; index += 1) {
+    if (rows[index - 1]!.getBoundingClientRect().bottom > pageBottom) {
+      break;
+    }
+    if (!docxTableBoundaryCrossesRowSpan(rows, index)) {
+      splitIndex = index;
+    }
+  }
+  if (splitIndex <= 0 || splitIndex >= rows.length) {
+    return undefined;
+  }
+
+  const continuation = table.cloneNode(false) as HTMLTableElement;
+  continuation.dataset.ofvDocxTableContinuation = "true";
+  continuation.removeAttribute("id");
+  const sectionClones = new Map<HTMLElement, HTMLElement>();
+  for (const child of Array.from(table.children)) {
+    if (child instanceof HTMLTableRowElement || /^(THEAD|TBODY|TFOOT)$/.test(child.tagName)) {
+      continue;
+    }
+    continuation.append(child.cloneNode(true));
+  }
+  continuation.querySelectorAll<HTMLElement>("[id]").forEach((element) => element.removeAttribute("id"));
+
+  for (const row of rows.slice(splitIndex)) {
+    const parent = row.parentElement;
+    if (parent && parent !== table && /^(THEAD|TBODY|TFOOT)$/.test(parent.tagName)) {
+      let section = sectionClones.get(parent);
+      if (!section) {
+        section = parent.cloneNode(false) as HTMLElement;
+        section.removeAttribute("id");
+        sectionClones.set(parent, section);
+        continuation.append(section);
+      }
+      section.append(row);
+    } else {
+      continuation.append(row);
+    }
+  }
+  return continuation;
+}
+
+function docxTableBoundaryCrossesRowSpan(rows: HTMLTableRowElement[], splitIndex: number): boolean {
+  return rows.slice(0, splitIndex).some((row, rowIndex) =>
+    Array.from(row.cells).some((cell) => cell.rowSpan > 1 && rowIndex + cell.rowSpan > splitIndex)
+  );
+}
+
+function docxBlockIsVisuallyEmpty(block: HTMLElement): boolean {
+  return !block.textContent?.trim() && !block.querySelector("br, hr, img, svg, canvas, video, table");
+}
+
+function splitDocxParagraphToFit(paragraph: HTMLElement, page: HTMLElement, nominalHeight: number): HTMLElement | undefined {
+  if (paragraph.tagName !== "P" || paragraph.querySelector("img, svg, canvas, video, table")) {
+    return undefined;
+  }
+  const textLength = paragraph.textContent?.length || 0;
+  if (textLength < 2 || !paragraph.parentNode) {
+    return undefined;
+  }
+
+  let low = 1;
+  let high = textLength - 1;
+  let best = 0;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const candidate = cloneDocxTextRange(paragraph, 0, middle);
+    paragraph.replaceWith(candidate);
+    const fits = !docxBlockExceedsPage(candidate, page, nominalHeight);
+    candidate.replaceWith(paragraph);
+    if (fits) {
+      best = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+
+  best = avoidSplittingUnicodePair(paragraph.textContent || "", best);
+  if (best <= 0 || best >= textLength) {
+    return undefined;
+  }
+
+  const prefix = cloneDocxTextRange(paragraph, 0, best);
+  const continuation = cloneDocxTextRange(paragraph, best, textLength);
+  prefix.style.marginBottom = "0px";
+  continuation.style.marginTop = "0px";
+  continuation.style.textIndent = "0px";
+  continuation.dataset.ofvDocxParagraphContinuation = "true";
+  for (const className of Array.from(continuation.classList)) {
+    if (/-num-\d+-\d+$/.test(className)) {
+      continuation.classList.remove(className);
+    }
+  }
+  continuation.removeAttribute("id");
+  continuation.querySelectorAll<HTMLElement>("[id]").forEach((element) => element.removeAttribute("id"));
+  paragraph.replaceWith(prefix);
+  return continuation;
+}
+
+function cloneDocxTextRange(source: HTMLElement, start: number, end: number): HTMLElement {
+  const clone = source.cloneNode(true) as HTMLElement;
+  const walker = clone.ownerDocument.createTreeWalker(clone, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  const nodes: Node[] = [];
+  let current = walker.nextNode();
+  while (current) {
+    nodes.push(current);
+    current = walker.nextNode();
+  }
+
+  let offset = 0;
+  for (const node of nodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const textNode = node as Text;
+      const value = textNode.data;
+      const nodeStart = offset;
+      const nodeEnd = nodeStart + value.length;
+      const sliceStart = Math.max(0, start - nodeStart);
+      const sliceEnd = Math.min(value.length, end - nodeStart);
+      textNode.data = sliceStart < sliceEnd ? value.slice(sliceStart, sliceEnd) : "";
+      offset = nodeEnd;
+      continue;
+    }
+    if (node instanceof HTMLElement && node.tagName === "BR" && (offset < start || offset >= end)) {
+      node.remove();
+    }
+  }
+  return clone;
+}
+
+function avoidSplittingUnicodePair(value: string, index: number): number {
+  if (index > 0 && index < value.length) {
+    const previous = value.charCodeAt(index - 1);
+    const next = value.charCodeAt(index);
+    if (previous >= 0xd800 && previous <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) {
+      return index - 1;
+    }
+  }
+  return index;
+}
+
+function createDocxContinuationPage(sourcePage: HTMLElement, sourceFlowRoot: HTMLElement): {
+  page: HTMLElement;
+  flowRoot: HTMLElement;
+} {
+  const page = sourcePage.cloneNode(false) as HTMLElement;
+  page.dataset.ofvDocxFlowContinuation = "true";
+  let flowRoot: HTMLElement | undefined;
+  for (const child of Array.from(sourcePage.children)) {
+    if (child === sourceFlowRoot) {
+      flowRoot = child.cloneNode(false) as HTMLElement;
+      page.append(flowRoot);
+    } else {
+      page.append(child.cloneNode(true));
+    }
+  }
+  if (!flowRoot) {
+    flowRoot = sourceFlowRoot.cloneNode(false) as HTMLElement;
+    page.append(flowRoot);
+  }
+  return { page, flowRoot };
+}
+
+function docxBlockExceedsPage(block: HTMLElement, page: HTMLElement, nominalHeight: number): boolean {
+  const blockBottom = block.getBoundingClientRect().bottom;
+  return blockBottom > docxPageContentBottom(page, nominalHeight);
+}
+
+function docxPageContentBottom(page: HTMLElement, nominalHeight: number): number {
+  const pageTop = page.getBoundingClientRect().top;
+  const paddingBottom = parseCssLengthInPixels(page.style.paddingBottom) || parseDocxPaddingBottom(page.style.padding);
+  return pageTop + nominalHeight - paddingBottom + 1;
+}
+
+function parseDocxPaddingBottom(value: string): number {
+  const parts = value.trim().split(/\s+/);
+  if (parts.length === 0) {
+    return 0;
+  }
+  const bottom = parts.length === 1 ? parts[0] : parts.length === 2 || parts.length === 3 ? parts[0] : parts[2];
+  return parseCssLengthInPixels(bottom || "");
 }
 
 function fitDocxPages(container: HTMLElement, fit: PreviewFit): () => void {

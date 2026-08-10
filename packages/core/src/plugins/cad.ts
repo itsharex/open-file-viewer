@@ -238,6 +238,9 @@ function wrapCadPreviewInstance(panel: HTMLElement, instance: PreviewInstance): 
     command(command) {
       return instance.command?.(command);
     },
+    preparePrint() {
+      return instance.preparePrint?.();
+    },
     destroy() {
       instance.destroy();
       panel.remove();

@@ -26,6 +26,9 @@ importers:
       '@vue/test-utils':
         specifier: ^2.4.11
         version: 2.4.11(@vue/compiler-dom@3.5.35)(@vue/server-renderer@3.5.35(vue@3.5.35(typescript@5.9.3)))(vue@3.5.35(typescript@5.9.3))
+      esbuild:
+        specifier: ^0.27.7
+        version: 0.27.7
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1

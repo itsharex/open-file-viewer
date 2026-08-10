@@ -67,6 +67,9 @@ export function assetPlugin(): PreviewPlugin {
           command(command) {
             return photoshopPreview.instance?.command?.(command) ?? false;
           },
+          preparePrint() {
+            return photoshopPreview.instance?.preparePrint?.();
+          },
           resize(size) {
             photoshopPreview.instance?.resize?.(size);
           },
@@ -91,6 +94,9 @@ export function assetPlugin(): PreviewPlugin {
             command(command) {
               return postScriptPreview.instance?.command?.(command) ?? false;
             },
+            preparePrint() {
+              return postScriptPreview.instance?.preparePrint?.();
+            },
             resize(size) {
               postScriptPreview.instance?.resize?.(size);
             },
@@ -108,6 +114,9 @@ export function assetPlugin(): PreviewPlugin {
           },
           command(command) {
             return postScriptPreview.instance?.command?.(command) ?? false;
+          },
+          preparePrint() {
+            return postScriptPreview.instance?.preparePrint?.();
           },
           resize(size) {
             postScriptPreview.instance?.resize?.(size);
@@ -190,6 +199,9 @@ export function assetPlugin(): PreviewPlugin {
             }
           }
           return false;
+        },
+        async preparePrint() {
+          await Promise.all(childInstances.map((instance) => instance.preparePrint?.()));
         },
         resize(size) {
           childInstances.forEach((instance) => instance.resize?.(size));
@@ -3062,6 +3074,9 @@ async function createPdfCompatibleAiPreview(
       },
       command(command) {
         return instance.command(command);
+      },
+      preparePrint() {
+        return instance.preparePrint?.();
       },
       resize(size) {
         instance.resize(size);

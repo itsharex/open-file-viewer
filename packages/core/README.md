@@ -125,6 +125,17 @@ main-thread SVG/thumbnail fallback.
 
 Native browser video formats such as MP4, WebM and MOV do not need extra dependencies. HLS uses `hls.js`, which is bundled with the core package. FLV and MPEG-TS/M2TS playback is optional: install `mpegts.js` in your application only if you need those formats. If it is not installed, `videoPlugin()` shows the built-in download fallback for FLV/M2TS files.
 
+Pass the native media `controlsList` tokens when the host application needs to
+remove browser-provided controls. For example, Chromium hides the Download item
+for `nodownload`:
+
+```ts
+videoPlugin({ controlsList: "nodownload" });
+```
+
+This is a browser UI hint, not download protection. It does not hide Open File
+Viewer's toolbar download action or the unsupported-format fallback link.
+
 ```bash
 npm install mpegts.js
 ```
@@ -274,11 +285,16 @@ npm install @mlightcad/cad-simple-viewer@1.5.9 @mlightcad/data-model@1.12.3 loda
 ```ts
 cadPlugin({
   webglDwg: {
+    engineLoader: () => import("@mlightcad/cad-simple-viewer"),
     workerBaseUrl: "/vendor/cad-engine",
     baseUrl: "/cad-data/"
   }
 });
 ```
+
+The explicit `engineLoader` keeps the optional engine out of builds that do not
+configure WebGL DWG preview and gives strict esbuild setups a host-owned import
+they can resolve.
 
 Copy `libredwg-parser-worker.js` and `mtext-renderer-worker.js` from
 `@mlightcad/cad-simple-viewer/dist/` to `/vendor/cad-engine/`. `baseUrl` is
