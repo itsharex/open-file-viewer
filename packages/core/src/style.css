@@ -2699,6 +2699,42 @@
   z-index: 0;
 }
 
+.ofv-ppt-binary-round-rectangle {
+  border-radius: 999px;
+}
+
+.ofv-ppt-binary-ellipse {
+  border-radius: 50%;
+}
+
+.ofv-ppt-binary-diamond {
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.ofv-ppt-binary-line-shape {
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
+}
+
+.ofv-ppt-binary-line-svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.ofv-ppt-binary-right-arrow {
+  clip-path: polygon(0 18%, 68% 18%, 68% 0, 100% 50%, 68% 100%, 68% 82%, 0 82%);
+}
+
+.ofv-ppt-binary-down-arrow {
+  clip-path: polygon(18% 0, 82% 0, 82% 68%, 100% 68%, 50% 100%, 0 68%, 18% 68%);
+}
+
 .ofv-ppt-binary-image {
   display: block;
   width: 100%;
@@ -2714,10 +2750,76 @@
   overflow: hidden;
   color: #202124;
   font-family: Arial, "Helvetica Neue", sans-serif;
-  font-size: clamp(7px, 1.65cqw, 18px);
-  line-height: 1.28;
+  font-size: clamp(7px, 2.15cqw, 24px);
+  line-height: 1.22;
   overflow-wrap: anywhere;
   white-space: pre-line;
+}
+
+.ofv-ppt-binary-plain-text {
+  padding: 0.833cqh 1.25cqw;
+}
+
+.ofv-ppt-binary-short-text-shape,
+.ofv-ppt-binary-short-text-shape .ofv-ppt-binary-styled-text,
+.ofv-ppt-binary-nowrap-title-shape,
+.ofv-ppt-binary-nowrap-title-shape .ofv-ppt-binary-styled-text {
+  overflow: visible;
+}
+
+.ofv-ppt-binary-nowrap-title-shape .ofv-ppt-binary-styled-text {
+  white-space: pre;
+}
+
+.ofv-ppt-binary-nowrap-short-text-shape .ofv-ppt-binary-styled-text {
+  white-space: pre;
+}
+
+.ofv-ppt-binary-vertical-text-shape,
+.ofv-ppt-binary-vertical-text-shape .ofv-ppt-binary-vertical-text {
+  overflow: visible;
+}
+
+.ofv-ppt-binary-vertical-text {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  white-space: normal;
+}
+
+.ofv-ppt-binary-master-shape .ofv-ppt-binary-text {
+  color: #80a812;
+  font-weight: 600;
+}
+
+.ofv-ppt-binary-filled-text,
+.ofv-ppt-binary-section-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25cqh 0.5cqw;
+  text-align: center;
+}
+
+.ofv-ppt-binary-filled-text {
+  font-size: clamp(7px, 1.8cqw, 18px);
+  line-height: 1.15;
+}
+
+.ofv-ppt-binary-picture-overlay-text {
+  justify-content: flex-start;
+  padding-inline: 1cqw;
+  text-align: left;
+}
+
+.ofv-ppt-binary-section-number {
+  color: #fff;
+  font-size: clamp(12px, 2.3cqw, 25px);
+  font-weight: 700;
+}
+
+.ofv-ppt-binary-section-heading {
+  color: #80a812;
+  font-weight: 700;
 }
 
 .ofv-ppt-binary-title {
@@ -2740,10 +2842,10 @@
   align-items: center;
   justify-content: center;
   padding: 0.3cqh 0.5cqw;
-  border: 1px solid rgb(86 138 42 / 55%);
-  background: rgb(183 226 135 / 88%);
+  border: 0;
+  background: transparent;
   color: #26351b;
-  font-size: clamp(7px, 1.45cqw, 16px);
+  font-size: clamp(8px, 1.95cqw, 18px);
   font-weight: 600;
   text-align: center;
 }

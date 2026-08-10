@@ -9,7 +9,9 @@ import { renderPdfDocumentPreview, type PdfPluginOptions } from "./pdf";
 import { parseLegacyWordDocument, renderLegacyWordDocument } from "./msdoc";
 import {
   parseLegacyPowerPoint,
+  type LegacyPowerPointCharacterStyle,
   type LegacyPowerPointImage,
+  type LegacyPowerPointMasterTextStyles,
   type LegacyPowerPointPresentation,
   type LegacyPowerPointShape
 } from "./msppt";
@@ -5762,16 +5764,17 @@ async function renderLegacyPowerPoint(panel: HTMLElement, arrayBuffer: ArrayBuff
   const viewer = document.createElement("div");
   viewer.className = "ofv-ppt-binary-viewer";
   viewer.style.setProperty("--ofv-ppt-aspect", `${presentation.width} / ${presentation.height}`);
-  const hasMasterBackground = presentation.masterShapes.some(
-    (shape) =>
-      shape.imageIndices.some((index) => imageSources.has(index)) &&
-      shape.left <= presentation.width * 0.02 &&
-      shape.top <= presentation.height * 0.02 &&
-      shape.width >= presentation.width * 0.9 &&
-      shape.height >= presentation.height * 0.9
-  );
 
   for (const [slideIndex, slide] of presentation.slides.entries()) {
+    const masterShapes = slide.masterShapes || presentation.masterShapes;
+    const hasMasterBackground = masterShapes.some(
+      (shape) =>
+        shape.imageIndices.some((index) => imageSources.has(index)) &&
+        shape.left <= presentation.width * 0.02 &&
+        shape.top <= presentation.height * 0.02 &&
+        shape.width >= presentation.width * 0.9 &&
+        shape.height >= presentation.height * 0.9
+    );
     const article = document.createElement("article");
     article.className = `ofv-ppt-binary-slide${hasMasterBackground ? " ofv-ppt-binary-has-master-background" : ""}`;
     article.dataset.slideIndex = String(slideIndex);
@@ -5780,11 +5783,42 @@ async function renderLegacyPowerPoint(panel: HTMLElement, arrayBuffer: ArrayBuff
     const canvas = document.createElement("div");
     canvas.className = "ofv-ppt-binary-canvas";
     const tableCells = findLegacyPowerPointTableCells(slide.shapes);
-    for (const shape of presentation.masterShapes) {
-      renderLegacyPowerPointShape(canvas, shape, presentation, imageSources, true);
+    const tableLines = findLegacyPowerPointTableLines(slide.shapes, tableCells);
+    const masterFillTexts = findLegacyPowerPointFillTexts(masterShapes);
+    const slideFillTexts = findLegacyPowerPointFillTexts(slide.shapes);
+    const masterDarkFillTexts = findLegacyPowerPointDarkFillTexts(masterShapes);
+    const slideDarkFillTexts = findLegacyPowerPointDarkFillTexts(slide.shapes);
+    const masterPictureOverlayTexts = findLegacyPowerPointPictureOverlayTexts(masterShapes);
+    const slidePictureOverlayTexts = findLegacyPowerPointPictureOverlayTexts(slide.shapes);
+    for (const shape of masterShapes) {
+      renderLegacyPowerPointShape(
+        canvas,
+        shape,
+        presentation,
+        slide.masterTextStyles,
+        imageSources,
+        true,
+        false,
+        false,
+        masterFillTexts.has(shape),
+        masterDarkFillTexts.has(shape),
+        masterPictureOverlayTexts.has(shape)
+      );
     }
     for (const shape of slide.shapes) {
-      renderLegacyPowerPointShape(canvas, shape, presentation, imageSources, false, tableCells.has(shape));
+      renderLegacyPowerPointShape(
+        canvas,
+        shape,
+        presentation,
+        slide.masterTextStyles,
+        imageSources,
+        false,
+        tableCells.has(shape),
+        tableLines.has(shape),
+        slideFillTexts.has(shape),
+        slideDarkFillTexts.has(shape),
+        slidePictureOverlayTexts.has(shape)
+      );
     }
     if (!canvas.hasChildNodes()) {
       const empty = document.createElement("p");
@@ -5853,28 +5887,68 @@ function renderLegacyPowerPointShape(
   canvas: HTMLElement,
   shape: LegacyPowerPointShape,
   presentation: LegacyPowerPointPresentation,
+  masterTextStyles: LegacyPowerPointMasterTextStyles,
   imageSources: Map<number, LegacyPresentationImageSource>,
   master: boolean,
-  tableCell = false
+  tableCell = false,
+  tableLine = false,
+  overFill = false,
+  overDarkFill = false,
+  pictureOverlay = false
 ): void {
   const usableImages = shape.imageIndices
     .map((index) => imageSources.get(index))
     .filter((source): source is LegacyPresentationImageSource => Boolean(source));
-  const texts = master ? [] : shape.texts;
-  if (usableImages.length === 0 && texts.length === 0) {
+  const texts = shape.texts;
+  const hasVisualStyle = shape.fillEnabled === true || shape.lineEnabled === true;
+  if (usableImages.length === 0 && texts.length === 0 && !hasVisualStyle) {
     return;
   }
 
   const element = document.createElement("div");
   element.className = `ofv-ppt-binary-shape${master ? " ofv-ppt-binary-master-shape" : ""}`;
-  const left = clampPresentationRatio(shape.left / presentation.width);
-  const top = clampPresentationRatio(shape.top / presentation.height);
-  const width = clampPresentationRatio(shape.width / presentation.width, 0.001);
-  const height = clampPresentationRatio(shape.height / presentation.height, 0.001);
+  const left = clampPresentationRatio(shape.left / presentation.width, -1, 1);
+  const top = clampPresentationRatio(shape.top / presentation.height, -1, 1);
+  const width = clampPresentationRatio(shape.width / presentation.width, 0.001, 2);
+  const height = clampPresentationRatio(shape.height / presentation.height, 0.001, 2);
   element.style.left = `${left * 100}%`;
   element.style.top = `${top * 100}%`;
-  element.style.width = `${Math.min(width, 1 - left) * 100}%`;
-  element.style.height = `${Math.min(height, 1 - top) * 100}%`;
+  element.style.width = `${width * 100}%`;
+  element.style.height = `${height * 100}%`;
+  if (shape.fillEnabled && shape.fillColor) {
+    element.style.backgroundColor = shape.fillColor;
+  }
+  const isLineShape = shape.shapeType === 20;
+  if (shape.lineEnabled && !isLineShape) {
+    element.style.borderStyle = "solid";
+    element.style.borderColor = shape.lineColor || "#000";
+    element.style.borderWidth = `${shape.lineWidth || 0.75}pt`;
+  }
+  if (tableLine) {
+    element.style.borderColor = "#fff";
+  }
+  if (shape.rotation) {
+    element.style.transform = `rotate(${shape.rotation}deg)`;
+  }
+  if (shape.shapeType === 2) {
+    element.classList.add("ofv-ppt-binary-round-rectangle");
+  } else if (shape.shapeType === 3 || shape.shapeType === 120) {
+    element.classList.add("ofv-ppt-binary-ellipse");
+  } else if (shape.shapeType === 4) {
+    element.classList.add("ofv-ppt-binary-diamond");
+  } else if (shape.shapeType === 20) {
+    element.classList.add("ofv-ppt-binary-line-shape");
+  } else if (shape.shapeType === 67) {
+    element.classList.add("ofv-ppt-binary-down-arrow");
+  } else if (shape.shapeType === 176) {
+    element.classList.add("ofv-ppt-binary-round-rectangle");
+  } else if (shape.shapeType === 0 && shape.rotation) {
+    element.classList.add("ofv-ppt-binary-right-arrow");
+  }
+
+  if (isLineShape && shape.lineEnabled) {
+    appendLegacyPowerPointLine(element, shape, tableLine ? "#fff" : shape.lineColor || "#000");
+  }
 
   for (const source of usableImages) {
     const image = document.createElement("img");
@@ -5882,31 +5956,278 @@ function renderLegacyPowerPointShape(
     image.src = source.src;
     image.alt = "";
     image.draggable = false;
+    applyLegacyPowerPointImageCrop(image, shape);
     element.append(image);
   }
 
   if (texts.length > 0) {
     const text = document.createElement("div");
-    const textKind = isLegacyPowerPointTitle(shape, presentation)
-      ? " ofv-ppt-binary-title"
-      : tableCell
-        ? " ofv-ppt-binary-table-cell"
-        : isLegacyPowerPointBody(shape, presentation)
-          ? " ofv-ppt-binary-body-text"
-          : "";
-    text.className = `ofv-ppt-binary-text${textKind}`;
-    text.textContent = texts.join("\n");
+    const filledText = (shape.fillEnabled && shape.fillColor) || overFill ? " ofv-ppt-binary-filled-text" : "";
+    const sectionNumber = isLegacyPowerPointSectionNumber(shape, presentation)
+      ? " ofv-ppt-binary-section-number"
+      : "";
+    const sectionHeading = isLegacyPowerPointSectionHeading(shape, presentation)
+      ? " ofv-ppt-binary-section-heading"
+      : "";
+    const pictureOverlayText = pictureOverlay ? " ofv-ppt-binary-picture-overlay-text" : "";
+    const textKind = master
+      ? ""
+      : isLegacyPowerPointTitle(shape, presentation)
+        ? " ofv-ppt-binary-title"
+        : tableCell
+          ? " ofv-ppt-binary-table-cell"
+          : isLegacyPowerPointBody(shape, presentation)
+            ? " ofv-ppt-binary-body-text"
+            : "";
+    text.className = `ofv-ppt-binary-text${textKind}${filledText}${sectionNumber}${sectionHeading}${pictureOverlayText}`;
+    if (!filledText && !sectionNumber && !pictureOverlayText && !tableCell && !shape.verticalText) {
+      text.classList.add("ofv-ppt-binary-plain-text");
+    }
+    if (shape.verticalText) {
+      text.classList.add("ofv-ppt-binary-vertical-text");
+      element.classList.add("ofv-ppt-binary-vertical-text-shape");
+    }
+    if (overDarkFill || (shape.fillColor && hasDarkPresentationFill(shape.fillColor))) {
+      text.style.color = "#fff";
+    }
+    const formattedTexts = shape.formattedTexts || [];
+    const binaryStyled = formattedTexts.some(
+      (block) =>
+        block.characterRuns.some((run) =>
+          run.bold !== undefined ||
+          run.italic !== undefined ||
+          run.underline !== undefined ||
+          run.fontSize !== undefined ||
+          run.color !== undefined ||
+          run.fontRef !== undefined
+        ) || block.paragraphRuns.some((run) => run.alignment !== undefined || run.lineSpacing !== undefined)
+    );
+    if (binaryStyled) {
+      text.classList.add("ofv-ppt-binary-styled-text");
+      if (texts.every((value) => !/[\r\n]/.test(value)) && texts.join("").length <= 16) {
+        element.classList.add("ofv-ppt-binary-short-text-shape");
+        if (texts.join("") !== "Contents Page" && !filledText) {
+          element.classList.add("ofv-ppt-binary-nowrap-short-text-shape");
+        }
+      }
+      if (textKind.includes("ofv-ppt-binary-title") && !/[\r\n]/.test(texts.join("")) && texts.join("").length > 16) {
+        element.classList.add("ofv-ppt-binary-nowrap-title-shape");
+      }
+      renderLegacyPowerPointFormattedText(
+        text,
+        formattedTexts,
+        presentation.fonts,
+        masterTextStyles[shape.textType ?? 4] || []
+      );
+    } else {
+      text.textContent = texts.join("\n");
+    }
     element.append(text);
   }
   canvas.append(element);
 }
 
+function appendLegacyPowerPointLine(
+  target: HTMLElement,
+  shape: LegacyPowerPointShape,
+  color: string
+): void {
+  const namespace = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(namespace, "svg");
+  svg.classList.add("ofv-ppt-binary-line-svg");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  svg.setAttribute("preserveAspectRatio", "none");
+  const line = document.createElementNS(namespace, "line");
+  line.setAttribute("x1", shape.flipHorizontal ? "100" : "0");
+  line.setAttribute("y1", shape.flipVertical ? "100" : "0");
+  line.setAttribute("x2", shape.flipHorizontal ? "0" : "100");
+  line.setAttribute("y2", shape.flipVertical ? "0" : "100");
+  line.setAttribute("vector-effect", "non-scaling-stroke");
+  line.style.stroke = color;
+  line.style.strokeWidth = `${(shape.lineWidth || 0.75) / 7.2}cqw`;
+  svg.append(line);
+  target.append(svg);
+}
+
+function applyLegacyPowerPointImageCrop(image: HTMLImageElement, shape: LegacyPowerPointShape): void {
+  const top = shape.imageCropTop || 0;
+  const bottom = shape.imageCropBottom || 0;
+  const left = shape.imageCropLeft || 0;
+  const right = shape.imageCropRight || 0;
+  if (top === 0 && bottom === 0 && left === 0 && right === 0) return;
+  const visibleWidth = Math.max(0.01, 1 - left - right);
+  const visibleHeight = Math.max(0.01, 1 - top - bottom);
+  image.style.position = "absolute";
+  image.style.maxWidth = "none";
+  image.style.width = `${100 / visibleWidth}%`;
+  image.style.height = `${100 / visibleHeight}%`;
+  image.style.left = `${(-left / visibleWidth) * 100}%`;
+  image.style.top = `${(-top / visibleHeight) * 100}%`;
+}
+
+function renderLegacyPowerPointFormattedText(
+  target: HTMLElement,
+  blocks: NonNullable<LegacyPowerPointShape["formattedTexts"]>,
+  fonts: string[],
+  masterStyles: LegacyPowerPointCharacterStyle[]
+): void {
+  for (const [blockIndex, block] of blocks.entries()) {
+    if (blockIndex > 0) target.append(document.createTextNode("\n"));
+    const firstParagraph = block.paragraphRuns[0];
+    if (firstParagraph?.alignment) target.style.textAlign = firstParagraph.alignment;
+    if (firstParagraph?.lineSpacing) {
+      // PowerPoint percentages are relative to its normal line box, which is
+      // approximately 1.2 times the font size. CSS unitless line-height is
+      // relative to the font size itself, so preserve that extra baseline.
+      target.style.lineHeight = String(firstParagraph.lineSpacing * 1.2);
+    }
+
+    let cursor = 0;
+    for (const run of block.characterRuns) {
+      const paragraph = block.paragraphRuns.find(
+        (candidate) => run.start >= candidate.start && run.start < candidate.start + Math.max(1, candidate.length)
+      );
+      const inherited = masterStyles[paragraph?.indentLevel || 0] || masterStyles[0] || {};
+      const effective = { ...inherited, ...run };
+      const start = Math.max(cursor, Math.min(block.text.length, run.start));
+      if (start > cursor) target.append(document.createTextNode(block.text.slice(cursor, start)));
+      const end = Math.max(start, Math.min(block.text.length, run.start + run.length));
+      if (end > start) {
+        const span = document.createElement("span");
+        span.textContent = block.text.slice(start, end);
+        if (effective.bold !== undefined) span.style.fontWeight = effective.bold ? "700" : "400";
+        if (effective.italic !== undefined) span.style.fontStyle = effective.italic ? "italic" : "normal";
+        if (effective.underline !== undefined) {
+          span.style.textDecoration = effective.underline ? "underline" : "none";
+        }
+        if (effective.fontSize !== undefined && effective.fontSize > 0) {
+          // A legacy slide uses 1/8-point master units. Expressing point sizes
+          // relative to the 720-point-wide slide keeps text scaled with the
+          // responsive canvas instead of pinning it to CSS physical points.
+          span.style.fontSize = `${effective.fontSize / 7.2}cqw`;
+        }
+        if (effective.color) span.style.color = effective.color;
+        const fontFamily = effective.fontRef === undefined ? undefined : fonts[effective.fontRef];
+        if (fontFamily) span.style.fontFamily = `"${fontFamily.replaceAll('"', '\\"')}", sans-serif`;
+        target.append(span);
+      }
+      cursor = Math.max(cursor, end);
+    }
+    if (cursor < block.text.length) target.append(document.createTextNode(block.text.slice(cursor)));
+  }
+}
+
 function isLegacyPowerPointTitle(shape: LegacyPowerPointShape, presentation: LegacyPowerPointPresentation): boolean {
-  return shape.top < presentation.height * 0.18 && shape.height < presentation.height * 0.24;
+  const shortSingleLineText = shape.texts.length === 1 && !shape.texts[0].includes("\n") && shape.texts[0].length <= 32;
+  return (
+    shape.textType === 0 ||
+    shape.textType === 6 ||
+    (shortSingleLineText && shape.width >= presentation.width * 0.6 && shape.height <= presentation.height * 0.18)
+  );
+}
+
+function isLegacyPowerPointSectionNumber(
+  shape: LegacyPowerPointShape,
+  presentation: LegacyPowerPointPresentation
+): boolean {
+  return (
+    shape.texts.length === 1 &&
+    /^[1-9一二三四五六七八九十]$/.test(shape.texts[0]) &&
+    shape.width <= presentation.width * 0.1 &&
+    shape.height <= presentation.height * 0.11 &&
+    shape.width / Math.max(1, shape.height) >= 0.65 &&
+    shape.width / Math.max(1, shape.height) <= 1.55
+  );
+}
+
+function isLegacyPowerPointSectionHeading(
+  shape: LegacyPowerPointShape,
+  presentation: LegacyPowerPointPresentation
+): boolean {
+  const shortSingleLineText = shape.texts.length === 1 && !shape.texts[0].includes("\n") && shape.texts[0].length <= 28;
+  const nearTopLeft = shape.top < presentation.height * 0.12 && shape.left < presentation.width * 0.2;
+  const sectionPageTitle =
+    shape.top >= presentation.height * 0.15 &&
+    shape.top < presentation.height * 0.3 &&
+    shape.left >= presentation.width * 0.2 &&
+    shape.left < presentation.width * 0.4 &&
+    shape.width >= presentation.width * 0.5;
+  return shortSingleLineText && shape.width >= presentation.width * 0.2 && (nearTopLeft || sectionPageTitle);
+}
+
+function hasDarkPresentationFill(color: string): boolean {
+  const match = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(color);
+  if (!match) return false;
+  const [red, green, blue] = match.slice(1).map((channel) => Number.parseInt(channel, 16));
+  return red * 0.299 + green * 0.587 + blue * 0.114 < 145;
+}
+
+function findLegacyPowerPointDarkFillTexts(shapes: LegacyPowerPointShape[]): Set<LegacyPowerPointShape> {
+  const darkVisuals = shapes.filter(
+    (shape) => shape.fillEnabled && shape.fillColor && hasDarkPresentationFill(shape.fillColor) && shape.texts.length === 0
+  );
+  const pictureOverlayTexts = findLegacyPowerPointPictureOverlayTexts(shapes);
+  return new Set(
+    shapes.filter((shape) => {
+      if (shape.texts.length === 0 || (shape.fillEnabled && shape.fillColor)) return false;
+      const centerX = shape.left + shape.width / 2;
+      const centerY = shape.top + shape.height / 2;
+      return (
+        darkVisuals.some((visual) => containsPresentationPoint(visual, centerX, centerY)) || pictureOverlayTexts.has(shape)
+      );
+    })
+  );
+}
+
+function findLegacyPowerPointFillTexts(shapes: LegacyPowerPointShape[]): Set<LegacyPowerPointShape> {
+  const visuals = shapes.filter((shape) => shape.fillEnabled && shape.fillColor && shape.texts.length === 0);
+  const pictureOverlayTexts = findLegacyPowerPointPictureOverlayTexts(shapes);
+  return new Set(
+    shapes.filter((shape) => {
+      if (shape.texts.length === 0 || (shape.fillEnabled && shape.fillColor)) return false;
+      const centerX = shape.left + shape.width / 2;
+      const centerY = shape.top + shape.height / 2;
+      return (
+        visuals.some((visual) => containsPresentationPoint(visual, centerX, centerY)) || pictureOverlayTexts.has(shape)
+      );
+    })
+  );
+}
+
+function containsPresentationPoint(shape: LegacyPowerPointShape, x: number, y: number): boolean {
+  return x >= shape.left && x <= shape.left + shape.width && y >= shape.top && y <= shape.top + shape.height;
+}
+
+function findLegacyPowerPointPictureOverlayTexts(shapes: LegacyPowerPointShape[]): Set<LegacyPowerPointShape> {
+  const pictures = shapes.filter((shape) => shape.shapeType === 75 && shape.texts.length === 0);
+  return new Set(
+    shapes.filter((shape) => {
+      const centerX = shape.left + shape.width / 2;
+      const centerY = shape.top + shape.height / 2;
+      return isLongPictureOverlayText(shape, pictures, centerX, centerY);
+    })
+  );
+}
+
+function isLongPictureOverlayText(
+  shape: LegacyPowerPointShape,
+  pictures: LegacyPowerPointShape[],
+  centerX: number,
+  centerY: number
+): boolean {
+  return (
+    shape.texts.join("").length > 32 &&
+    shape.width >= 3000 &&
+    shape.height <= 700 &&
+    pictures.some((picture) => containsPresentationPoint(picture, centerX, centerY))
+  );
 }
 
 function isLegacyPowerPointBody(shape: LegacyPowerPointShape, presentation: LegacyPowerPointPresentation): boolean {
-  return shape.top < presentation.height * 0.24 && shape.height > presentation.height * 0.45;
+  return (
+    [1, 5, 7, 8].includes(shape.textType ?? -1) ||
+    (shape.top < presentation.height * 0.24 && shape.height > presentation.height * 0.45)
+  );
 }
 
 function findLegacyPowerPointTableCells(shapes: LegacyPowerPointShape[]): Set<LegacyPowerPointShape> {
@@ -5929,8 +6250,32 @@ function findLegacyPowerPointTableCells(shapes: LegacyPowerPointShape[]): Set<Le
   return cells;
 }
 
-function clampPresentationRatio(value: number, minimum = 0): number {
-  return Number.isFinite(value) ? Math.min(1, Math.max(minimum, value)) : minimum;
+function findLegacyPowerPointTableLines(
+  shapes: LegacyPowerPointShape[],
+  cells: Set<LegacyPowerPointShape>
+): Set<LegacyPowerPointShape> {
+  if (cells.size < 8) return new Set();
+  const cellList = [...cells];
+  const left = Math.min(...cellList.map((shape) => shape.left));
+  const top = Math.min(...cellList.map((shape) => shape.top));
+  const right = Math.max(...cellList.map((shape) => shape.left + shape.width));
+  const bottom = Math.max(...cellList.map((shape) => shape.top + shape.height));
+  const tolerance = 24;
+  return new Set(
+    shapes.filter(
+      (shape) =>
+        shape.shapeType === 20 &&
+        shape.texts.length === 0 &&
+        shape.left + shape.width >= left - tolerance &&
+        shape.left <= right + tolerance &&
+        shape.top + shape.height >= top - tolerance &&
+        shape.top <= bottom + tolerance
+    )
+  );
+}
+
+function clampPresentationRatio(value: number, minimum = 0, maximum = 1): number {
+  return Number.isFinite(value) ? Math.min(maximum, Math.max(minimum, value)) : minimum;
 }
 
 function toStandaloneArrayBuffer(bytes: Uint8Array): ArrayBuffer {
