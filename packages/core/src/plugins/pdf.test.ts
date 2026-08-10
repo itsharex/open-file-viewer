@@ -43,6 +43,35 @@ describe("pdfPlugin", () => {
     viewer.destroy();
   });
 
+  it("renders PDF pages at a sharp backing resolution on 1x displays", async () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    vi.stubGlobal("devicePixelRatio", 1);
+
+    const container = createSizedContainer();
+    const pdfjs = createPdfJsMock();
+    const page = pdfjs.__page;
+    const viewer = createViewer({
+      container,
+      file: new Blob(["pdf"], { type: "application/pdf" }),
+      fileName: "image-heavy.pdf",
+      plugins: [pdfPlugin({ pdfjs })]
+    });
+
+    await waitFor(() => container.querySelectorAll("canvas.ofv-pdf-page").length === 2);
+
+    const canvas = container.querySelector<HTMLCanvasElement>("canvas.ofv-pdf-page");
+    expect(canvas?.style.width).toBe("20px");
+    expect(canvas?.width).toBe(40);
+    expect(canvas?.height).toBe(60);
+    expect(page.render).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transform: [2, 0, 0, 2, 0, 0]
+      })
+    );
+
+    viewer.destroy();
+  });
+
   it("eagerly renders first pages when IntersectionObserver does not fire", async () => {
     class IdleIntersectionObserver {
       observe = vi.fn();

@@ -621,7 +621,10 @@ function getPdfOutputScale(): number {
   if (typeof window === "undefined") {
     return 1;
   }
-  return Math.max(1, Math.min(window.devicePixelRatio || 1, 2.5));
+  // A 1x backing canvas loses the small labels inside raster-heavy PDFs after
+  // fit-to-container scaling. Keep two backing pixels per CSS pixel even on
+  // standard-density displays, while retaining the existing memory cap.
+  return Math.max(2, Math.min(window.devicePixelRatio || 1, 2.5));
 }
 
 function getPdfAvailableWidth(width: number): number {
