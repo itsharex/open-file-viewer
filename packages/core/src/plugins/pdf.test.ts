@@ -475,6 +475,7 @@ describe("pdfPlugin", () => {
     expect(container.textContent).not.toContain("PDF 预览失败");
     expect(container.textContent).not.toContain("作为 HTML 预览");
     expect(iframe?.src).toBe("https://example.com/report.pdf");
+    expect(iframe?.hasAttribute("referrerpolicy")).toBe(false);
     expect(iframe?.getAttribute("sandbox")).not.toContain("allow-scripts");
 
     viewer.destroy();

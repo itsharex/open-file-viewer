@@ -837,7 +837,6 @@ function createPdfWebFallback(fileName: string, url: string): HTMLElement {
   iframe.className = "ofv-pdf-web-fallback-frame";
   iframe.src = url;
   iframe.title = `${fileName} HTML preview`;
-  iframe.referrerPolicy = "no-referrer";
   iframe.setAttribute("sandbox", "allow-forms allow-popups allow-presentation allow-same-origin");
 
   fallback.append(iframe);
