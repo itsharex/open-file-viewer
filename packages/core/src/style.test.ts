@@ -151,7 +151,11 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-pdf")).toContain("overflow-y: scroll");
     expect(rule(".ofv-pdf")).toContain("min-height: 0");
     expect(rule(".ofv-pdf")).not.toContain("min-height: 100%");
+    expect(rule(".ofv-pdf-page")).toContain("margin: 0");
+    expect(rule(".ofv-pdf-page")).not.toContain("margin: 0 auto 16px");
     expect(rule(".ofv-pdf-page-wrapper")).toContain("overflow: hidden");
+    expect(rule(".ofv-pdf-page-wrapper")).toContain("outline: 1px solid var(--ofv-border)");
+    expect(rule(".ofv-pdf-page-wrapper")).not.toContain("border: 1px solid var(--ofv-border)");
     expect(rule(".ofv-pdf-page-wrapper")).not.toContain("max-width: 100%");
     expect(rule(".ofv-pdf-text-layer")).toContain("text-size-adjust: none");
     expect(rule(".ofv-pdf-text-layer span")).toContain("line-height: 1");
