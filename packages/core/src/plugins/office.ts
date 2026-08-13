@@ -4,7 +4,15 @@ import * as docxPreview from "docx-preview";
 import type { WorkBook } from "xlsx";
 import { formatPreviewMessage } from "../messages";
 import type { PreviewCommand, PreviewContext, PreviewFit, PreviewInstance, PreviewMessages, PreviewPlugin } from "../types";
-import { createPanel, createSection, decodeTextBuffer, getInitialZoom, readArrayBuffer, resolveFormat } from "./utils";
+import {
+  createPanel,
+  createSection,
+  decodeTextBuffer,
+  getInitialZoom,
+  goToRenderedPage,
+  readArrayBuffer,
+  resolveFormat
+} from "./utils";
 import { renderPdfDocumentPreview, type PdfPluginOptions } from "./pdf";
 import { parseLegacyWordDocument, renderLegacyWordDocument } from "./msdoc";
 import {
@@ -178,6 +186,7 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
       const extension = resolveFormat(ctx.file, officeMimeFormatMap);
       const arrayBuffer = await readArrayBuffer(ctx.file);
       const packageFormat = shouldSniffPackagedOffice(extension) ? await detectPackagedOfficeFormat(arrayBuffer) : undefined;
+      const wordHtml = packageFormat ? undefined : detectWordHtmlDocument(extension, arrayBuffer);
       let disposeDocxFit: (() => void) | undefined;
       let disposeLegacyPresentation: (() => void) | undefined;
       let delegatedInstance: PreviewInstance | undefined;
@@ -185,6 +194,8 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
       const conversionContext = await createOfficeConversionContext(ctx, arrayBuffer, extension, packageFormat);
       if (conversionContext && (await shouldUseOfficeConversion(options, conversionContext))) {
         delegatedInstance = await renderConvertedOfficePreview(panel, ctx, options, conversionContext);
+      } else if (wordHtml) {
+        renderWordHtmlDocument(panel, wordHtml);
       } else if (packageFormat === "docx" && !fileIsDocx(extension)) {
         disposeDocxFit = await renderDocx(panel, arrayBuffer, ctx.options.fit);
       } else if (packageFormat === "xlsx" && !sheetExtensions.has(extension)) {
@@ -238,6 +249,17 @@ export function officePlugin(options: OfficePluginOptions = {}): PreviewPlugin {
       ctx.toolbar?.refreshCommandSupport();
 
       return {
+        goToPage(page) {
+          return (
+            delegatedInstance?.goToPage?.(page) ||
+            goToRenderedPage(
+              panel,
+              ".ofv-docx-page-frame, .ofv-docx-textbox-page, .ofv-msdoc-page, .ofv-slide, .ofv-ppt-binary-slide",
+              page,
+              panel
+            )
+          );
+        },
         canCommand(command) {
           return delegatedInstance?.canCommand?.(command) || controller?.canCommand(command) || false;
         },
@@ -536,6 +558,29 @@ async function detectPackagedOfficeFormat(arrayBuffer: ArrayBuffer): Promise<"do
     return undefined;
   }
   return undefined;
+}
+
+function detectWordHtmlDocument(extension: string, arrayBuffer: ArrayBuffer): string | undefined {
+  if (extension !== "doc" && extension !== "dot") {
+    return undefined;
+  }
+  if (hasOleSignature(arrayBuffer)) {
+    return undefined;
+  }
+  const html = decodeTextBuffer(arrayBuffer).replace(/^\uFEFF/, "");
+  return /^\s*(?:<!doctype\s+html[^>]*>\s*)?<html(?:\s|>)/i.test(html) && /<body(?:\s|>)/i.test(html) ? html : undefined;
+}
+
+function renderWordHtmlDocument(panel: HTMLElement, html: string): void {
+  panel.classList.add("ofv-office-word-html");
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  const section = createSection("Word HTML 文档");
+  hideSuccessfulSectionHeading(section);
+  const content = document.createElement("article");
+  content.className = "ofv-document ofv-word-html-document";
+  content.innerHTML = sanitizeHtml(parsed.body.innerHTML || "<p>未解析到可展示内容。</p>");
+  section.append(content);
+  panel.append(section);
 }
 
 async function renderDocx(panel: HTMLElement, arrayBuffer: ArrayBuffer, fit: PreviewFit): Promise<() => void> {
@@ -2699,8 +2744,11 @@ function readWorkbookCellStyleIndex(
   xfElements.forEach((xfElement, index) => {
     const fontId = parseOptionalInteger(xfElement.getAttribute("fontId"));
     const font = fontId === undefined ? undefined : fonts.get(fontId);
-    if (font) {
-      result.set(index, { font });
+    const alignment = firstDirectOfficeChild(xfElement, "alignment");
+    const wrapTextValue = alignment?.getAttribute("wrapText")?.toLowerCase();
+    const wrapText = wrapTextValue === "1" || wrapTextValue === "true";
+    if (font || wrapText) {
+      result.set(index, { font, wrapText: wrapText || undefined });
     }
   });
   return result;
@@ -3777,6 +3825,7 @@ type WorkbookRichTextRun = {
 
 type WorkbookCellStyleMetadata = {
   font?: WorkbookCellFontStyle;
+  wrapText?: boolean;
 };
 
 type WorkbookCellFontStyle = {
@@ -4283,7 +4332,8 @@ function applyWorkbookCellStyle(
 ): void {
   const style = sourceCell?.s;
   const sourceFont = sourceStyleMetadata?.font || style?.font;
-  if (!style && !sourceFont) {
+  const wrapText = sourceStyleMetadata?.wrapText || Boolean(style?.alignment?.wrapText);
+  if (!style && !sourceFont && !wrapText) {
     return;
   }
 
@@ -4322,9 +4372,9 @@ function applyWorkbookCellStyle(
     if (vertical) {
       cell.style.verticalAlign = vertical;
     }
-    if (alignment.wrapText) {
-      cell.classList.add("ofv-cell-multiline");
-    }
+  }
+  if (wrapText) {
+    cell.classList.add("ofv-cell-multiline");
   }
 }
 

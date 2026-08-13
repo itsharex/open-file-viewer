@@ -52,6 +52,10 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-docx-document")).toContain("overflow-x: auto");
     expect(rule(".ofv-docx-document")).toContain("overflow-y: hidden");
     expect(rule(".ofv-office-docx")).toContain("overflow: visible");
+    expect(rule(".ofv-word-html-document")).toContain("width: min(100%, 794px)");
+    expect(rule(".ofv-word-html-document")).toContain("min-height: 1123px");
+    expect(rule(".ofv-word-html-document")).toContain("background: #fff");
+    expect(rule(".ofv-word-html-document p")).toContain("margin: 0");
     expect(docxWrapper).toContain("width: 100%");
     expect(docxWrapper).toContain("max-width: 100%");
     expect(docxWrapper).toContain("overflow: hidden");
@@ -145,6 +149,8 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-markdown-body table")).toContain("max-width: 100%");
     expect(rule(".ofv-pdf")).toContain("overflow-x: auto");
     expect(rule(".ofv-pdf")).toContain("overflow-y: scroll");
+    expect(rule(".ofv-pdf")).toContain("min-height: 0");
+    expect(rule(".ofv-pdf")).not.toContain("min-height: 100%");
     expect(rule(".ofv-pdf-page-wrapper")).toContain("overflow: hidden");
     expect(rule(".ofv-pdf-page-wrapper")).not.toContain("max-width: 100%");
     expect(rule(".ofv-pdf-text-layer")).toContain("text-size-adjust: none");
@@ -184,7 +190,7 @@ describe("core responsive styles", () => {
     expect(rule(".ofv-workbook-table td,\n.ofv-workbook-table th")).toContain("padding: 2px 2px 2px 3px");
     expect(rule(".ofv-workbook-table td,\n.ofv-workbook-table th")).toContain("line-height: 1.25");
     expect(rule(".ofv-cell-number")).toContain("text-align: right");
-    expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("white-space: normal");
+    expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("white-space: nowrap");
     expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("overflow-wrap: normal");
     expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("overflow: hidden");
     expect(rule(".ofv-table-scroll td,\n.ofv-table-scroll th")).toContain("text-overflow: clip");

@@ -490,6 +490,7 @@ describe("assetPlugin", () => {
     expect(container.querySelector(".ofv-data-preview")).toBeNull();
     expect(container.querySelector(".ofv-asset-summary")).toBeNull();
     expect(container.querySelector(".ofv-asset-hex")).toBeNull();
+    expect(viewer.goToPage(1)).toBe(true);
 
     viewer.destroy();
   });

@@ -776,7 +776,7 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: 100%;
+  min-height: 0;
   padding: 16px;
   overflow-x: auto;
   /* Always reserve the vertical scrollbar so the layout width stays stable
@@ -1008,6 +1008,21 @@
 .ofv-document img {
   max-width: 100%;
   height: auto;
+}
+
+.ofv-word-html-document {
+  box-sizing: border-box;
+  width: min(100%, 794px);
+  min-height: 1123px;
+  margin: 0 auto;
+  padding: clamp(32px, 9vw, 96px) clamp(24px, 11vw, 120px);
+  overflow-wrap: normal;
+  background: #fff;
+  color: #000;
+}
+
+.ofv-word-html-document p {
+  margin: 0;
 }
 
 .ofv-document-extra {
@@ -2296,7 +2311,7 @@
   position: relative;
   border: 1px solid var(--ofv-border);
   padding: 5px 10px 5px 8px;
-  white-space: normal;
+  white-space: nowrap;
   overflow: hidden;
   overflow-wrap: normal;
   word-break: normal;

@@ -71,6 +71,7 @@ export function createViewer(options: PreviewOptions): FileViewer {
       getLength: () => queue.length,
       next: () => goTo(currentIndex + 1),
       previous: () => goTo(currentIndex - 1),
+      goToPage: (page) => currentInstance?.goToPage?.(page) ?? false,
       command: (command) => currentInstance?.command?.(command),
       print: async () => {
         if (printPreparationPending) {
@@ -104,6 +105,7 @@ export function createViewer(options: PreviewOptions): FileViewer {
   const normalizedOptions = {
     ...options,
     fit: options.fit || "contain",
+    fitWasProvided: options.fit !== undefined,
     fallback: options.fallback || "inline",
     zoom: normalizeInitialZoom(options.zoom),
     messages: resolveMessages(options)
@@ -174,6 +176,9 @@ export function createViewer(options: PreviewOptions): FileViewer {
         renderAbortController = undefined;
       }
       currentInstance = nextInstance;
+      if (normalizedOptions.initialPage !== undefined) {
+        nextInstance.goToPage?.(normalizedOptions.initialPage);
+      }
       setLoading(false);
       toolbar?.setCommandSupport((command) =>
         Boolean(nextInstance.command) && (nextInstance.canCommand ? nextInstance.canCommand(command) : true)
@@ -227,6 +232,9 @@ export function createViewer(options: PreviewOptions): FileViewer {
       await goTo(currentIndex - 1);
     },
     goTo,
+    goToPage(page) {
+      return destroyed ? false : currentInstance?.goToPage?.(page) ?? false;
+    },
     getCurrentIndex() {
       return currentIndex;
     },
@@ -397,6 +405,7 @@ function createToolbar(
     getLength: () => number;
     next: () => void | Promise<void>;
     previous: () => void | Promise<void>;
+    goToPage: (page: number) => boolean;
     command: (command: PreviewCommand) => void | boolean | undefined;
     print: () => void | Promise<void>;
   },
@@ -822,6 +831,7 @@ function createToolbarContext({
   queue: {
     next: () => void | Promise<void>;
     previous: () => void | Promise<void>;
+    goToPage: (page: number) => boolean;
     command: (command: PreviewCommand) => void | boolean | undefined;
     print: () => void | Promise<void>;
   };
@@ -850,6 +860,7 @@ function createToolbarContext({
     async next() {
       await queue.next();
     },
+    goToPage: queue.goToPage,
     command: queue.command,
     canCommand,
     refreshCommandSupport,

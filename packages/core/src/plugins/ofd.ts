@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import { createObjectUrl, revokeObjectUrl } from "../dom";
 import type { PreviewFile, PreviewPlugin } from "../types";
-import { createPanel, readArrayBuffer } from "./utils";
+import { createPanel, goToRenderedPage, readArrayBuffer } from "./utils";
 import { createEncryptedFallback, isEncryptedError } from "./encrypted";
 
 export function ofdPlugin(): PreviewPlugin {
@@ -106,6 +106,9 @@ export function ofdPlugin(): PreviewPlugin {
       }
 
       return {
+        goToPage(page) {
+          return goToRenderedPage(panel, ".ofv-ofd-page", page, panel);
+        },
         canCommand(command) {
           return (
             pages.length > 0 &&
@@ -1104,6 +1107,9 @@ function parseOfdDeltaX(value: string | null): number[] | undefined {
 
 function fontStackForOfdFont(fontName: string | undefined): string {
   const normalized = (fontName || "").trim().toLowerCase();
+  if (normalized.includes("times")) {
+    return '"Times New Roman", Times, "Songti SC", STSong, serif';
+  }
   if (normalized.includes("courier")) {
     return '"Courier New", Courier, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
   }

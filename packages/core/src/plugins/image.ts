@@ -1,7 +1,7 @@
 /// <reference path="../shims-heic.d.ts" />
 import { createObjectUrl, revokeObjectUrl } from "../dom";
 import type { PreviewContext, PreviewPlugin, PreviewSize } from "../types";
-import { getInitialZoom } from "./utils";
+import { getInitialZoom, goToRenderedPage } from "./utils";
 
 const imageExtensions = new Set([
   "jpg",
@@ -346,6 +346,9 @@ export function imagePlugin(): PreviewPlugin {
       updateTransform();
 
       return {
+        goToPage(page) {
+          return goToRenderedPage(stage, ".ofv-tiff-page", page, stage);
+        },
         canCommand(command) {
           return (
             previewAvailable &&

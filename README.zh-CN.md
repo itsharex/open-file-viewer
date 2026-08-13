@@ -205,6 +205,25 @@ pdfPlugin({
 `pdfjs-dist/legacy/build/pdf.worker.min.mjs`。确认只面向现代 Chrome、Edge 时，也可以设置
 `compatibilityMode: "modern"`。
 
+### 远程 PDF fallback 的跨浏览器兼容
+
+当 PDF.js 无法解析或加载远程 PDF URL 时，PDF 插件会使用浏览器内置的 PDF 阅读器作为
+iframe fallback。不同 Chromium 浏览器对沙箱 iframe 内置阅读器的脚本权限要求并不完全一致，
+因此 `webFallbackScripts` 默认使用 `"auto"`：
+
+- 跨域 PDF URL 会在保留 sandbox 的同时加入 `allow-scripts`，兼容 Edge、360 等内置阅读器；
+- 同源 URL 默认仍禁止脚本，避免同时开放脚本执行和同源权限。
+
+业务方可以收紧策略，或只在完全可信的同源 PDF 服务中主动放开：
+
+```ts
+pdfPlugin({ webFallbackScripts: "never" });  // 始终使用严格沙箱
+pdfPlugin({ webFallbackScripts: "always" }); // 仅用于可信 PDF 地址
+```
+
+该配置只影响远程 iframe fallback，不改变正常 PDF.js 渲染，也不会强制设置
+`referrerpolicy`。
+
 ### qiankun / micro-app 子应用中 Office 预览一直加载
 
 在 qiankun、micro-app 等微前端沙箱里，jszip 依赖的 `setImmediate` polyfill 基于
@@ -577,12 +596,13 @@ createViewer(options: PreviewOptions): FileViewer;
 | `file` | `File \| Blob \| string \| ArrayBuffer` | - | 单文件预览源 |
 | `files` | `(PreviewSource \| PreviewItem)[]` | - | 多文件预览队列 |
 | `initialIndex` | `number` | `0` | 初始文件索引 |
+| `initialPage` | `number` | `1` | 分页预览的初始页码，从 1 开始 |
 | `fileName` | `string` | 自动推断 | 文件名，用于扩展名识别 |
 | `mimeType` | `string` | 自动推断 | MIME 类型 |
 | `width` | `number \| string` | 容器原始宽度 | 预览容器宽度 |
 | `height` | `number \| string` | 容器原始高度 | 预览容器高度 |
 | `zoom` | `number` | `1` | 初始缩放比例，`1` 表示 100% |
-| `fit` | `contain \| cover \| width \| height \| actual \| scale-down` | `contain` | 内容适配方式 |
+| `fit` | `contain \| cover \| width \| height \| actual \| scale-down` | `contain` | 内容适配方式。直接预览 PDF 且未传该参数时，连续阅读器默认按 `width` 适宽；显式传 `contain` 时仍同时适配宽高。 |
 | `plugins` | `PreviewPlugin[]` | `[]` | 插件列表，按顺序匹配 |
 | `fallback` | `inline \| download \| custom` | `inline` | 不支持时的兜底策略 |
 | `locale` | `zh-CN \| en-US` | `en-US` | 内置状态、fallback、工具栏及插件文案语言 |
@@ -725,7 +745,7 @@ createViewer({
 });
 ```
 
-`render(ctx)` 的上下文包含 `file`、`index`、`length`、`previous()`、`next()`、`command()`、`download()`、`fullscreen()`、`print()`、`search()` 和 `clearSearch()`。
+`render(ctx)` 的上下文包含 `file`、`index`、`length`、`previous()`、`next()`、`goToPage(page)`、`command()`、`download()`、`fullscreen()`、`print()`、`search()` 和 `clearSearch()`。
 
 ### React 自定义工具栏
 
@@ -784,6 +804,7 @@ createViewer({
 | `reload(file?)` | 重新加载当前文件或指定文件 |
 | `next()` / `previous()` | 多文件队列切换 |
 | `goTo(index)` | 跳转到指定文件 |
+| `goToPage(page)` | 跳转到 PDF、DOCX、OFD、XPS、TIFF 等分页预览的指定页码（从 1 开始） |
 | `getCurrentIndex()` | 获取当前索引 |
 | `resize()` | 主动触发尺寸重算 |
 | `destroy()` | 销毁预览器并清理资源 |

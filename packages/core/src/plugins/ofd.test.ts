@@ -86,13 +86,14 @@ describe("ofdPlugin", () => {
     const container = document.createElement("div");
     document.body.append(container);
 
-    createViewer({ container, file: buffer, fileName: "ordered.ofd", plugins: [ofdPlugin()] });
+    const viewer = createViewer({ container, file: buffer, fileName: "ordered.ofd", plugins: [ofdPlugin()] });
 
     await waitFor(() => container.querySelectorAll(".ofv-ofd-page").length === 3);
     const pages = container.querySelectorAll(".ofv-ofd-page");
     expect(pages[0]?.textContent).toContain("第一页");
     expect(pages[1]?.querySelector("text")).toBeNull();
     expect(pages[2]?.textContent).toContain("第三页");
+    expect(viewer.goToPage(3)).toBe(true);
   });
 
   it("renders lightweight OFD vector layout with paths, lines, images and text styles", async () => {
@@ -397,6 +398,7 @@ describe("ofdPlugin", () => {
           <ofd:Font ID="2" FontName="楷体" FamilyName="楷体"/>
           <ofd:Font ID="5" FontName="Courier New" FamilyName="Courier New"/>
           <ofd:Font ID="6" FontName="宋体" FamilyName="宋体"/>
+          <ofd:Font ID="124" FontName="Times New Roman" FamilyName=""/>
         </ofd:Fonts>
       </ofd:Res>`
     );
@@ -413,6 +415,9 @@ describe("ofdPlugin", () => {
             </ofd:TextObject>
             <ofd:TextObject Boundary="10 38 80 10" Size="4" Font="6">
               <ofd:TextCode X="0" Y="4">陆佰叁拾陆圆柒角整</ofd:TextCode>
+            </ofd:TextObject>
+            <ofd:TextObject Boundary="10 52 10 10" Size="4" Font="124" CTM="0.3528 0 0 0.3528 0 0">
+              <ofd:TextCode X="0" Y="4">·</ofd:TextCode>
             </ofd:TextObject>
           </ofd:Layer>
         </ofd:Content>
@@ -436,6 +441,8 @@ describe("ofdPlugin", () => {
     expect(texts[0]?.getAttribute("font-family")).toContain("STKaiti");
     expect(texts[1]?.getAttribute("font-family")).toContain("Courier New");
     expect(texts[2]?.getAttribute("font-family")).toContain("SimSong");
+    expect(texts[3]?.textContent).toBe("·");
+    expect(texts[3]?.getAttribute("font-family")).toContain("Times New Roman");
   });
 
   it("keeps adjacent digit runs at their explicit coordinates without overlap", async () => {

@@ -31,6 +31,7 @@ export const OpenFileViewer = defineComponent({
       default: undefined
     },
     initialIndex: Number,
+    initialPage: Number,
     fileName: String,
     mimeType: String,
     width: {
@@ -43,7 +44,7 @@ export const OpenFileViewer = defineComponent({
     },
     fit: {
       type: String as () => PreviewOptions["fit"],
-      default: "contain"
+      default: undefined
     },
     zoom: {
       type: Number as PropType<PreviewOptions["zoom"]>,
@@ -78,7 +79,7 @@ export const OpenFileViewer = defineComponent({
     error: (_error: Error, _file?: unknown) => true,
     unsupported: (_file: unknown) => true
   },
-  setup(props, { emit, slots }) {
+  setup(props, { emit, expose, slots }) {
     const containerRef = ref<HTMLElement | null>(null);
     const toolbarTarget = ref<HTMLElement | null>(null);
     const toolbarContext = ref<PreviewToolbarRenderContext | null>(null);
@@ -100,6 +101,7 @@ export const OpenFileViewer = defineComponent({
         file: props.file,
         files: props.files,
         initialIndex: props.initialIndex,
+        initialPage: props.initialPage,
         fileName: props.fileName,
         mimeType: props.mimeType,
         width: props.width,
@@ -154,6 +156,7 @@ export const OpenFileViewer = defineComponent({
         props.file,
         props.files,
         props.initialIndex,
+        props.initialPage,
         props.fileName,
         props.mimeType,
         props.width,
@@ -177,6 +180,12 @@ export const OpenFileViewer = defineComponent({
     );
 
     onMounted(mount);
+
+    expose({
+      goToPage(page: number) {
+        return viewer?.goToPage(page) ?? false;
+      }
+    });
 
     onBeforeUnmount(() => {
       if (toolbarMount) {

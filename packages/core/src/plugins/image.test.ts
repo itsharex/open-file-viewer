@@ -518,6 +518,7 @@ describe("imagePlugin", () => {
     expect(container.textContent).toContain("第 1 / 2 页");
     expect(container.textContent).toContain("第 2 / 2 页");
     expect(container.textContent).toContain("图像2");
+    expect(viewer.goToPage(2)).toBe(true);
     expect(utifMock.decodeImage).toHaveBeenCalledWith(expect.any(ArrayBuffer), first);
     expect(utifMock.decodeImage).toHaveBeenCalledWith(expect.any(ArrayBuffer), second);
 

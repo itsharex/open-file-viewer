@@ -174,7 +174,7 @@ describe("pdfPlugin", () => {
     expect(pageInput?.value).toBe("1");
     expect(pageInput?.max).toBe("2");
     expect(container.querySelector(".ofv-pdf-page-navigator")?.textContent).toContain("/ 2");
-    nextPage?.click();
+    expect(viewer.goToPage(2)).toBe(true);
     expect(pageInput?.value).toBe("2");
     expect(nextPage?.disabled).toBe(true);
     const firstWrapper = container.querySelector<HTMLElement>(".ofv-pdf-page-wrapper");
@@ -451,7 +451,7 @@ describe("pdfPlugin", () => {
     viewer.destroy();
   });
 
-  it("offers an HTML preview iframe when a remote PDF URL cannot be parsed", async () => {
+  it("offers a cross-browser HTML preview iframe when a remote PDF URL cannot be parsed", async () => {
     const container = createSizedContainer();
     const pdfjs = createPdfJsMock();
     pdfjs.getDocument.mockImplementation(() => ({
@@ -461,7 +461,7 @@ describe("pdfPlugin", () => {
 
     const viewer = createViewer({
       container,
-      file: "https://example.com/report.pdf",
+      file: "https://pdf-host.invalid/report.pdf",
       fileName: "report.pdf",
       mimeType: "application/pdf",
       plugins: [pdfPlugin({ pdfjs })]
@@ -474,9 +474,38 @@ describe("pdfPlugin", () => {
     expect(container.querySelector(".ofv-fallback")).toBeNull();
     expect(container.textContent).not.toContain("PDF 预览失败");
     expect(container.textContent).not.toContain("作为 HTML 预览");
-    expect(iframe?.src).toBe("https://example.com/report.pdf");
+    expect(iframe?.src).toBe("https://pdf-host.invalid/report.pdf");
     expect(iframe?.hasAttribute("referrerpolicy")).toBe(false);
-    expect(iframe?.getAttribute("sandbox")).not.toContain("allow-scripts");
+    expect(iframe?.getAttribute("sandbox")).toContain("allow-scripts");
+
+    viewer.destroy();
+  });
+
+  it.each([
+    { name: "blocks scripts for same-origin URLs in auto mode", origin: "same", policy: undefined, expected: false },
+    { name: "can block scripts for cross-origin URLs", origin: "cross", policy: "never" as const, expected: false },
+    { name: "can allow scripts for trusted same-origin URLs", origin: "same", policy: "always" as const, expected: true }
+  ])("$name", async ({ origin, policy, expected }) => {
+    const container = createSizedContainer();
+    const pdfjs = createPdfJsMock();
+    pdfjs.getDocument.mockImplementation(() => ({
+      promise: Promise.reject(new Error("Invalid PDF structure")),
+      destroy: vi.fn()
+    }));
+    const fileUrl = origin === "same" ? `${window.location.origin}/report.pdf` : "https://pdf-host.invalid/report.pdf";
+
+    const viewer = createViewer({
+      container,
+      file: fileUrl,
+      fileName: "report.pdf",
+      mimeType: "application/pdf",
+      plugins: [pdfPlugin({ pdfjs, webFallbackScripts: policy })]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-pdf-web-fallback-frame")));
+
+    const sandbox = container.querySelector<HTMLIFrameElement>(".ofv-pdf-web-fallback-frame")?.getAttribute("sandbox");
+    expect(sandbox?.includes("allow-scripts")).toBe(expected);
 
     viewer.destroy();
   });
@@ -529,6 +558,31 @@ describe("pdfPlugin", () => {
     const wrapper = container.querySelector<HTMLElement>(".ofv-pdf-page-wrapper");
     expect(wrapper?.style.width).toBe("392px");
     expect(wrapper?.style.height).toBe("588px");
+
+    viewer.destroy();
+  });
+
+  it("fits direct PDF previews to width when fit is omitted", async () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    const container = createSizedContainer({ width: 920, height: 620 });
+    const pdfjs = createPdfJsMock();
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["pdf"], { type: "application/pdf" }),
+      fileName: "default-fit.pdf",
+      width: "920px",
+      height: "620px",
+      plugins: [pdfPlugin({ pdfjs })]
+    });
+    mockViewportSize(container, 920, 620);
+    await viewer.reload();
+
+    await waitFor(() => Boolean(container.querySelector("canvas.ofv-pdf-page")));
+
+    const wrapper = container.querySelector<HTMLElement>(".ofv-pdf-page-wrapper");
+    expect(wrapper?.style.width).toBe("888px");
+    expect(wrapper?.style.height).toBe("1332px");
 
     viewer.destroy();
   });

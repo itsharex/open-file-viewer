@@ -87,6 +87,8 @@ export interface PreviewToolbarRenderContext {
   zoomLabel?: string;
   previous: () => Promise<void>;
   next: () => Promise<void>;
+  /** Jump to a 1-based page in the active preview. Returns false for non-paginated formats. */
+  goToPage: (page: number) => boolean;
   command: (command: PreviewCommand) => void | boolean | undefined;
   canCommand: (command: PreviewCommand) => boolean;
   refreshCommandSupport: () => void;
@@ -103,6 +105,8 @@ export interface PreviewOptions {
   file?: PreviewSource;
   files?: Array<PreviewSource | PreviewItem>;
   initialIndex?: number;
+  /** Initial 1-based page for paginated previews. Out-of-range values are clamped. */
+  initialPage?: number;
   fileName?: string;
   mimeType?: string;
   width?: number | string;
@@ -225,7 +229,11 @@ export interface PreviewContext {
   viewport: HTMLElement;
   file: PreviewFile;
   size: PreviewSize;
-  options: Omit<PreviewOptions, "messages"> & Required<Pick<PreviewOptions, "fit" | "fallback" | "zoom">> & { messages: PreviewMessages };
+  options: Omit<PreviewOptions, "messages"> & Required<Pick<PreviewOptions, "fit" | "fallback" | "zoom">> & {
+    messages: PreviewMessages;
+    /** Whether the caller explicitly selected a fit mode instead of using the viewer default. */
+    fitWasProvided: boolean;
+  };
   toolbar?: PreviewToolbarRenderContext;
   /** Aborted when this render is superseded or the viewer is destroyed. */
   signal?: AbortSignal;
@@ -235,6 +243,8 @@ export interface PreviewContext {
 
 export interface PreviewInstance {
   resize?: (size: PreviewSize) => void;
+  /** Jump to a 1-based page. Returns false when the rendered preview has no pages. */
+  goToPage?: (page: number) => boolean;
   command?: (command: PreviewCommand) => void | boolean;
   canCommand?: (command: PreviewCommand) => boolean;
   /** Resolve once any lazily rendered content is ready to be captured for printing. */
@@ -255,6 +265,8 @@ export interface FileViewer {
   next: () => Promise<void>;
   previous: () => Promise<void>;
   goTo: (index: number) => Promise<void>;
+  /** Jump to a 1-based page in the active preview. */
+  goToPage: (page: number) => boolean;
   getCurrentIndex: () => number;
   resize: () => void;
   destroy: () => void;

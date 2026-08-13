@@ -93,6 +93,7 @@ export function FileViewer({
     options.file,
     options.files,
     options.initialIndex,
+    options.initialPage,
     options.fileName,
     options.mimeType,
     options.fit,

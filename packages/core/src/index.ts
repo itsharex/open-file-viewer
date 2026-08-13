@@ -5,6 +5,7 @@ export type { VideoPluginOptions } from "./plugins/video";
 export { audioPlugin } from "./plugins/audio";
 export { textPlugin } from "./plugins/text";
 export { pdfPlugin } from "./plugins/pdf";
+export type { PdfPluginOptions, PdfWebFallbackScripts } from "./plugins/pdf";
 export { epubPlugin } from "./plugins/epub";
 export { xpsPlugin } from "./plugins/xps";
 export { officePlugin } from "./plugins/office";

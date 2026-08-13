@@ -149,6 +149,28 @@ viewer.resize();
 viewer.destroy();
 ```
 
+### Remote PDF fallback compatibility
+
+When PDF.js cannot parse or load a remote PDF URL, the PDF plugin falls back to
+the browser's embedded PDF viewer. Different Chromium-based viewers apply
+different script requirements inside sandboxed iframes, so
+`webFallbackScripts: "auto"` is the default:
+
+- cross-origin PDF URLs receive `allow-scripts` while remaining sandboxed;
+- same-origin URLs keep scripts blocked to avoid combining script execution
+  with same-origin access by default.
+
+The host can make the policy stricter, or explicitly trust a same-origin PDF
+endpoint:
+
+```ts
+pdfPlugin({ webFallbackScripts: "never" });  // strict sandbox
+pdfPlugin({ webFallbackScripts: "always" }); // trusted PDF endpoints only
+```
+
+This setting only affects the remote iframe fallback. It does not change the
+normal PDF.js rendering path or force a `referrerpolicy` value.
+
 ### Office previews stuck on "Loading" inside qiankun / micro-app
 
 Micro-frontend sandboxes (qiankun, micro-app, ...) tear down window `message`
@@ -480,12 +502,13 @@ createViewer(options: PreviewOptions): FileViewer;
 | `file` | `File \| Blob \| string \| ArrayBuffer` | - | Single-file preview source |
 | `files` | `(PreviewSource \| PreviewItem)[]` | - | Multi-file preview queue |
 | `initialIndex` | `number` | `0` | Initial file index |
+| `initialPage` | `number` | `1` | Initial 1-based page for paginated previews |
 | `fileName` | `string` | Auto inferred | File name used for extension detection |
 | `mimeType` | `string` | Auto inferred | MIME type |
 | `width` | `number \| string` | Original container width | Preview container width |
 | `height` | `number \| string` | Original container height | Preview container height |
 | `zoom` | `number` | `1` | Initial zoom level, where `1` means 100% |
-| `fit` | `contain \| cover \| width \| height \| actual \| scale-down` | `contain` | Content fitting mode |
+| `fit` | `contain \| cover \| width \| height \| actual \| scale-down` | `contain` | Content fitting mode. When omitted for a direct PDF preview, the continuous reader uses `width`; pass `contain` explicitly to fit both dimensions. |
 | `plugins` | `PreviewPlugin[]` | `[]` | Plugin list, matched in order |
 | `fallback` | `inline \| download \| custom` | `inline` | Fallback strategy for unsupported formats |
 | `renderFallback` | `(ctx) => PreviewInstance` | - | Custom fallback renderer |
@@ -605,7 +628,7 @@ createViewer({
 });
 ```
 
-The `render(ctx)` context includes `file`, `index`, `length`, `previous()`, `next()`, `command()`, `download()`, `fullscreen()`, `print()`, `search()`, and `clearSearch()`. In core, `toolbar.render(ctx)` returns a DOM `HTMLElement | void`; React, Vue, and Svelte expose framework-native toolbar APIs.
+The `render(ctx)` context includes `file`, `index`, `length`, `previous()`, `next()`, `goToPage(page)`, `command()`, `download()`, `fullscreen()`, `print()`, `search()`, and `clearSearch()`. In core, `toolbar.render(ctx)` returns a DOM `HTMLElement | void`; React, Vue, and Svelte expose framework-native toolbar APIs.
 
 ### React Custom Toolbar
 
@@ -664,6 +687,7 @@ At the style layer, you can still override classes such as `.ofv-toolbar`, `.ofv
 | `reload(file?)` | Reload the current file or a specified file |
 | `next()` / `previous()` | Switch through the multi-file queue |
 | `goTo(index)` | Jump to a specified file |
+| `goToPage(page)` | Jump to a 1-based page in PDF, DOCX, OFD, XPS, TIFF, and other paginated previews |
 | `getCurrentIndex()` | Get the current index |
 | `resize()` | Manually trigger size recalculation |
 | `destroy()` | Destroy the viewer and clean up resources |

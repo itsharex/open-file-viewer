@@ -13,7 +13,7 @@ describe("xpsPlugin", () => {
     const container = document.createElement("div");
     document.body.append(container);
 
-    createViewer({
+    const viewer = createViewer({
       container,
       file: await createMinimalXps(),
       fileName: "report.xps",
@@ -50,6 +50,7 @@ describe("xpsPlugin", () => {
     expect(container.querySelector<HTMLElement>(".ofv-xps-text")?.hidden).toBe(true);
     expect(container.querySelector<HTMLElement>(".ofv-xps-page h4")?.hidden).toBe(true);
     expect(container.querySelectorAll(".ofv-xps-page")).toHaveLength(1);
+    expect(viewer.goToPage(1)).toBe(true);
     expect(container.querySelector(".ofv-xps-canvas")).toBeTruthy();
     expect(container.querySelector(".ofv-xps-canvas text")?.textContent).toBe("Hello XPS");
   });

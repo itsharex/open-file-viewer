@@ -10,11 +10,12 @@
   export let file: PreviewOptions["file"] = undefined;
   export let files: PreviewOptions["files"] = undefined;
   export let initialIndex: PreviewOptions["initialIndex"] = undefined;
+  export let initialPage: PreviewOptions["initialPage"] = undefined;
   export let fileName: PreviewOptions["fileName"] = undefined;
   export let mimeType: PreviewOptions["mimeType"] = undefined;
   export let width: PreviewOptions["width"] = "100%";
   export let height: PreviewOptions["height"] = "600px";
-  export let fit: PreviewOptions["fit"] = "contain";
+  export let fit: PreviewOptions["fit"] = undefined;
   export let zoom: PreviewOptions["zoom"] = 1;
   export let plugins: PreviewOptions["plugins"] = [];
   export let toolbar: PreviewOptions["toolbar"] = false;
@@ -36,6 +37,10 @@
   let toolbarContext: PreviewToolbarRenderContext | undefined;
   let mounted = false;
   let previousDeps: unknown[] = [];
+
+  export function goToPage(page: number): boolean {
+    return viewer?.goToPage(page) ?? false;
+  }
 
   function destroyToolbarMount() {
     toolbarContext = undefined;
@@ -70,6 +75,7 @@
       file,
       files,
       initialIndex,
+      initialPage,
       fileName,
       mimeType,
       width,
@@ -115,6 +121,7 @@
       file,
       files,
       initialIndex,
+      initialPage,
       fileName,
       mimeType,
       width,

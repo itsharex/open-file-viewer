@@ -447,6 +447,7 @@ describe("officePlugin", () => {
     expect(darkFillCell?.style.backgroundColor).toBe("rgb(30, 58, 138)");
     expect(darkFillCell?.style.color).toBe("rgb(248, 250, 252)");
     const inkCell = container.querySelector<HTMLTableCellElement>('[data-cell="C4"]');
+    const sourceWrappedCell = container.querySelector<HTMLTableCellElement>('[data-cell="A3"]');
     expect(inkCell?.textContent).toBe("Black ink");
     expect(inkCell?.style.color).toBe("rgb(0, 0, 0)");
     expect(inkCell?.style.fontWeight).toBe("700");
@@ -455,6 +456,8 @@ describe("officePlugin", () => {
     expect(mergedNote?.rowSpan).toBe(2);
     expect(mergedNote?.classList.contains("ofv-cell-multiline")).toBe(true);
     expect(mergedNote?.textContent).toBe("Multiline\nnote");
+    expect(sourceWrappedCell?.classList.contains("ofv-cell-multiline")).toBe(true);
+    expect(titleCell?.classList.contains("ofv-cell-multiline")).toBe(false);
     expect(table?.style.width).toBe("380px");
     expect(container.querySelector<HTMLTableRowElement>("tr")?.style.height).toBe("21px");
     expect(container.querySelector(".ofv-column-resize-handle")).not.toBeNull();
@@ -915,6 +918,39 @@ describe("officePlugin", () => {
     expect(container.querySelector(".ofv-docx-document")?.textContent).toContain("DOCX layout page");
   });
 
+  it("renders UTF-16 Word HTML saved with a legacy .doc extension", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const html = `<!doctype html>
+      <html xmlns:o="urn:schemas-microsoft-com:office:office">
+        <head><meta name="ProgId" content="Word.Document"></head>
+        <body lang="ZH-CN">
+          <p class="MsoNormal" style="text-indent:28pt;line-height:22pt" onclick="alert('x')">
+            <span style="font-size:14pt">四、到货时间：2026-06-22。</span>
+          </p>
+          <script>document.body.textContent = 'unsafe';</script>
+        </body>
+      </html>`;
+    const utf16Html = new Uint8Array([0xff, 0xfe, ...encodeUtf16Le(html)]);
+
+    createViewer({
+      container,
+      file: new Blob([toBlobPart(utf16Html)], { type: "application/msword" }),
+      fileName: "测试.doc",
+      plugins: [officePlugin()]
+    });
+
+    await waitFor(() => Boolean(container.querySelector(".ofv-word-html-document")));
+
+    const paragraph = container.querySelector<HTMLParagraphElement>(".ofv-word-html-document p");
+    expect(paragraph?.textContent).toContain("四、到货时间：2026-06-22。");
+    expect(paragraph?.style.textIndent).toBe("28pt");
+    expect(paragraph?.hasAttribute("onclick")).toBe(false);
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.querySelector(".ofv-office-conversion")).toBeNull();
+    expect(container.textContent).not.toContain("legacy Microsoft Office binary format");
+  });
+
   it("normalizes impossible DOCX line heights that would overlap text", async () => {
     const container = document.createElement("div");
     document.body.append(container);
@@ -1270,6 +1306,7 @@ describe("officePlugin", () => {
 
     expect(container.querySelector<HTMLElement>(".ofv-docx-wrapper")?.className).toContain("ofv-docx-wrapper");
     expect(container.querySelector<HTMLElement>(".ofv-docx-page-frame")).not.toBeNull();
+    expect(viewer.goToPage(1)).toBe(true);
     expect(container.querySelector<HTMLElement>("section.ofv-docx")?.style.width).toBe("794px");
     expect(container.querySelector<HTMLElement>(".ofv-docx-wrapper")?.style.getPropertyValue("--ofv-docx-scale")).toBe(
       "0.2166"
@@ -2725,7 +2762,7 @@ async function createStyledWorkbook(): Promise<Blob> {
             <c r="C2" t="inlineStr"><is><t>Value</t></is></c>
           </row>
           <row r="3">
-            <c r="A3" t="inlineStr"><is><t>A</t></is></c>
+            <c r="A3" t="inlineStr" s="2"><is><t>Wrap from source style</t></is></c>
             <c r="C3"><v>42</v></c>
           </row>
           <row r="4">

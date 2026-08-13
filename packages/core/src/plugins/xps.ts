@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import type { PreviewCommand, PreviewContext, PreviewPlugin } from "../types";
-import { createPanel, createSection, readArrayBuffer } from "./utils";
+import { createPanel, createSection, goToRenderedPage, readArrayBuffer } from "./utils";
 
 const xpsMimeTypes = new Set([
   "application/oxps",
@@ -24,8 +24,12 @@ export function xpsPlugin(): PreviewPlugin {
         renderXpsFallback(panel, error);
       }
       const controller = createXpsCanvasController(panel, ctx);
+      const pages = panel.querySelector<HTMLElement>(".ofv-xps-pages") || panel;
 
       return {
+        goToPage(page) {
+          return goToRenderedPage(pages, ".ofv-xps-page", page, pages);
+        },
         canCommand(command) {
           return controller?.canCommand(command) ?? false;
         },

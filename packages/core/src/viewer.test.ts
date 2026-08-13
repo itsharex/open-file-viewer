@@ -46,6 +46,44 @@ describe("createViewer", () => {
     expect(container.childElementCount).toBe(0);
   });
 
+  it("delegates 1-based page jumps through initial options, the viewer, and custom toolbar context", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const goToPage = vi.fn(() => true);
+    let toolbarGoToPage: ((page: number) => boolean) | undefined;
+
+    const viewer = createViewer({
+      container,
+      file: new Blob(["pages"], { type: "text/plain" }),
+      fileName: "pages.txt",
+      initialPage: 3,
+      toolbar: {
+        render(ctx) {
+          toolbarGoToPage = ctx.goToPage;
+        }
+      },
+      plugins: [
+        {
+          name: "paginated",
+          match: () => true,
+          render(ctx) {
+            ctx.viewport.textContent = "ready";
+            return { goToPage, destroy: vi.fn() };
+          }
+        }
+      ]
+    });
+
+    await waitFor(() => goToPage.mock.calls.length === 1);
+    expect(goToPage).toHaveBeenNthCalledWith(1, 3);
+    expect(viewer.goToPage(5)).toBe(true);
+    expect(toolbarGoToPage?.(2)).toBe(true);
+    expect(goToPage.mock.calls).toEqual([[3], [5], [2]]);
+
+    viewer.destroy();
+    expect(viewer.goToPage(1)).toBe(false);
+  });
+
   it("aborts an in-flight plugin render when the viewer is destroyed", async () => {
     const container = document.createElement("div");
     document.body.append(container);

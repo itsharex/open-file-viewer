@@ -61,6 +61,9 @@ export function assetPlugin(): PreviewPlugin {
         panel.append(photoshopPreview.element);
         ctx.toolbar?.refreshCommandSupport();
         return {
+          goToPage(page) {
+            return photoshopPreview.instance?.goToPage?.(page) ?? false;
+          },
           canCommand(command) {
             return photoshopPreview.instance?.canCommand?.(command) ?? false;
           },
@@ -88,6 +91,9 @@ export function assetPlugin(): PreviewPlugin {
           hideSuccessfulAssetDiagnostics(panel);
           ctx.toolbar?.refreshCommandSupport();
           return {
+            goToPage(page) {
+              return postScriptPreview.instance?.goToPage?.(page) ?? false;
+            },
             canCommand(command) {
               return postScriptPreview.instance?.canCommand?.(command) ?? false;
             },
@@ -109,6 +115,9 @@ export function assetPlugin(): PreviewPlugin {
         }
 
         return {
+          goToPage(page) {
+            return postScriptPreview.instance?.goToPage?.(page) ?? false;
+          },
           canCommand(command) {
             return postScriptPreview.instance?.canCommand?.(command) ?? false;
           },
@@ -189,6 +198,14 @@ export function assetPlugin(): PreviewPlugin {
       panel.append(section);
 
       return {
+        goToPage(page) {
+          for (const instance of childInstances) {
+            if (instance.goToPage?.(page)) {
+              return true;
+            }
+          }
+          return false;
+        },
         canCommand(command) {
           return childInstances.some((instance) => instance.canCommand?.(command));
         },
@@ -3069,6 +3086,9 @@ async function createPdfCompatibleAiPreview(
   return {
     element: wrapper,
     instance: {
+      goToPage(page) {
+        return instance.goToPage?.(page) ?? false;
+      },
       canCommand(command) {
         return instance.canCommand(command);
       },

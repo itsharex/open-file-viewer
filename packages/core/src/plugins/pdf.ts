@@ -1,10 +1,11 @@
 import { createObjectUrl, revokeObjectUrl } from "../dom";
 import { defaultMessages, formatPreviewMessage } from "../messages";
-import type { PreviewFit, PreviewMessages, PreviewPlugin, PreviewSize } from "../types";
+import type { PreviewCommand, PreviewFit, PreviewInstance, PreviewMessages, PreviewPlugin, PreviewSize } from "../types";
 import { createEncryptedFallback, isEncryptedError } from "./encrypted";
 import { getInitialZoom } from "./utils";
 
 type PdfJsModule = typeof import("pdfjs-dist");
+export type PdfWebFallbackScripts = "auto" | "never" | "always";
 type PdfDocumentProxyLike = {
   numPages: number;
   getPage(pageNumber: number): Promise<any>;
@@ -25,6 +26,7 @@ export interface PdfPluginOptions {
   disableRange?: boolean;
   rangeChunkSize?: number;
   useFetchData?: boolean;
+  webFallbackScripts?: PdfWebFallbackScripts;
 }
 
 export interface PdfDocumentPreviewOptions {
@@ -51,6 +53,7 @@ export interface PdfDocumentPreviewOptions {
   disableRange?: boolean;
   rangeChunkSize?: number;
   useFetchData?: boolean;
+  webFallbackScripts?: PdfWebFallbackScripts;
   title?: string;
   fallbackTitle?: string;
   encryptedTitle?: string;
@@ -90,7 +93,10 @@ export function pdfPlugin(options: PdfJsModule | PdfPluginOptions = {}): Preview
         isExternal,
         viewport: ctx.viewport,
         size: ctx.size,
-        fit: ctx.options.fit,
+        // A scrolling PDF reader historically defaulted to fit-width. Keep
+        // that behavior when the host did not choose a fit mode, while still
+        // honoring explicit contain/height/cover/scale-down requests.
+        fit: ctx.options.fitWasProvided ? ctx.options.fit : "width",
         zoom: ctx.options.zoom,
         toolbar: ctx.toolbar,
         messages: ctx.options.messages,
@@ -100,13 +106,15 @@ export function pdfPlugin(options: PdfJsModule | PdfPluginOptions = {}): Preview
   };
 }
 
-export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOptions): Promise<{
-  canCommand(command: string): boolean;
-  command(command: string): boolean;
-  resize(size: PreviewSize): void;
-  preparePrint?(): void | Promise<void>;
-  destroy(): void;
-}> {
+export async function renderPdfDocumentPreview(
+  options: PdfDocumentPreviewOptions
+): Promise<
+  PreviewInstance & {
+    canCommand(command: PreviewCommand): boolean;
+    command(command: PreviewCommand): boolean;
+    resize(size: PreviewSize): void;
+  }
+> {
   const useLegacyCompatibility = shouldUseLegacyPdfCompatibility(options.compatibilityMode);
   if (useLegacyCompatibility) {
     installPromiseWithResolversPolyfill();
@@ -149,7 +157,14 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
           message: options.encryptedMessage || messages.pdfEncryptedMessage,
           action: options.encryptedAction || messages.pdfDownload
         })
-      : createPdfFallback(options.fileName, options.fileUrl, normalizePdfError(error, messages), messages, options.fallbackTitle);
+      : createPdfFallback(
+          options.fileName,
+          options.fileUrl,
+          normalizePdfError(error, messages),
+          messages,
+          options.fallbackTitle,
+          options.webFallbackScripts
+        );
     if (!fallback.classList.contains("ofv-pdf-web-fallback")) {
       options.viewport.classList.add("ofv-center");
     }
@@ -242,14 +257,16 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
     pageNavigator.setCurrent(currentPage);
     const wrapper = pageStates[currentPage - 1]?.wrapper;
     if (!scroll || !wrapper) {
-      return;
+      return true;
     }
+    void renderPage(currentPage - 1, currentSize);
     const top = Math.max(0, wrapper.offsetTop - 16);
     if (typeof scroller.scrollTo === "function") {
       scroller.scrollTo({ top, behavior: "smooth" });
     } else {
       scroller.scrollTop = top;
     }
+    return true;
   };
 
   const pageNavigator = createPdfPageNavigator(pdfDocument.numPages, messages, (page) => goToPage(page));
@@ -506,6 +523,9 @@ export async function renderPdfDocumentPreview(options: PdfDocumentPreviewOption
 
   let resizeTimer: number | undefined;
   return {
+    goToPage(page) {
+      return goToPage(page);
+    },
     canCommand(command) {
       return (
         command === "zoom-in" ||
@@ -805,10 +825,11 @@ function createPdfFallback(
   url: string,
   message: string,
   messages: PreviewMessages,
-  titleText = messages.pdfPreviewFailedTitle
+  titleText = messages.pdfPreviewFailedTitle,
+  webFallbackScripts: PdfWebFallbackScripts = "auto"
 ): HTMLElement {
   if (isEmbeddableRemoteUrl(url)) {
-    return createPdfWebFallback(fileName, url);
+    return createPdfWebFallback(fileName, url, webFallbackScripts);
   }
 
   const fallback = document.createElement("div");
@@ -829,7 +850,11 @@ function createPdfFallback(
   return fallback;
 }
 
-function createPdfWebFallback(fileName: string, url: string): HTMLElement {
+function createPdfWebFallback(
+  fileName: string,
+  url: string,
+  webFallbackScripts: PdfWebFallbackScripts
+): HTMLElement {
   const fallback = document.createElement("div");
   fallback.className = "ofv-pdf-web-fallback";
 
@@ -837,10 +862,30 @@ function createPdfWebFallback(fileName: string, url: string): HTMLElement {
   iframe.className = "ofv-pdf-web-fallback-frame";
   iframe.src = url;
   iframe.title = `${fileName} HTML preview`;
-  iframe.setAttribute("sandbox", "allow-forms allow-popups allow-presentation allow-same-origin");
+  const sandboxTokens = ["allow-forms", "allow-popups", "allow-presentation", "allow-same-origin"];
+  if (shouldAllowPdfWebFallbackScripts(url, webFallbackScripts)) {
+    sandboxTokens.push("allow-scripts");
+  }
+  iframe.setAttribute("sandbox", sandboxTokens.join(" "));
 
   fallback.append(iframe);
   return fallback;
+}
+
+function shouldAllowPdfWebFallbackScripts(url: string, policy: PdfWebFallbackScripts): boolean {
+  if (policy === "always") {
+    return true;
+  }
+  if (policy === "never" || typeof window === "undefined" || typeof document === "undefined") {
+    return false;
+  }
+  try {
+    const target = document.createElement("a");
+    target.href = url;
+    return target.origin !== window.location.origin;
+  } catch {
+    return false;
+  }
 }
 
 function isEmbeddableRemoteUrl(url: string): boolean {

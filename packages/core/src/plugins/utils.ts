@@ -41,6 +41,30 @@ export function createPanel(className = ""): HTMLElement {
   return panel;
 }
 
+/** Scroll a rendered, paginated preview to a 1-based page. */
+export function goToRenderedPage(
+  root: ParentNode,
+  selector: string,
+  page: number,
+  scroller: HTMLElement
+): boolean {
+  const pages = Array.from(root.querySelectorAll<HTMLElement>(selector));
+  if (pages.length === 0) {
+    return false;
+  }
+  const rounded = Math.round(page);
+  const pageNumber = Math.min(pages.length, Math.max(1, Number.isFinite(rounded) ? rounded : 1));
+  const target = pages[pageNumber - 1];
+  const targetTop = scroller.scrollTop + target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  const top = Math.max(0, targetTop - 16);
+  if (typeof scroller.scrollTo === "function") {
+    scroller.scrollTo({ top, behavior: "smooth" });
+  } else {
+    scroller.scrollTop = top;
+  }
+  return true;
+}
+
 export function getInitialZoom(ctx: { options: { zoom: number } }, min = 0.1, max = 8): number {
   return Math.min(max, Math.max(min, ctx.options.zoom));
 }
